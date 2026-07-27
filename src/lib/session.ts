@@ -1,5 +1,6 @@
 import { debounce } from "@/lib/utils";
 import { flattenNotes } from "@/lib/tree";
+import { SIDEBAR_DEFAULT_WIDTH } from "@/lib/sidebarResize";
 import type { View } from "@/lib/types";
 import { useBookmarks } from "@/stores/bookmarks";
 import { useTabs } from "@/stores/tabs";
@@ -51,6 +52,9 @@ export function restoreSession(root: string) {
   } catch {
     data = null;
   }
+  useUi
+    .getState()
+    .setSidebarWidth(data?.sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH);
   if (!data) return;
 
   const vault = useVault.getState();
@@ -61,9 +65,6 @@ export function restoreSession(root: string) {
 
   useTodos.setState({ tagFilter: data.todoFilter ?? null });
   useBookmarks.setState({ tagFilter: data.bookmarkFilter ?? null });
-  if (data.sidebarWidth !== undefined) {
-    useUi.getState().setSidebarWidth(data.sidebarWidth);
-  }
 
   const view = data.view;
   if (view?.type === "note") {
