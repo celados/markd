@@ -1,12 +1,14 @@
-import { forwardRef, type InputHTMLAttributes } from "react";
+import { Input as BaseInput } from "@octanejs/base-ui/input";
+import type { Octane } from "octane/jsx-runtime";
 import { cn } from "@/lib/utils";
 
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {}
+export type InputProps = Octane.JSX.IntrinsicElements["input"];
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type = "text", ...props }, ref) => (
-    <input
-      ref={ref}
+export function Input(props: InputProps) {
+  const { className, type = "text", ...inputProps } = props;
+
+  return (
+    <BaseInput
       type={type}
       className={cn(
         "h-9 w-full rounded-lg border border-line-soft bg-panel px-3 text-[12.5px] text-ink outline-none",
@@ -16,9 +18,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         "disabled:cursor-not-allowed disabled:opacity-60",
         className,
       )}
-      {...props}
+      {...inputProps}
     />
-  ),
-);
-
-Input.displayName = "Input";
+  );
+}

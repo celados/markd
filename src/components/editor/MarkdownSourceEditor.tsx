@@ -17,7 +17,7 @@ import {
   keymap,
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "octane";
 
 const markdTheme = EditorView.theme({
   "&": {
@@ -60,13 +60,15 @@ export function MarkdownSourceEditor({
   value,
   onChange,
   selection,
+  active,
 }: {
   value: string;
   onChange: (value: string) => void;
   selection?: { from: number; to: number; nonce: number } | null;
+  active: boolean;
 }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null | null>(null);
   const syncingRef = useRef(false);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -96,7 +98,6 @@ export function MarkdownSourceEditor({
       }),
     });
     viewRef.current = view;
-    view.focus();
 
     return () => {
       view.destroy();
@@ -116,6 +117,10 @@ export function MarkdownSourceEditor({
     });
     syncingRef.current = false;
   }, [value]);
+
+  useEffect(() => {
+    if (active) viewRef.current?.focus();
+  }, [active]);
 
   useEffect(() => {
     const view = viewRef.current;

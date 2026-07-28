@@ -1,12 +1,12 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { octane } from "octane/compiler/vite";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [octane(), tailwindcss()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
@@ -40,4 +40,5 @@ export default defineConfig(async () => ({
       "@/features": path.resolve(__dirname, "./src/features/"),
     },
   },
+  base: "./",
 }));

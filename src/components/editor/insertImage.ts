@@ -1,5 +1,5 @@
-import type { Editor } from "@tiptap/react";
-import { toast } from "sonner";
+import type { Editor } from "@octanejs/tiptap";
+import { toast } from "@octanejs/sonner";
 import { ipc } from "@/lib/ipc";
 
 /** Save a pasted/dropped image into the vault and insert it at `range`. */

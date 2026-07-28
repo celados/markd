@@ -7,10 +7,10 @@
  * It reads the signature files and creates a properly formatted JSON file.
  *
  * Usage:
- *   bun scripts/generate-latest-json.js <version> [--type=fix|feature] [--require=darwin-aarch64] <notes>
+ *   node scripts/generate-latest-json.js <version> [--type=fix|feature] [--require=darwin-aarch64] <notes>
  *
  * Example:
- *   bun scripts/generate-latest-json.js "0.2.0" --type=feature "New properties"
+ *   node scripts/generate-latest-json.js "0.2.0" --type=feature "New properties"
  */
 
 import { existsSync, readFileSync, statSync, writeFileSync } from "fs";
@@ -28,10 +28,10 @@ const APP_NAME = "Markd";
 const args = process.argv.slice(2);
 if (args.length < 2) {
   console.error(
-    "Usage: bun scripts/generate-latest-json.js <version> [--type=fix|feature] <notes>",
+    "Usage: node scripts/generate-latest-json.js <version> [--type=fix|feature] <notes>",
   );
   console.error(
-    'Example: bun scripts/generate-latest-json.js "0.1.1" "Bug fixes"'
+    'Example: node scripts/generate-latest-json.js "0.1.1" "Bug fixes"'
   );
   process.exit(1);
 }
@@ -200,7 +200,7 @@ if (platformCount === 0) {
   console.log("   3. For manual updates, you can edit latest.json manually");
   console.log("");
   console.log("💡 To generate signature files:");
-  console.log("   - Build with: bun run tauri build");
+  console.log("   - Build with: pnpm run tauri build");
   console.log(
     "   - Signature files are created automatically by Tauri updater plugin"
   );

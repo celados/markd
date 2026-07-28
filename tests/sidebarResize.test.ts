@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import {
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_KEYBOARD_STEP,

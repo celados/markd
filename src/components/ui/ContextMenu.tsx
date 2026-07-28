@@ -1,36 +1,35 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import type { LucideIcon } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "octane";
+import { createPortal } from "octane";
+import type { IconComponent } from "@/icons/icon-types";
 import { cx } from "@/lib/utils";
 
-export interface MenuItem {
+export type MenuItem = {
   label: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   danger?: boolean;
   onSelect: () => void;
-}
+};
 
-export interface MenuPosition {
+export type MenuPosition = {
   x: number;
   y: number;
-}
+};
 
-export function ContextMenu({
-  position,
-  items,
-  onClose,
-}: {
+type ContextMenuProps = {
   position: MenuPosition;
   items: MenuItem[];
   onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
+};
+
+export function ContextMenu(props: ContextMenuProps) {
+  const { position, items, onClose } = props;
+  const ref = useRef<HTMLDivElement | null>(null);
   const [adjusted, setAdjusted] = useState(position);
 
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
+    const element = ref.current;
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
     setAdjusted({
       x: Math.min(position.x, window.innerWidth - rect.width - 8),
       y: Math.min(position.y, window.innerHeight - rect.height - 8),
@@ -49,19 +48,19 @@ export function ContextMenu({
         onClose();
         return;
       }
-      const items = Array.from(
+      const menuItems = Array.from(
         ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
       );
-      const index = items.indexOf(document.activeElement as HTMLElement);
+      const index = menuItems.indexOf(document.activeElement as HTMLElement);
       let next = index;
-      if (event.key === "ArrowDown") next = (index + 1) % items.length;
+      if (event.key === "ArrowDown") next = (index + 1) % menuItems.length;
       else if (event.key === "ArrowUp") {
-        next = (index - 1 + items.length) % items.length;
+        next = (index - 1 + menuItems.length) % menuItems.length;
       } else if (event.key === "Home") next = 0;
-      else if (event.key === "End") next = items.length - 1;
+      else if (event.key === "End") next = menuItems.length - 1;
       else return;
       event.preventDefault();
-      items[next]?.focus();
+      menuItems[next]?.focus();
     };
     window.addEventListener("mousedown", close);
     window.addEventListener("contextmenu", close);
@@ -96,7 +95,7 @@ export function ContextMenu({
             item.onSelect();
           }}
         >
-          {item.icon && <item.icon size={14} strokeWidth={1.75} />}
+          {item.icon ? <item.icon size={14} strokeWidth={1.75} /> : null}
           {item.label}
         </button>
       ))}

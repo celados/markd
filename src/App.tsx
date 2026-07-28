@@ -1,7 +1,7 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect } from "octane";
 import { listen } from "@tauri-apps/api/event";
-import { Toaster } from "sonner";
-import { closeTab } from "@/components/editor/TabBar";
+import { Toaster } from "@octanejs/sonner";
+import { closeTab } from "@/components/editor/TabBar.tsrx";
 import { Welcome } from "@/components/welcome/Welcome";
 import { initSessionSync, restoreSession } from "@/lib/session";
 import { notifyBacklinksChanged } from "@/lib/backlinks";
@@ -16,17 +16,17 @@ import { useShortcuts } from "@/stores/shortcuts";
 import { useUpdater } from "@/stores/updater";
 
 const AppShell = lazy(() =>
-  import("@/components/layout/AppShell").then((module) => ({
+  import("@/components/layout/AppShell.tsrx").then((module) => ({
     default: module.AppShell,
   })),
 );
 const loadCommandPalette = () =>
-  import("@/components/palette/CommandPalette").then((module) => ({
+  import("@/components/palette/CommandPalette.tsrx").then((module) => ({
     default: module.CommandPalette,
   }));
 const CommandPalette = lazy(loadCommandPalette);
 const SettingsModal = lazy(() =>
-  import("@/components/settings/SettingsModal").then((module) => ({
+  import("@/components/settings/SettingsModal.tsrx").then((module) => ({
     default: module.SettingsModal,
   })),
 );

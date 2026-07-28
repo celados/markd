@@ -1,42 +1,36 @@
-import assert from "node:assert/strict";
-import { describe, test } from "node:test";
-import { shouldShowReleaseNotes } from "../src/lib/updateRelease";
+import { describe, expect, test } from "vitest";
+import { shouldShowReleaseNotes } from "../src/lib/updateRelease.ts";
 
 describe("update release classification", () => {
   test("installs patch releases directly", () => {
-    assert.equal(
+    expect(
       shouldShowReleaseNotes({ currentVersion: "0.1.5", version: "0.1.6" }),
-      false,
-    );
+    ).toBe(false);
   });
 
   test("shows notes for minor and major releases", () => {
-    assert.equal(
+    expect(
       shouldShowReleaseNotes({ currentVersion: "0.1.5", version: "0.2.0" }),
-      true,
-    );
-    assert.equal(
+    ).toBe(true);
+    expect(
       shouldShowReleaseNotes({ currentVersion: "0.9.0", version: "1.0.0" }),
-      true,
-    );
+    ).toBe(true);
   });
 
   test("respects an explicit manifest release type", () => {
-    assert.equal(
+    expect(
       shouldShowReleaseNotes({
         currentVersion: "0.1.5",
         version: "0.1.6",
         rawJson: { release_type: "feature" },
       }),
-      true,
-    );
-    assert.equal(
+    ).toBe(true);
+    expect(
       shouldShowReleaseNotes({
         currentVersion: "0.1.5",
         version: "0.2.0",
         rawJson: { release_type: "fix" },
       }),
-      false,
-    );
+    ).toBe(false);
   });
 });

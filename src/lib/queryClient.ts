@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient } from "@octanejs/tanstack-query";
 import type { TreeNode } from "@/lib/types";
 
 const PUBLISH_STATUS_QUERY = ["publish-note-status"] as const;

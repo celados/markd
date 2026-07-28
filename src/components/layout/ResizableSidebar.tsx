@@ -1,5 +1,5 @@
-import { motion } from "motion/react";
-import { useRef, useState } from "react";
+import { motion } from "@octanejs/motion";
+import { useRef, useState } from "octane";
 import { SPRING_PANEL } from "@/lib/ease";
 import {
   SIDEBAR_DEFAULT_WIDTH,
@@ -14,7 +14,7 @@ interface ResizableSidebarProps {
   hidden: boolean;
   width: number;
   onWidthChange: (width: number) => void;
-  children: React.ReactNode;
+  children: unknown;
 }
 
 interface ResizeStart {
@@ -28,10 +28,10 @@ export function ResizableSidebar({
   onWidthChange,
   children,
 }: ResizableSidebarProps) {
-  const resizeStart = useRef<ResizeStart | null>(null);
+  const resizeStart = useRef<ResizeStart | null | null>(null);
   const [resizing, setResizing] = useState(false);
 
-  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+  const startResize = (event: NativeEvent<HTMLDivElement, PointerEvent>) => {
     if (event.button !== 0) return;
     resizeStart.current = { pointerX: event.clientX, width };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -39,7 +39,7 @@ export function ResizableSidebar({
     event.preventDefault();
   };
 
-  const resize = (event: React.PointerEvent<HTMLDivElement>) => {
+  const resize = (event: NativeEvent<HTMLDivElement, PointerEvent>) => {
     const start = resizeStart.current;
     if (!start) return;
     onWidthChange(
@@ -47,7 +47,7 @@ export function ResizableSidebar({
     );
   };
 
-  const finishResize = (event: React.PointerEvent<HTMLDivElement>) => {
+  const finishResize = (event: NativeEvent<HTMLDivElement, PointerEvent>) => {
     resizeStart.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -55,7 +55,7 @@ export function ResizableSidebar({
     setResizing(false);
   };
 
-  const resizeWithKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const resizeWithKeyboard = (event: NativeEvent<HTMLDivElement, KeyboardEvent>) => {
     const nextWidth = sidebarWidthFromKey(width, event.key);
     if (nextWidth === null) return;
     event.preventDefault();

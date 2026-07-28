@@ -1,0 +1,31 @@
+diff --git a/dist/runtime.d.ts b/dist/runtime.d.ts
+index d60178ed04bdd64ca2d4662519bc82c87e9dcc93..eb02cb1ac6e23233d15acfe6a29d86698c4e18d6 100644
+--- a/dist/runtime.d.ts
++++ b/dist/runtime.d.ts
+@@ -1250,5 +1250,5 @@
+ export declare function componentSlotVoid(parentScope: Scope, slotKey: number, domParent: Node, comp: ComponentBody | string, props: any, anchor?: Node | null, key?: any, singleRoot?: boolean | 2, inherit?: boolean, hasKey?: boolean): void;
+ export declare function positionalChildren(children: any[]): any[];
+-export declare function hostComponent(scope: Scope, slot: number, tag: string, props: Record<string, any> | null, childrenBody?: ComponentBody | null, anchor?: Node | null): Element;
++export declare function hostComponent(scope: Scope, slot: number, tag: string, props: Record<string, any> | null, childrenBody?: unknown, anchor?: Node | null): Element;
+ export declare function childSlot(parentScope: Scope, slotKey: number, domParent: Node, value: unknown, anchor?: Node | null, ownEnd?: boolean, ownsHost?: Element, compactable?: boolean, includeKeyedSingle?: boolean): void;
+ export declare function textSlot(parentScope: Scope, slotKey: number, domParent: Node, value: unknown, anchor?: Node | null, ownEnd?: boolean, compactable?: boolean): void;
+diff --git a/dist/runtime.js b/dist/runtime.js
+index 82f6dc48c78695f226d7781da3e9c1e6dbdcdb30..f8f779a04d4aec98c7365868f1c60043e54b91fd 100644
+--- a/dist/runtime.js
++++ b/dist/runtime.js
+@@ -8102,12 +8102,14 @@ function hostComponent(scope, slot, tag, props, childrenBody, anchor) {
+   }
+   const el = state.el;
+   applyHostProps(el, props, scope, state);
+-  if (childrenBody != null) {
++  if (typeof childrenBody === "function") {
+     state.latest = childrenBody;
+     if (state.body === void 0) {
+       state.body = ((...args) => state.latest(...args));
+     }
+     childSlot(state.childScope, 0, el, state.body, null, false, el);
++  } else if (childrenBody != null) {
++    childSlot(state.childScope, 0, el, childrenBody, null, false, el);
+   }
+   return el;
+ }

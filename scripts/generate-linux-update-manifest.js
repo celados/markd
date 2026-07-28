@@ -8,7 +8,7 @@ const [version, signaturePath, outputPath, notes = `Markd ${version}`] =
 
 if (!version || !signaturePath || !outputPath) {
   console.error(
-    "Usage: bun scripts/generate-linux-update-manifest.js <version> <signature> <output> [notes]",
+    "Usage: node scripts/generate-linux-update-manifest.js <version> <signature> <output> [notes]",
   );
   process.exit(1);
 }

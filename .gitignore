@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+playwright-report
+test-results
 *.local
 
 # Editor directories and files
@@ -29,6 +31,10 @@ dist-ssr
 !CONTRIBUTING.md
 !brand.md
 !NOTARIZATION.md
+!.agents/
+!.agents/**/*.md
+!docs/
+!docs/**/*.md
 
 # Secrets and keys (never commit these!)
 *.key
@@ -43,6 +49,3 @@ AuthKey_*.p8
 *.mobileprovision
 
 .claude
-
-# Internal design/research notes — not shipped
-/docs/

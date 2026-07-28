@@ -9,7 +9,7 @@
  * - src-tauri/Cargo.toml
  *
  * Usage:
- *   bun scripts/sync-version.js
+ *   node scripts/sync-version.js
  *
  * The script reads the version from tauri.conf.json and updates the other files.
  * This should be run before building to ensure all files have the same version.

@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useMemo, useRef, useState } from "octane";
+import { toast } from "@octanejs/sonner";
 import { matchesShortcut } from "@/lib/shortcuts";
 import { useShortcuts } from "@/stores/shortcuts";
 import { useUi } from "@/stores/ui";

@@ -1,14 +1,14 @@
 import {
-  FilePlus,
-  FolderOpen,
-  FolderPlus,
-  Pencil,
-  Pin,
-  PinOff,
-  Trash2,
-} from "lucide-react";
+  LuFilePlus as FilePlus,
+  LuFolderOpen as FolderOpen,
+  LuFolderPlus as FolderPlus,
+  LuPencil as Pencil,
+  LuPin as Pin,
+  LuPinOff as PinOff,
+  LuTrash2 as Trash2,
+} from "@/icons/icons.tsrx";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { toast } from "sonner";
+import { toast } from "@octanejs/sonner";
 import type { TreeNode } from "@/lib/types";
 import type { MenuItem } from "@/components/ui/ContextMenu";
 import { usePins } from "@/stores/pins";

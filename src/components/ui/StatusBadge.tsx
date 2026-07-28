@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { Octane } from "octane/jsx-runtime";
 import { cn } from "@/lib/utils";
 
 type StatusTone = "neutral" | "success" | "info" | "warning" | "cloud";
@@ -16,9 +16,9 @@ export function StatusBadge({
   children,
   className,
   ...props
-}: HTMLAttributes<HTMLSpanElement> & {
+}: Omit<Octane.JSX.IntrinsicElements["span"], "children"> & {
   tone?: StatusTone;
-  children: ReactNode;
+  children: unknown;
 }) {
   return (
     <span

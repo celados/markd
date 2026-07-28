@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, describe, expect, test } from "vitest";
 
-const projectRoot = join(import.meta.dir, "..");
+const projectRoot = join(import.meta.dirname, "..");
 const projectVersion = JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8")).version;
 const tempDirs: string[] = [];
 
@@ -12,18 +13,21 @@ afterEach(() => {
 });
 
 function run(args: string[]) {
-  return Bun.spawnSync(args, { cwd: projectRoot, stderr: "pipe", stdout: "pipe" });
+  return spawnSync(args[0], args.slice(1), {
+    cwd: projectRoot,
+    encoding: "utf8",
+  });
 }
 
 describe("release script validation", () => {
   test("accepts the synchronized project version", () => {
-    const result = run(["bun", "scripts/verify-release-version.js", projectVersion]);
-    expect(result.exitCode).toBe(0);
+    const result = run(["node", "scripts/verify-release-version.js", projectVersion]);
+    expect(result.status).toBe(0);
   });
 
   test("rejects a mismatched project version", () => {
-    const result = run(["bun", "scripts/verify-release-version.js", "9.9.9"]);
-    expect(result.exitCode).not.toBe(0);
+    const result = run(["node", "scripts/verify-release-version.js", "9.9.9"]);
+    expect(result.status).not.toBe(0);
   });
 
   test("validates updater version, type, URL, and signature", () => {
@@ -47,13 +51,13 @@ describe("release script validation", () => {
     );
 
     const result = run([
-      "bun",
+      "node",
       "scripts/verify-update-manifest.js",
       manifestPath,
       projectVersion,
       "feature",
     ]);
-    expect(result.exitCode).toBe(0);
+    expect(result.status).toBe(0);
   });
 
   test("rejects stale updater metadata", () => {
@@ -72,12 +76,12 @@ describe("release script validation", () => {
     );
 
     const result = run([
-      "bun",
+      "node",
       "scripts/verify-update-manifest.js",
       manifestPath,
       projectVersion,
       "feature",
     ]);
-    expect(result.exitCode).not.toBe(0);
+    expect(result.status).not.toBe(0);
   });
 });

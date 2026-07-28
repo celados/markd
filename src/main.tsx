@@ -1,6 +1,5 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { createRoot } from "octane";
+import { QueryClientProvider } from "@octanejs/tanstack-query";
 import App from "./App";
 import { QuickCaptureWindow } from "./components/capture/QuickCaptureWindow";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
@@ -21,12 +20,13 @@ document.addEventListener("focusin", (event) => {
 
 const Root = getCurrentWindow().label === "quick-capture" ? QuickCaptureWindow : App;
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <Root />
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
+const root = document.getElementById("root");
+if (!root) throw new Error("Markd requires a #root element");
+
+createRoot(root).render(
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <Root />
+    </QueryClientProvider>
+  </ErrorBoundary>,
 );

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "octane";
 import type { TreeNode } from "@/lib/types";
 import { useVault } from "@/stores/vault";
 
@@ -10,7 +10,7 @@ export function RenameInput({
   onDone: () => void;
 }) {
   const renameEntry = useVault((state) => state.renameEntry);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const submitted = useRef(false);
 
   useEffect(() => {

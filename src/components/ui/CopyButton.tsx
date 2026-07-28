@@ -1,9 +1,12 @@
-import { Check, Copy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  LuCheck as Check,
+  LuCopy as Copy,
+} from "@/icons/icons.tsrx";
+import { useEffect, useRef, useState } from "octane";
 import {
   ActionSwapIcon,
   ActionSwapText,
-} from "@/components/motion/action-swap";
+} from "@/components/motion/action-swap.tsrx";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +43,7 @@ export function CopyButton({
     [],
   );
 
-  const copy = (event: React.MouseEvent) => {
+  const copy = (event: MouseEvent) => {
     event.stopPropagation();
     navigator.clipboard.writeText(value);
     setCopied(true);
@@ -53,13 +56,14 @@ export function CopyButton({
       value={copied ? "done" : "copy"}
       animation="roll"
       className="h-[13px] w-[13px]"
-    >
-      {copied ? (
-        <Check size={13} strokeWidth={2} />
-      ) : (
-        <Copy size={13} strokeWidth={2} />
-      )}
-    </ActionSwapIcon>
+      icon={
+        copied ? (
+          <Check size={13} strokeWidth={2} />
+        ) : (
+          <Copy size={13} strokeWidth={2} />
+        )
+      }
+    />
   );
 
   if (text) {
@@ -73,9 +77,11 @@ export function CopyButton({
         )}
       >
         {icon}
-        <ActionSwapText value={copied ? "done" : "idle"} animation="cascade">
-          {copied ? copiedText : text}
-        </ActionSwapText>
+        <ActionSwapText
+          value={copied ? "done" : "idle"}
+          text={copied ? copiedText : text}
+          animation="cascade"
+        />
       </button>
     );
   }

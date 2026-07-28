@@ -1,7 +1,6 @@
-import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
-import { forwardRef, type ReactNode } from "react";
+import { Button as BaseButton } from "@octanejs/base-ui/button";
+import type { Octane } from "octane/jsx-runtime";
 import { Spinner } from "@/components/ui/Spinner";
-import { SPRING_PRESS } from "@/lib/ease";
 import { cn } from "@/lib/utils";
 
 type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
@@ -22,45 +21,43 @@ const SIZE: Record<Size, string> = {
   icon: "h-7 w-7 rounded-md",
 };
 
-export interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
+export type ButtonProps = Omit<Octane.JSX.IntrinsicElements["button"], "children"> & {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
-  children?: ReactNode;
+  children?: unknown;
+};
+
+export function Button(props: ButtonProps) {
+  const {
+    variant = "secondary",
+    size = "md",
+    className,
+    disabled,
+    loading,
+    children,
+    ...buttonProps
+  } = props;
+  const isDisabled = disabled || loading;
+
+  return (
+    <BaseButton
+      type="button"
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
+      className={cn(
+        "flex select-none items-center justify-center font-medium leading-none transition-[color,background-color,border-color,opacity,transform] duration-100",
+        "active:scale-[0.96] motion-reduce:active:scale-100",
+        "[&>svg]:block [&>svg]:shrink-0",
+        "disabled:pointer-events-none disabled:opacity-50",
+        VARIANT[variant],
+        SIZE[size],
+        className,
+      )}
+      {...buttonProps}
+    >
+      {loading ? <Spinner size={14} /> : null}
+      {children}
+    </BaseButton>
+  );
 }
-
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    { variant = "secondary", size = "md", className, disabled, loading, children, ...rest },
-    ref,
-  ) => {
-    const reduce = useReducedMotion();
-    const isDisabled = disabled || loading;
-    return (
-      <motion.button
-        ref={ref}
-        type="button"
-        disabled={isDisabled}
-        aria-busy={loading || undefined}
-        whileTap={reduce || isDisabled ? undefined : { scale: 0.96 }}
-        transition={SPRING_PRESS}
-        className={cn(
-          "flex select-none items-center justify-center font-medium leading-none transition-colors duration-100",
-          "[&>svg]:block [&>svg]:shrink-0",
-          "disabled:pointer-events-none disabled:opacity-50",
-          VARIANT[variant],
-          SIZE[size],
-          className,
-        )}
-        {...rest}
-      >
-        {loading ? (
-          <Spinner size={14} />
-        ) : null}
-        {children}
-      </motion.button>
-    );
-  },
-);
-
-Button.displayName = "Button";

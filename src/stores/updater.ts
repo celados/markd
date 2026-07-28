@@ -1,7 +1,7 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { toast } from "sonner";
-import { create } from "zustand";
+import { toast } from "@octanejs/sonner";
+import { create } from "@octanejs/zustand";
 import { shouldShowReleaseNotes } from "@/lib/updateRelease";
 
 type Status = "idle" | "checking" | "available" | "downloading" | "ready" | "error";

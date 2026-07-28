@@ -1,5 +1,8 @@
-import { Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  LuTrash2 as Trash2,
+  LuX as X,
+} from "@/icons/icons.tsrx";
+import { useEffect, useRef, useState } from "octane";
 import { Tooltip } from "@/components/ui/Tooltip";
 import {
   isValidPropertyKey,
@@ -7,8 +10,8 @@ import {
   type PropertyType,
   propertyType,
 } from "@/lib/frontmatter";
-import { PropertyNameMenu } from "./PropertyNameMenu";
-import { PropertyValueEditor } from "./PropertyValueEditor";
+import { PropertyNameMenu } from "./PropertyNameMenu.tsrx";
+import { PropertyValueEditor } from "./PropertyValueEditor.tsrx";
 
 function inputValue(value: Property["value"] | undefined): string {
   if (Array.isArray(value)) return value.join("\n");
@@ -51,11 +54,21 @@ export function PropertyRow({
   const [value, setValue] = useState(inputValue(property?.value));
   const [invalid, setInvalid] = useState(false);
   const [nameMenuOpen, setNameMenuOpen] = useState(false);
+  const nameMenuOpenRef = useRef(false);
+  const dismissCommittedRef = useRef(false);
+  const skipNextRowBlurRef = useRef(false);
   const valueRef = useRef<HTMLElement | null>(null);
+
+  const updateNameMenuOpen = (open: boolean) => {
+    // Portal focus leaves this row's DOM subtree, so blur cannot own menu commits.
+    if (open) dismissCommittedRef.current = false;
+    nameMenuOpenRef.current = open;
+    setNameMenuOpen(open);
+  };
 
   useEffect(() => {
     if (focusNonce === undefined) return;
-    setNameMenuOpen(true);
+    updateNameMenuOpen(true);
   }, [focusNonce]);
 
   const cleanName = name.trim();
@@ -112,7 +125,16 @@ export function PropertyRow({
         if (event.key === "Escape" && !property && !nameMenuOpen) onCancel?.();
       }}
       onBlur={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget)) return;
+        if (skipNextRowBlurRef.current) {
+          skipNextRowBlurRef.current = false;
+          return;
+        }
+        if (nameMenuOpenRef.current) return;
+        if (
+          event.currentTarget.contains(
+            event.relatedTarget instanceof Node ? event.relatedTarget : null,
+          )
+        ) return;
         if (!cleanName && !property) return;
         save();
       }}
@@ -124,7 +146,22 @@ export function PropertyRow({
           open={nameMenuOpen}
           invalid={invalid}
           errorMessage={errorMessage}
-          onOpenChange={setNameMenuOpen}
+          onOpenChange={updateNameMenuOpen}
+          onDismiss={(reason) => {
+            if (dismissCommittedRef.current) return;
+            if (!cleanName && !property) {
+              dismissCommittedRef.current = true;
+              skipNextRowBlurRef.current = reason === "outside-press";
+              updateNameMenuOpen(false);
+              onCancel?.();
+              return;
+            }
+            if (save()) {
+              dismissCommittedRef.current = true;
+              skipNextRowBlurRef.current = reason === "outside-press";
+              updateNameMenuOpen(false);
+            }
+          }}
           onNameChange={(nextName) => {
             setName(nextName);
             setInvalid(false);
@@ -135,7 +172,7 @@ export function PropertyRow({
               return;
             }
             if (property) save();
-            setNameMenuOpen(false);
+            updateNameMenuOpen(false);
             requestAnimationFrame(() => valueRef.current?.focus());
           }}
           onTypeChange={selectType}

@@ -1,9 +1,9 @@
-import { PanelRight } from "lucide-react";
-import { motion } from "motion/react";
+import { LuPanelRight as PanelRight } from "@/icons/icons.tsrx";
+import { motion } from "@octanejs/motion";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { SPRING_PANEL } from "@/lib/ease";
 import { cx } from "@/lib/utils";
-import { LinkedMentions } from "./LinkedMentions";
+import { LinkedMentions } from "./LinkedMentions.tsrx";
 
 const WIDTH = 280;
 

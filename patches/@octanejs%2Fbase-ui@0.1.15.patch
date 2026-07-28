@@ -1,0 +1,18 @@
+diff --git a/src/popover.ts b/src/popover.ts
+index a44c33c0428af988488671e46e2bd7af9c493411..4382f057bddf5972dab335b2d10c32a29f97ec9e 100644
+--- a/src/popover.ts
++++ b/src/popover.ts
+@@ -532,7 +532,12 @@ function PopoverRootComponent<Payload>(props: any): any {
+ 	});
+ }
+ 
+-function PopoverRoot<Payload = unknown>(props: any): any {
++interface PopoverRootProps<Payload> {
++	handle?: PopoverHandle<Payload>;
++	[key: string]: unknown;
++}
++
++function PopoverRoot<Payload = unknown>(props: PopoverRootProps<Payload>): any {
+ 	const slot = S('PopoverRootWrapper');
+ 	// Top-level popovers establish a FloatingTree; nested ones reuse the parent's.
+ 	if (usePopoverRootContext(true)) {

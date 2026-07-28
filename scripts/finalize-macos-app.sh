@@ -78,7 +78,7 @@ spctl --assess --type execute --verbose=2 "$APP_PATH"
 echo "Creating a fresh updater archive from the verified app..."
 rm -f "$ARCHIVE_PATH" "$SIGNATURE_PATH"
 COPYFILE_DISABLE=1 tar -czf "$ARCHIVE_PATH" -C "$MACOS_DIR" "Markd.app"
-bunx tauri signer sign "$ARCHIVE_PATH"
+pnpm exec tauri signer sign "$ARCHIVE_PATH"
 [ -s "$ARCHIVE_PATH" ] || fail "Updater archive was not created."
 [ -s "$SIGNATURE_PATH" ] || fail "Updater signature was not created."
 

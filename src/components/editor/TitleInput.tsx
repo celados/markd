@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "octane";
 
 export function TitleInput({
   title,
@@ -11,7 +11,7 @@ export function TitleInput({
   onEnter: () => void;
   onRename: (name: string) => void;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (focusNonce === undefined) return;

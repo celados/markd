@@ -4,17 +4,17 @@ Thanks for considering a contribution. Markd stays small on purpose — please o
 
 ## Setup
 
-Requirements: [Bun](https://bun.sh), [Rust](https://rustup.rs), Xcode Command Line Tools.
+Requirements: [pnpm](https://pnpm.io), [Rust](https://rustup.rs), Xcode Command Line Tools.
 
 ```bash
-bun install
-bun tauri dev
+pnpm install
+pnpm tauri dev
 ```
 
 ## Before opening a PR
 
 ```bash
-bunx tsc --noEmit          # typecheck
+pnpm run typecheck         # typecheck
 cd src-tauri && cargo test # Rust unit tests
 ```
 

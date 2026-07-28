@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { splitFrontmatter } from "../src/lib/frontmatter";
 import {
   containsMdx,
@@ -75,7 +75,7 @@ links:
     const note = splitFrontmatter(source);
 
     expect(note.frontmatter).toContain("title: Accordion");
-    expect(note.body).toStartWith("\n<ComponentPreview");
+    expect(note.body.startsWith("\n<ComponentPreview")).toBe(true);
     expect(containsMdx(note.body)).toBe(true);
   });
 });

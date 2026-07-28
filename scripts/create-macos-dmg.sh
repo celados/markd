@@ -34,7 +34,7 @@ DMG_DIR="$BUNDLE_DIR/dmg"
 DMG_HELPER="$DMG_DIR/bundle_dmg.sh"
 
 [ -d "$APP_PATH" ] || fail "Signed app bundle not found at $APP_PATH."
-[ -x "$DMG_HELPER" ] || fail "Tauri DMG helper not found. Run 'bunx tauri bundle --bundles dmg' once to generate it."
+[ -x "$DMG_HELPER" ] || fail "Tauri DMG helper not found. Run 'pnpm exec tauri bundle --bundles dmg' once to generate it."
 
 case "$(uname -m)" in
   arm64) DMG_ARCH="aarch64" ;;

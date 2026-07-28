@@ -1,4 +1,7 @@
-import { Sparkles, X } from "lucide-react";
+import {
+  LuSparkles as Sparkles,
+  LuX as X,
+} from "@/icons/icons.tsrx";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useUpdater } from "@/stores/updater";

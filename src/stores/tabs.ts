@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create } from "@octanejs/zustand";
 
 /**
  * Open note tabs, in strip order. Intentionally dumb: just the ordered list

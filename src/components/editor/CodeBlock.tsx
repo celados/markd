@@ -4,10 +4,13 @@ import {
   NodeViewWrapper,
   ReactNodeViewRenderer,
   type NodeViewProps,
-} from "@tiptap/react";
-import { Check, Copy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { ActionSwapIcon } from "@/components/motion/action-swap";
+} from "@octanejs/tiptap";
+import {
+  LuCheck as Check,
+  LuCopy as Copy,
+} from "@/icons/icons.tsrx";
+import { useEffect, useRef, useState } from "octane";
+import { ActionSwapIcon } from "@/components/motion/action-swap.tsrx";
 
 function CodeBlockView({ node }: NodeViewProps) {
   const [copied, setCopied] = useState(false);
@@ -30,7 +33,7 @@ function CodeBlockView({ node }: NodeViewProps) {
   return (
     <NodeViewWrapper className="code-block-wrap">
       <pre>
-        <NodeViewContent<"code"> as="code" />
+        <NodeViewContent as="code" />
       </pre>
       <button
         type="button"
@@ -44,13 +47,14 @@ function CodeBlockView({ node }: NodeViewProps) {
           value={copied ? "copied" : "copy"}
           animation="roll"
           className="h-[13px] w-[13px]"
-        >
-          {copied ? (
-            <Check size={13} strokeWidth={2} />
-          ) : (
-            <Copy size={13} strokeWidth={2} />
-          )}
-        </ActionSwapIcon>
+          icon={
+            copied ? (
+              <Check size={13} strokeWidth={2} />
+            ) : (
+              <Copy size={13} strokeWidth={2} />
+            )
+          }
+        />
         <span>{copied ? "Copied" : "Copy"}</span>
       </button>
     </NodeViewWrapper>

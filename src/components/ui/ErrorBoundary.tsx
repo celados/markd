@@ -1,28 +1,15 @@
-import { Component, type ReactNode } from "react";
+import { ErrorBoundary as OctaneErrorBoundary } from "octane";
 
 interface Props {
-  children: ReactNode;
+  children: unknown;
 }
-interface State {
-  error: Error | null;
-}
-
-/** Catches render crashes so a broken subtree shows a recover screen, not a
- * blank window. Recovery is a full reload — cheapest reliable reset. */
-export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
-
-  static getDerivedStateFromError(error: Error): State {
-    return { error };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error("Markd crashed:", error);
-  }
-
-  render() {
-    if (!this.state.error) return this.props.children;
-
+/** Uses Octane's render boundary; class lifecycles are not part of the runtime. */
+export function ErrorBoundary({ children }: Props) {
+  return (
+    <OctaneErrorBoundary
+      fallback={(error: unknown) => {
+        console.error("Markd crashed:", error);
+        const message = error instanceof Error ? error.message : String(error);
     return (
       <div className="flex h-full flex-col items-center justify-center gap-5 bg-bg px-8 text-center">
         <div className="max-w-md">
@@ -33,9 +20,9 @@ export class ErrorBoundary extends Component<Props, State> {
             Markd hit an unexpected error. Your notes are safe on disk — reloading
             usually fixes it.
           </p>
-          {this.state.error.message && (
+          {message && (
             <p className="mt-3 truncate rounded-md border border-line-soft bg-panel px-3 py-2 font-mono text-[11.5px] text-faint">
-              {this.state.error.message}
+              {message}
             </p>
           )}
         </div>
@@ -47,6 +34,10 @@ export class ErrorBoundary extends Component<Props, State> {
           Reload
         </button>
       </div>
-    );
-  }
+        );
+      }}
+    >
+      {children}
+    </OctaneErrorBoundary>
+  );
 }

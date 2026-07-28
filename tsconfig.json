@@ -1,8 +1,11 @@
 {
+  "tsrx": {
+    "compiler": "octane/compiler/volar"
+  },
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ESNext",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 
@@ -13,16 +16,14 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-
-    /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-
-    /* Path aliases */
+    "jsxImportSource": "octane",
     "baseUrl": ".",
     "paths": {
+      "@tiptap/core": ["node_modules/@tiptap/core"],
+      "@tiptap/pm": ["node_modules/@tiptap/pm"],
+      "prosemirror-model": ["node_modules/prosemirror-model"],
+      "prosemirror-state": ["node_modules/prosemirror-state"],
+      "prosemirror-view": ["node_modules/prosemirror-view"],
       "@/*": ["./src/*"],
       "@/components/*": ["./src/components/*"],
       "@/context/*": ["./src/context/*"],
@@ -30,8 +31,16 @@
       "@/lib/*": ["./src/lib/*"],
       "@/stores/*": ["./src/stores/*"],
       "@/features/*": ["./src/features/*"]
-    }
+    },
+    "types": ["node"],
+    "plugins": [{ "name": "@tsrx/typescript-plugin" }],
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src/**/*", "vite.config.ts"]
 }

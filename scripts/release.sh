@@ -57,7 +57,7 @@ NOTES="${NOTE_PARTS[*]}"
 [ -n "$NOTES" ] || fail "Release notes cannot be empty."
 
 cd "$PROJECT_ROOT"
-bun scripts/verify-release-version.js "$VERSION"
+node scripts/verify-release-version.js "$VERSION"
 
 if [ "$RESUME" -eq 0 ] && [ -n "$(git status --porcelain)" ]; then
   fail "Commit or stash repository changes before starting a release."
@@ -65,7 +65,7 @@ fi
 
 echo -e "${GREEN}🚀 Preparing Markd ${VERSION}${NC}"
 echo -e "${YELLOW}🔐 Checking release credentials...${NC}"
-bun run release:check
+pnpm run release:check
 
 BUNDLE_DIR="$PROJECT_ROOT/src-tauri/target/release/bundle"
 MACOS_DIR="$BUNDLE_DIR/macos"
@@ -85,26 +85,26 @@ if [ "$RESUME" -eq 0 ]; then
     -u APPLE_ID \
     -u APPLE_PASSWORD \
     -u APPLE_TEAM_ID \
-    bunx tauri build --bundles app
+    pnpm exec tauri build --bundles app
 
   echo -e "${YELLOW}✍️  Finalizing the app and updater archive...${NC}"
-  bun run finalize:macos-app -- "$VERSION"
+  pnpm run finalize:macos-app -- "$VERSION"
 else
   echo -e "${YELLOW}↩️  Resuming from existing app and updater artifacts...${NC}"
-  if ! bun run release:verify-artifacts -- "$VERSION" app; then
+  if ! pnpm run release:verify-artifacts -- "$VERSION" app; then
     echo -e "${YELLOW}Existing app artifacts need to be finalized again before resuming...${NC}"
-    bun run finalize:macos-app -- "$VERSION"
+    pnpm run finalize:macos-app -- "$VERSION"
   fi
 fi
 
-bun run release:verify-artifacts -- "$VERSION" app
+pnpm run release:verify-artifacts -- "$VERSION" app
 
 echo -e "${YELLOW}💿 Creating the DMG from the verified app...${NC}"
 find "$DMG_DIR" -maxdepth 1 -type f \( -name "Markd_${VERSION}_*.dmg" -o -name "rw.*.Markd_${VERSION}_*.dmg" \) -delete 2>/dev/null || true
 
-if ! bunx tauri bundle --bundles dmg; then
+if ! pnpm exec tauri bundle --bundles dmg; then
   echo -e "${YELLOW}Tauri DMG packaging failed. Retrying with its generated create-dmg helper...${NC}"
-  bun run create:dmg -- "$VERSION"
+  pnpm run create:dmg -- "$VERSION"
 fi
 
 DMG_MATCHES=()
@@ -115,8 +115,8 @@ done < <(find "$DMG_DIR" -maxdepth 1 -type f -name "Markd_${VERSION}_*.dmg" -pri
 DMG_PATH="${DMG_MATCHES[0]}"
 
 echo -e "${YELLOW}🎟️  Signing and notarizing the DMG...${NC}"
-bun run notarize:dmg -- "$DMG_PATH"
-bun run release:verify-artifacts -- "$VERSION" all
+pnpm run notarize:dmg -- "$DMG_PATH"
+pnpm run release:verify-artifacts -- "$VERSION" all
 
 echo -e "${YELLOW}📝 Generating and validating updater metadata...${NC}"
 GENERATE_ARGS=("$VERSION" "--require=darwin-aarch64")
@@ -124,8 +124,8 @@ if [ -n "$RELEASE_TYPE" ]; then
   GENERATE_ARGS+=("--type=$RELEASE_TYPE")
 fi
 GENERATE_ARGS+=("$NOTES")
-bun run update:generate "${GENERATE_ARGS[@]}"
-bun scripts/verify-update-manifest.js "$PROJECT_ROOT/latest.json" "$VERSION" "$RELEASE_TYPE"
+pnpm run update:generate -- "${GENERATE_ARGS[@]}"
+node scripts/verify-update-manifest.js "$PROJECT_ROOT/latest.json" "$VERSION" "$RELEASE_TYPE"
 
 SITE_UPDATES="$PROJECT_ROOT/site/public/updates"
 mkdir -p "$SITE_UPDATES"

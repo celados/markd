@@ -1,8 +1,12 @@
 import { emit, listen } from "@tauri-apps/api/event";
-import { CornerDownLeft, Feather, X } from "lucide-react";
-import { motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { toast, Toaster } from "sonner";
+import {
+  LuCornerDownLeft as CornerDownLeft,
+  LuFeather as Feather,
+  LuX as X,
+} from "@/icons/icons.tsrx";
+import { motion } from "@octanejs/motion";
+import { useCallback, useEffect, useRef, useState } from "octane";
+import { toast, Toaster } from "@octanejs/sonner";
 import { Button } from "@/components/ui/Button";
 import { ipc } from "@/lib/ipc";
 import { EASE_OUT } from "@/lib/ease";
@@ -16,8 +20,8 @@ export function QuickCaptureWindow() {
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [openNonce, setOpenNonce] = useState(0);
-  const titleRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const titleRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const reset = useCallback(() => {
     setTitle("");
@@ -110,7 +114,7 @@ export function QuickCaptureWindow() {
         <input
           ref={titleRef}
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onInput={(event) => setTitle(event.currentTarget.value)}
           placeholder="Title"
           className="mb-2 h-10 w-full rounded-xl bg-panel px-3.5 text-[14px] font-medium text-ink outline-none placeholder:text-faint focus:ring-1 focus:ring-line"
           onKeyDown={(event) => {
@@ -123,7 +127,7 @@ export function QuickCaptureWindow() {
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onInput={(event) => setValue(event.currentTarget.value)}
           placeholder="Write something worth keeping…"
           rows={6}
           className="w-full resize-none rounded-xl bg-panel px-3.5 py-3 text-[14px] leading-6 text-ink outline-none placeholder:text-faint focus:ring-1 focus:ring-line"

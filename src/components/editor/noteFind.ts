@@ -28,8 +28,11 @@ export const FindHighlightExtension = Extension.create({
           decorations(state) {
             const pluginState = findHighlightKey.getState(state);
             if (!pluginState?.matches.length) return null;
+            // `@tiptap/pm` re-exports ProseMirror classes through a package
+            // boundary; its runtime objects are compatible, but TypeScript
+            // sees the nested model package as a distinct nominal type.
             return DecorationSet.create(
-              state.doc,
+              state.doc as never,
               pluginState.matches.map((match, index) =>
                 Decoration.inline(match.from, match.to, {
                   class:
@@ -38,7 +41,7 @@ export const FindHighlightExtension = Extension.create({
                       : "markd-find-match",
                 }),
               ),
-            );
+            ) as never;
           },
         },
       }),

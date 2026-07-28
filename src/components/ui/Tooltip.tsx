@@ -1,98 +1,34 @@
-import {
-  cloneElement,
-  isValidElement,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { createPortal } from "react-dom";
+import { Tooltip as BaseTooltip } from "@octanejs/base-ui/tooltip";
 
 type Side = "top" | "bottom" | "left" | "right";
 
 const GAP = 6;
 const DELAY_MS = 120;
 
-export function Tooltip({
-  label,
-  side = "bottom",
-  children,
-}: {
+type TooltipProps = {
   label: string;
   side?: Side;
-  children: React.ReactElement;
-}) {
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(
-    null,
-  );
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const anchor = useRef<HTMLElement | null>(null);
+  children: unknown;
+};
 
-  const show = () => {
-    const el = anchor.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const point = {
-      top: { x: rect.left + rect.width / 2, y: rect.top - GAP },
-      bottom: { x: rect.left + rect.width / 2, y: rect.bottom + GAP },
-      left: { x: rect.left - GAP, y: rect.top + rect.height / 2 },
-      right: { x: rect.right + GAP, y: rect.top + rect.height / 2 },
-    }[side];
-    setPosition(point);
-  };
-
-  const onEnter = (event: React.MouseEvent<HTMLElement>) => {
-    anchor.current = event.currentTarget;
-    timer.current = setTimeout(show, DELAY_MS);
-  };
-
-  const hide = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    setPosition(null);
-  };
-
-  useEffect(() => hide, []);
-
-  if (!isValidElement(children)) return children;
-
-  const childProps = children.props as Record<string, unknown>;
-  const trigger = cloneElement(children, {
-    onMouseEnter: (event: React.MouseEvent<HTMLElement>) => {
-      (childProps.onMouseEnter as ((e: unknown) => void) | undefined)?.(event);
-      onEnter(event);
-    },
-    onMouseLeave: (event: React.MouseEvent<HTMLElement>) => {
-      (childProps.onMouseLeave as ((e: unknown) => void) | undefined)?.(event);
-      hide();
-    },
-    onMouseDown: (event: React.MouseEvent<HTMLElement>) => {
-      (childProps.onMouseDown as ((e: unknown) => void) | undefined)?.(event);
-      hide();
-    },
-    "aria-label": (childProps["aria-label"] as string) ?? label,
-  } as never);
-
-  const transform = {
-    top: "translate(-50%, -100%)",
-    bottom: "translate(-50%, 0)",
-    left: "translate(-100%, -50%)",
-    right: "translate(0, -50%)",
-  }[side];
+export function Tooltip(props: TooltipProps) {
+  const { label, side = "bottom", children } = props;
 
   return (
-    <>
-      {trigger}
-      {position &&
-        createPortal(
-          <div
-            role="tooltip"
-            className="tooltip-pop pointer-events-none fixed z-110 whitespace-nowrap rounded-md bg-invert px-2 py-1 text-[11px] font-medium text-invert-ink shadow-md shadow-black/15"
-            style={{ left: position.x, top: position.y, transform }}
-          >
+    <BaseTooltip.Root>
+      <BaseTooltip.Trigger
+        render={<span className="inline-flex" />}
+        delay={DELAY_MS}
+      >
+        {children}
+      </BaseTooltip.Trigger>
+      <BaseTooltip.Portal>
+        <BaseTooltip.Positioner side={side} sideOffset={GAP}>
+          <BaseTooltip.Popup className="tooltip-pop z-110 whitespace-nowrap rounded-md bg-invert px-2 py-1 text-[11px] font-medium text-invert-ink shadow-md shadow-black/15">
             {label}
-          </div>,
-          document.body,
-        )}
-    </>
+          </BaseTooltip.Popup>
+        </BaseTooltip.Positioner>
+      </BaseTooltip.Portal>
+    </BaseTooltip.Root>
   );
 }

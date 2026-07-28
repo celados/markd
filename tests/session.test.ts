@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
 import { restoreSession } from "../src/lib/session";
 import { SIDEBAR_DEFAULT_WIDTH } from "../src/lib/sidebarResize";
 import { useUi } from "../src/stores/ui";

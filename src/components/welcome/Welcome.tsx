@@ -1,5 +1,8 @@
-import { FolderOpen, FolderPlus } from "lucide-react";
-import { motion } from "motion/react";
+import {
+  LuFolderOpen as FolderOpen,
+  LuFolderPlus as FolderPlus,
+} from "@/icons/icons.tsrx";
+import { motion } from "@octanejs/motion";
 import { Button } from "@/components/ui/Button";
 import { useVault } from "@/stores/vault";
 

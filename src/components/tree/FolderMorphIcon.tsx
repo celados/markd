@@ -1,5 +1,9 @@
-import { Folder, FolderOpen } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "@/lib/motion";
+import {
+  LuFolder as Folder,
+  LuFolderOpen as FolderOpen,
+} from "@/icons/icons.tsrx";
+import { motion } from "@octanejs/motion";
 import { EASE_IN_OUT } from "@/lib/ease";
 import { cx } from "@/lib/utils";
 

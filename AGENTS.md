@@ -1,14 +1,36 @@
 # Markd — agent guide
 
-Local-first markdown notes app for macOS and GNU/Linux. Tauri 2 (Rust) + React 19 + Vite + Tailwind v4 + Tiptap 3 + Zustand.
+Local-first markdown notes app for macOS and GNU/Linux. Tauri 2 (Rust) + Octane + Vite + Tailwind v4 + Tiptap 3.
+
+## Fork provenance
+
+This is the Celados Octane fork of
+[`starc007/markd`](https://github.com/starc007/markd), based on upstream commit
+`1d9f0e7f7f2a3cce1a8c83966ff07f6ed2448fb4`. The port was validated against Octane snapshot
+`bbb668df31c3a7f13c79b5bbea6fb7d2e8f4db10`; current package versions and pnpm patches are the
+runtime source of truth. Historical decisions, the reviewed plan, and the per-file migration
+manifest live under `docs/`; unresolved framework/release seams live in `.agents/backlog.md`.
+
+The UI is Octane-native. Do not reintroduce React compatibility layers or mechanically translate
+React composition patterns. Use TSRX where keyed/control-flow ownership benefits from compiler
+visibility; TSX remains valid for straightforward structure and imperative third-party owners.
+
+The root app uses pnpm exclusively. `pnpm-lock.yaml` is the dependency source of truth and
+`pnpm-workspace.yaml` owns patch/install policy. `site/` and `services/cloud-api/` are independent deployment
+packages with their own Bun lockfiles; do not run their scripts from the root or silently absorb them into the
+root pnpm workspace.
 
 ## Commands
 
-- `bun tauri dev` — run the app (vite on port 1420 + cargo)
-- `bun run build` — typecheck (tsc) + vite production build
-- `bunx tsc --noEmit` — typecheck only
+- `pnpm tauri dev` — run the app (vite on port 1420 + cargo)
+- `pnpm run build` — strict app typecheck + Vite production build
+- `pnpm run typecheck` — TSRX typecheck；只豁免 `octanejs/octane#332` 列出的三个精确 dependency path
+- `pnpm run icons:generate` — 从根 `icons.json` 用 Sigil 生成 Octane-native `src/icons/icons.tsrx`；
+  Sigil 通过 workspace 的 `bun link` 提供，只参与开发期 AOT codegen，生成物必须提交，app
+  runtime 和 consumer 安装不依赖 Bun/Sigil
+- `pnpm exec playwright test` — run production-preview journeys in system Google Chrome
 - `cd src-tauri && cargo test` — Rust unit tests
-- `bun run release`: full signed and notarized macOS release (scripts/release.sh)
+- `pnpm run release`: full signed and notarized macOS release (scripts/release.sh)
 - `.github/workflows/release-linux.yml`: signed x86_64 AppImage and Debian release
 
 ## Architecture
@@ -44,6 +66,8 @@ Blocking dialogs (`blocking_pick_folder`) must run in async commands via `spawn_
 
 - `stores/` — zustand: `vault` (tree, view, theme, recents), `tabs` (open note tabs; active = derived from `vault.view`), `todos`, `bookmarks`, `ui`
 - `components/` — by feature: `layout/`, `tree/`, `editor/`, `todos/`, `bookmarks/`, `palette/`, `settings/`, `welcome/`, `ui/`
+- `icons.json` 是图标依赖清单；`src/icons/icons.tsrx` 由 Sigil 生成，禁止手改。新增图标先
+  `sigil add lucide/<name>`，再运行 `pnpm run icons:generate`。
 - Editor: Tiptap with `contentType: "markdown"`; autosave debounced 500ms, flush on unmount; images stored as vault-relative paths, rendered via asset protocol
 - Tabs: `NotesWorkspace` keeps one live editor per open tab, inactive panes hidden via `display:none` — tab switch is a CSS toggle, never a remount/re-parse. Keep it that way.
 - Session: `lib/session.ts` persists per-vault UI layout (open tabs, active view, todo/bookmark tag filters) to localStorage keyed by vault root, restoring it on launch. Tag filters live in the `todos`/`bookmarks` stores (not component state) so they're subscribable.
@@ -69,7 +93,7 @@ Animated components come from the beui registry (the user's own library). A comp
 
 Two ways to add one:
 1. **beui MCP** (preferred): `get_component <slug>` returns every file's contents; write them under `src/components/…`. Shared files (`lib/ease.ts`, `lib/utils.ts`) already exist — don't overwrite.
-2. **shadcn CLI**: `bunx --bun shadcn add @beui/<slug>`.
+2. **shadcn CLI**: `pnpm dlx shadcn add @beui/<slug>`.
 
 Our `Modal` (`components/ui/Modal.tsx`) is built on the same tokens; keep new dialogs on it for one motion language.
 

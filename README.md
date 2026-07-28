@@ -2,6 +2,13 @@
 
 **Local-first notes for people who write.**
 
+> [!NOTE]
+> This is [Celados' Octane-based fork](https://github.com/celados/markd) of
+> [starc007/markd](https://github.com/starc007/markd). The framework port is complete and keeps
+> the product behavior and Tauri data model intact. Upstream currently owns the public website,
+> cloud service, signed binaries, and update channel; this repository is the source for Celados'
+> independent fixes and customization.
+
 Markd is a fast notes app for macOS and Linux, built for people who care about speed, privacy, and ownership.
 
 No accounts.
@@ -69,17 +76,17 @@ Notes are addressed by path, never by ID. Deletes go to the OS trash. Edit notes
 
 ## Getting started
 
-Requirements: [Bun](https://bun.sh), [Rust](https://rustup.rs), and the platform dependencies listed in the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+Requirements: [pnpm](https://pnpm.io), [Rust](https://rustup.rs), and the platform dependencies listed in the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
-bun install
-bun tauri dev      # run the app
+pnpm install
+pnpm tauri dev      # run the app
 ```
 
 Build a release bundle:
 
 ```bash
-bun tauri build
+pnpm tauri build
 ```
 
 Maintainers can follow [NOTARIZATION.md](./NOTARIZATION.md) to configure Developer ID signing and Apple notarization for releases.
@@ -100,7 +107,9 @@ See [AGENTS.md](./AGENTS.md) for architecture details, or [CONTRIBUTING.md](./CO
 
 ## Status
 
-Markd is under active development.
+This fork is under active development. Its React-to-Octane migration has passed the app's type,
+logic, production-build, browser-journey, Rust, and native-host gates.
+
 Sync, encryption, and publishing may be added later without compromising local-first performance.
 
 ## License
