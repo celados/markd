@@ -78,7 +78,7 @@ Never use `--skip-stapling` for a public release.
 
 ## 5. CI secret mapping
 
-The workflow imports the certificate into an ephemeral Keychain and deletes it in an `always()` cleanup step. Repository secrets are populated from Vaultwarden rather than copied from a developer shell:
+The workflow imports the certificate into an ephemeral Keychain and deletes it in an `always()` cleanup step. It passes the imported certificate fingerprint to `codesign`, avoiding an older same-named identity that may already exist on a persistent runner. Repository secrets are populated from Vaultwarden rather than copied from a developer shell:
 
 - `DEVELOPER_ID_CERT_BASE64`, `P12_PASSWORD`, `KEYCHAIN_PASSWORD`
 - `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`

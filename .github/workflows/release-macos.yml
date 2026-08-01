@@ -196,7 +196,8 @@ jobs:
           security list-keychains -d user -s "$keychain_path" "${existing_keychains[@]}"
 
           identity_output="$(security find-identity -v -p codesigning "$keychain_path")"
-          identity="$(sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' <<< "$identity_output" | head -n 1)"
+          # A fingerprint selects this imported certificate even if the runner has an older namesake.
+          identity="$(awk '/"Developer ID Application:/ {print $2; exit}' <<< "$identity_output")"
           if [ -z "$identity" ]; then
             echo "The imported certificate has no Developer ID Application identity." >&2
             echo "$identity_output" >&2

@@ -32,11 +32,6 @@ xcrun --find stapler >/dev/null 2>&1 || fail "stapler is unavailable. Install or
 IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
 [ -n "$IDENTITY" ] || fail "APPLE_SIGNING_IDENTITY is required. Use your Developer ID Application identity."
 
-case "$IDENTITY" in
-  "Developer ID Application:"*) ;;
-  *) fail "APPLE_SIGNING_IDENTITY must be a Developer ID Application certificate, not an Apple Development or ad-hoc identity." ;;
-esac
-
 IDENTITY_ARGS=(security find-identity -v -p codesigning)
 if [ -n "${APPLE_KEYCHAIN_PATH:-}" ]; then
   [ -f "$APPLE_KEYCHAIN_PATH" ] || fail "APPLE_KEYCHAIN_PATH does not point to a keychain."
@@ -44,7 +39,17 @@ if [ -n "${APPLE_KEYCHAIN_PATH:-}" ]; then
 fi
 
 IDENTITIES="$("${IDENTITY_ARGS[@]}")"
-grep -Fq "\"$IDENTITY\"" <<<"$IDENTITIES" || {
+if [[ "$IDENTITY" =~ ^[[:xdigit:]]{40}$ ]]; then
+  IDENTITY_MATCH="$(awk -v fingerprint="$IDENTITY" '$2 == fingerprint && /"Developer ID Application:/ {print; exit}' <<<"$IDENTITIES")"
+else
+  case "$IDENTITY" in
+    "Developer ID Application:"*) ;;
+    *) fail "APPLE_SIGNING_IDENTITY must identify a Developer ID Application certificate, not an Apple Development or ad-hoc identity." ;;
+  esac
+  IDENTITY_MATCH="$(grep -F "\"$IDENTITY\"" <<<"$IDENTITIES" | head -n 1 || true)"
+fi
+
+[ -n "$IDENTITY_MATCH" ] || {
   echo "Available code-signing identities:" >&2
   echo "$IDENTITIES" >&2
   fail "APPLE_SIGNING_IDENTITY is not installed with a valid private key."
