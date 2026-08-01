@@ -166,10 +166,14 @@ jobs:
           intermediate_g2_sha="$(shasum -a 256 "$intermediate_g2_path" | awk '{print $1}')"
           test "$intermediate_g2_sha" = "f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a"
 
+          # codesign only constructs Developer ID chains reliably from a system-installed intermediate.
+          sudo -n security import \
+            "$intermediate_g2_path" \
+            -k /Library/Keychains/System.keychain >/dev/null
+
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security import "$intermediate_g2_path" -k "$keychain_path" >/dev/null
           security import "$certificate_path" \
             -P "$P12_PASSWORD" \
             -f pkcs12 \
