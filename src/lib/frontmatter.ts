@@ -1,3 +1,5 @@
+import { isMap, isScalar, isSeq, parseDocument } from "yaml";
+
 /**
  * YAML frontmatter handling. Frontmatter stays outside the rich editor and is
  * re-attached on save. UI property edits only touch the selected flat property
@@ -7,12 +9,12 @@
 // Leading `---\n … \n---` block at the very start of the document.
 const FRONTMATTER_RE = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 
-export interface SplitNote {
+export type SplitNote = {
   /** Raw frontmatter incl. delimiters and trailing newline, or "" if none. */
   frontmatter: string;
   /** Everything after the frontmatter block. */
   body: string;
-}
+};
 
 export function splitFrontmatter(markdown: string): SplitNote {
   const match = FRONTMATTER_RE.exec(markdown);
@@ -36,10 +38,10 @@ export type PropertyType =
   | "url"
   | "list";
 
-export interface Property {
+export type Property = {
   key: string;
   value: string | string[] | number | boolean;
-}
+};
 
 export function propertyType(value: Property["value"]): PropertyType {
   if (Array.isArray(value)) return "list";
@@ -50,77 +52,44 @@ export function propertyType(value: Property["value"]): PropertyType {
   return "text";
 }
 
-function unquote(raw: string): string {
-  const value = raw.trim();
-  if (value.startsWith('"') && value.endsWith('"')) {
-    try {
-      return JSON.parse(value) as string;
-    } catch {
-      return value.slice(1, -1);
-    }
-  }
-  if (value.startsWith("'") && value.endsWith("'")) {
-    return value.slice(1, -1).replace(/''/g, "'");
-  }
-  return value.replace(/^\[\[|\]\]$/g, "").trim();
-}
-
-/**
- * Minimal YAML-frontmatter reader — enough for the flat maps that clipping
- * tools emit: `key: value` scalars and `key:` followed by `- item` lists.
- * Not a general YAML parser; nested maps and block scalars are ignored.
- */
 export function parseFrontmatter(frontmatter: string): Property[] {
-  if (!frontmatter) return [];
-  const inner = frontmatter
-    .replace(/^---[ \t]*\r?\n/, "")
-    .replace(/\r?\n---[ \t]*\r?\n?$/, "");
-  const lines = inner.split(/\r?\n/);
-  const props: Property[] = [];
+  const block = frontmatterBlock(frontmatter);
+  if (!block) return [];
 
-  for (let i = 0; i < lines.length; ) {
-    const match = /^([A-Za-z0-9_][\w -]*?):[ \t]*(.*)$/.exec(lines[i]);
-    if (!match) {
-      i += 1;
+  const document = parseDocument(block.yaml);
+  if (!isMap(document.contents)) return [];
+
+  const properties: Property[] = [];
+  for (const pair of document.contents.items) {
+    if (!isScalar(pair.key) || typeof pair.key.value !== "string") continue;
+    const key = pair.key.value;
+    const value = pair.value;
+
+    if (value == null) {
+      properties.push({ key, value: "" });
       continue;
     }
-    const key = match[1].trim();
-    const scalar = match[2].trim();
-    if (scalar === "[]") {
-      props.push({ key, value: [] });
-      i += 1;
+    if (isScalar(value)) {
+      const scalar = value.value;
+      if (
+        typeof scalar === "string" ||
+        typeof scalar === "number" ||
+        typeof scalar === "boolean"
+      ) {
+        properties.push({ key, value: scalar });
+      }
       continue;
     }
-    if (scalar === "true" || scalar === "false") {
-      props.push({ key, value: scalar === "true" });
-      i += 1;
-      continue;
-    }
-    if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(scalar)) {
-      props.push({ key, value: Number(scalar) });
-      i += 1;
-      continue;
-    }
-    if (scalar) {
-      props.push({ key, value: unquote(scalar) });
-      i += 1;
-      continue;
-    }
-    // No inline value — collect any following `- item` list lines.
-    const items: string[] = [];
-    let j = i + 1;
-    while (j < lines.length && /^[ \t]*-[ \t]+/.test(lines[j])) {
-      items.push(unquote(lines[j].replace(/^[ \t]*-[ \t]+/, "")));
-      j += 1;
-    }
-    if (items.length) {
-      props.push({ key, value: items });
-      i = j;
-    } else {
-      i += 1;
+    if (isSeq(value)) {
+      const items = value.items.map((item) =>
+        isScalar(item) && item.value != null ? String(item.value) : null,
+      );
+      if (items.every((item): item is string => item !== null)) {
+        properties.push({ key, value: items });
+      }
     }
   }
-  return props;
+  return properties;
 }
 
 const PROPERTY_KEY_RE = /^[A-Za-z0-9_][\w -]*$/;
@@ -144,22 +113,47 @@ function propertyLines(property: Property): string[] {
   return [`${key}: ${JSON.stringify(property.value)}`];
 }
 
-function propertyRange(lines: string[], key: string, closing: number) {
-  for (let start = 1; start < closing; start += 1) {
-    const match = /^([A-Za-z0-9_][\w -]*?):[ \t]*(.*)$/.exec(lines[start]);
-    if (!match || match[1].trim() !== key) continue;
-    let end = start + 1;
-    while (end < closing && /^[ \t]*-[ \t]+/.test(lines[end])) end += 1;
-    return { start, end };
-  }
-  return null;
+type FrontmatterBlock = {
+  opening: string;
+  yaml: string;
+  beforeClosing: string;
+  closing: string;
+  trailing: string;
+};
+
+function frontmatterBlock(frontmatter: string): FrontmatterBlock | null {
+  const match = /^(---[ \t]*\r?\n)([\s\S]*?)(\r?\n)(---[ \t]*)(\r?\n)?$/.exec(
+    frontmatter,
+  );
+  if (!match) return null;
+  return {
+    opening: match[1],
+    yaml: match[2],
+    beforeClosing: match[3],
+    closing: match[4],
+    trailing: match[5] ?? "",
+  };
 }
 
-function closingDelimiterIndex(lines: string[]): number {
-  for (let index = lines.length - 1; index > 0; index -= 1) {
-    if (lines[index].trim() === "---") return index;
-  }
-  return -1;
+function joinFrontmatterBlock(block: FrontmatterBlock, yaml: string): string {
+  return `${block.opening}${yaml}${block.beforeClosing}${block.closing}${block.trailing}`;
+}
+
+function propertySourceRange(yaml: string, key: string) {
+  const document = parseDocument(yaml);
+  if (!isMap(document.contents)) return null;
+  const pairs = document.contents.items;
+  const index = pairs.findIndex(
+    (pair) => isScalar(pair.key) && pair.key.value === key,
+  );
+  if (index < 0) return null;
+
+  const pair = pairs[index];
+  const start = pair.key?.range?.[0];
+  if (start == null) return null;
+  const valueEnd = pair.value?.range?.[2] ?? pair.key?.range?.[2];
+  if (valueEnd == null) return null;
+  return { start, end: valueEnd };
 }
 
 /** Add or replace one flat property without reserializing the full YAML block. */
@@ -175,18 +169,23 @@ export function upsertFrontmatterProperty(
     return ["---", ...propertyLines(next), "---", ""].join("\n");
   }
 
-  const newline = frontmatter.includes("\r\n") ? "\r\n" : "\n";
-  const lines = frontmatter.split(/\r?\n/);
-  const closing = closingDelimiterIndex(lines);
-  if (closing < 0) return frontmatter;
-
-  const range = propertyRange(lines, previousKey ?? next.key, closing);
+  const block = frontmatterBlock(frontmatter);
+  if (!block) return frontmatter;
+  const newline = block.opening.endsWith("\r\n") ? "\r\n" : "\n";
+  const replacement = propertyLines(next).join(newline);
+  const range = propertySourceRange(block.yaml, previousKey ?? next.key);
+  let yaml: string;
   if (range) {
-    lines.splice(range.start, range.end - range.start, ...propertyLines(next));
+    const suffix = block.yaml.slice(range.end);
+    yaml = `${block.yaml.slice(0, range.start)}${replacement}${
+      suffix && !suffix.startsWith("\n") && !suffix.startsWith("\r\n")
+        ? newline
+        : ""
+    }${suffix}`;
   } else {
-    lines.splice(closing, 0, ...propertyLines(next));
+    yaml = `${block.yaml}${block.yaml ? newline : ""}${replacement}`;
   }
-  return lines.join(newline);
+  return joinFrontmatterBlock(block, yaml);
 }
 
 /** Remove one flat property while leaving unrelated YAML untouched. */
@@ -195,17 +194,13 @@ export function removeFrontmatterProperty(
   key: string,
 ): string {
   if (!frontmatter) return "";
-  const newline = frontmatter.includes("\r\n") ? "\r\n" : "\n";
-  const lines = frontmatter.split(/\r?\n/);
-  const closing = closingDelimiterIndex(lines);
-  if (closing < 0) return frontmatter;
-  const range = propertyRange(lines, key, closing);
+  const block = frontmatterBlock(frontmatter);
+  if (!block) return frontmatter;
+  const range = propertySourceRange(block.yaml, key);
   if (!range) return frontmatter;
 
-  lines.splice(range.start, range.end - range.start);
-  const nextClosing = closingDelimiterIndex(lines);
-  const isEmpty = lines
-    .slice(1, nextClosing)
-    .every((line) => line.trim().length === 0);
-  return isEmpty ? "" : lines.join(newline);
+  const yaml = `${block.yaml.slice(0, range.start)}${block.yaml.slice(range.end)}`
+    .replace(/^\r?\n/, "")
+    .replace(/\r?\n$/, "");
+  return yaml.trim().length === 0 ? "" : joinFrontmatterBlock(block, yaml);
 }

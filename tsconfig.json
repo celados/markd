@@ -1,7 +1,4 @@
 {
-  "tsrx": {
-    "compiler": "octane/compiler/volar"
-  },
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,

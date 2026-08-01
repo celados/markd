@@ -82,6 +82,14 @@ pub fn resolve_rel(root: &Path, rel: &str) -> AppResult<PathBuf> {
     Ok(notes_root(root).join(rel_path))
 }
 
+/// Return the actual on-disk path so copied paths never preserve a vault or
+/// note symlink that would point agents at a different filesystem identity.
+pub fn canonical_note_path(root: &Path, rel: &str) -> AppResult<String> {
+    Ok(fs::canonicalize(resolve_rel(root, rel)?)?
+        .to_string_lossy()
+        .to_string())
+}
+
 pub fn rel_of(root: &Path, path: &Path) -> AppResult<String> {
     path.strip_prefix(notes_root(root))
         .map(|p| p.to_string_lossy().replace('\\', "/"))
@@ -277,6 +285,26 @@ mod tests {
         assert!(resolve_rel(dir.path(), "../escape.md").is_err());
         assert!(resolve_rel(dir.path(), "/abs.md").is_err());
         assert!(resolve_rel(dir.path(), "ok/fine.md").is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_note_path_expands_a_symlinked_vault() {
+        use std::os::unix::fs::symlink;
+
+        let parent = tempdir().unwrap();
+        let vault = parent.path().join("actual-vault");
+        fs::create_dir(&vault).unwrap();
+        fs::write(vault.join("Note.md"), "note").unwrap();
+        let alias = parent.path().join("vault-alias");
+        symlink(&vault, &alias).unwrap();
+
+        assert_eq!(
+            canonical_note_path(&alias, "Note.md").unwrap(),
+            fs::canonicalize(vault.join("Note.md"))
+                .unwrap()
+                .to_string_lossy()
+        );
     }
 
     #[test]

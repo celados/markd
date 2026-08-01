@@ -52,4 +52,37 @@ describe("frontmatter property editing", () => {
       { key: "title", value: 'A "quoted" note' },
     ]);
   });
+
+  test("parses folded and literal YAML block scalars as their resolved values", () => {
+    expect(
+      parseFrontmatter(
+        "---\nsummary: >-\n  A long field value that\n  continues on another line.\nbody: |-\n  first\n  second\n---\n",
+      ),
+    ).toEqual([
+      {
+        key: "summary",
+        value: "A long field value that continues on another line.",
+      },
+      { key: "body", value: "first\nsecond" },
+    ]);
+  });
+
+  test("replaces a block scalar without leaving its continuation lines", () => {
+    const source =
+      "---\nsummary: >-\n  old long value\n  on two lines\nkeep: yes\n---\n";
+    expect(
+      upsertFrontmatterProperty(source, "summary", {
+        key: "summary",
+        value: "replacement",
+      }),
+    ).toBe('---\nsummary: "replacement"\nkeep: yes\n---\n');
+  });
+
+  test("removes a block scalar without changing unrelated YAML", () => {
+    const source =
+      "---\nsummary: >-\n  old long value\n  on two lines\n# keep this comment\nnested:\n  name: value\n---\n";
+    expect(removeFrontmatterProperty(source, "summary")).toBe(
+      "---\n# keep this comment\nnested:\n  name: value\n---\n",
+    );
+  });
 });

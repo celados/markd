@@ -5,7 +5,7 @@ import { create } from "@octanejs/zustand";
  * of rels. Which tab is *active* is derived from `vault.view` — never stored
  * here — so the two can't drift apart.
  */
-interface TabsState {
+type TabsState = {
   tabs: string[];
   /** Bumped to ask a note's pane to scroll to top (e.g. opened via a link). */
   scrollTopReq: { rel: string; nonce: number } | null;
@@ -21,6 +21,7 @@ interface TabsState {
   /** Add a tab for `rel` if not already open (no-op otherwise). */
   open: (rel: string) => void;
   close: (rel: string) => void;
+  closeOthers: (rel: string) => void;
   /** Rewrite rels after a rename/move of `rel` → `next` (note or folder). */
   remap: (rel: string, next: string) => void;
   /** Drop `rel` and anything under it (folder delete). */
@@ -36,7 +37,7 @@ interface TabsState {
     occurrence: number,
   ) => void;
   clear: () => void;
-}
+};
 
 export const useTabs = create<TabsState>((set, get) => ({
   tabs: [],
@@ -49,6 +50,8 @@ export const useTabs = create<TabsState>((set, get) => ({
   },
 
   close: (rel) => set({ tabs: get().tabs.filter((t) => t !== rel) }),
+
+  closeOthers: (rel) => set({ tabs: get().tabs.includes(rel) ? [rel] : [] }),
 
   remap: (rel, next) =>
     set({

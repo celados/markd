@@ -100,6 +100,7 @@ export const ipc = {
   pinsList: () => call<string[]>("pins_list"),
   pinNote: (rel: string) => call<string[]>("pin_note", { rel }),
   unpinNote: (rel: string) => call<string[]>("unpin_note", { rel }),
+  notePath: (rel: string) => call<string>("note_path", { rel }),
 
   todosList: () => call<Todo[]>("todos_list"),
   todoAdd: (text: string) => call<Todo>("todo_add", { text }),

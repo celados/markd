@@ -24,7 +24,7 @@ root pnpm workspace.
 
 - `pnpm tauri dev` — run the app (vite on port 1420 + cargo)
 - `pnpm run build` — strict app typecheck + Vite production build
-- `pnpm run typecheck` — TSRX typecheck；只豁免 `octanejs/octane#332` 列出的三个精确 dependency path
+- `pnpm run typecheck` — strict TSRX typecheck；不保留 dependency diagnostic allowlist
 - `pnpm run icons:generate` — 从根 `icons.json` 用 Sigil 生成 Octane-native `src/icons/icons.tsrx`；
   Sigil 通过 workspace 的 `bun link` 提供，只参与开发期 AOT codegen，生成物必须提交，app
   runtime 和 consumer 安装不依赖 Bun/Sigil

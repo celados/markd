@@ -33,6 +33,42 @@ test("open tabs retain the same live editor across view switches", async ({
   ).toHaveAttribute("data-editor-identity", "readme");
 });
 
+test("tab context menu manages tabs, pins, and both path forms", async ({
+  page,
+}) => {
+  await page.getByRole("treeitem", { name: "Projects", exact: true }).click();
+  await page.getByRole("treeitem", { name: "Alpha.md", exact: true }).click();
+  const readmeTab = page.getByRole("tab", { name: /README/ });
+
+  await readmeTab.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Pin note" })).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Close", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Close others" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Copy path" })).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Copy relative path" }),
+  ).toBeVisible();
+
+  await page.getByRole("menuitem", { name: "Pin note" }).click();
+  await readmeTab.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Unpin note" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Copy path" }).click();
+  await expect
+    .poll(() => clipboardText(page))
+    .toBe("/private/tmp/markd-browser-fixture/README.md");
+
+  await readmeTab.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy relative path" }).click();
+  await expect.poll(() => clipboardText(page)).toBe("README.md");
+
+  await readmeTab.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Close others" }).click();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(readmeTab).toHaveAttribute("aria-selected", "true");
+});
+
 test("autosave and close flush preserve frontmatter and the owning path", async ({
   page,
 }) => {
@@ -155,6 +191,17 @@ async function clearCommands(page: Page) {
       }
     ).__MARKD_TEST__;
     fixture.commands.length = 0;
+  });
+}
+
+async function clipboardText(page: Page) {
+  return page.evaluate(() => {
+    const fixture = (
+      window as unknown as {
+        __MARKD_TEST__: { clipboard: string[] };
+      }
+    ).__MARKD_TEST__;
+    return fixture.clipboard.at(-1);
   });
 }
 

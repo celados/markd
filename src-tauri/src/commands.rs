@@ -338,6 +338,11 @@ pub fn unpin_note(state: State<'_, AppState>, rel: String) -> AppResult<Vec<Stri
     pins::unpin(&state.root()?, &rel)
 }
 
+#[tauri::command]
+pub fn note_path(state: State<'_, AppState>, rel: String) -> AppResult<String> {
+    vault::canonical_note_path(&state.root()?, &rel)
+}
+
 // ---- todos ----
 
 #[tauri::command]

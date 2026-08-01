@@ -77,6 +77,7 @@ pub fn run() {
             commands::pins_list,
             commands::pin_note,
             commands::unpin_note,
+            commands::note_path,
             commands::todos_list,
             commands::todo_add,
             commands::todo_toggle,

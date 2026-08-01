@@ -1,6 +1,7 @@
 import {
   LuFileText as FileText,
   LuPin as Pin,
+  LuPinOff as PinOff,
 } from "@/icons/icons.tsrx";
 import { motion } from "@octanejs/motion";
 import { useMemo, useState } from "octane";
@@ -8,6 +9,7 @@ import {
   ContextMenu,
   type MenuPosition,
 } from "@/components/ui/ContextMenu";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { EASE_OUT } from "@/lib/ease";
 import type { TreeNode } from "@/lib/types";
 import { cx } from "@/lib/utils";
@@ -91,6 +93,7 @@ function PinnedRow(props: {
   const expanded = useVault((state) => state.expanded);
   const toggleExpanded = useVault((state) => state.toggleExpanded);
   const setView = useVault((state) => state.setView);
+  const unpin = usePins((state) => state.unpin);
   const isFolder = node.kind === "folder";
   const isOpen = expanded.has(node.rel);
   const isActive = view?.type === "note" && view.rel === node.rel;
@@ -183,9 +186,24 @@ function PinnedRow(props: {
         @if (isRenaming) {
           <RenameInput node={node} onDone={() => setRenaming(null)} />
         } @else {
-          <span className={cx("truncate", isFolder && "font-medium")}>
+          <span className={cx("min-w-0 flex-1 truncate", isFolder && "font-medium")}>
             {node.name}
           </span>
+        }
+        @if (root && !isRenaming) {
+          <Tooltip label={isFolder ? "Unpin folder" : "Unpin note"} side="right">
+            <button
+              type="button"
+              aria-label={isFolder ? `Unpin ${node.name} folder` : `Unpin ${node.name}`}
+              className="grid h-5 w-5 shrink-0 place-items-center rounded opacity-0 transition-opacity duration-100 hover:bg-active group-hover:opacity-60 group-focus-within:opacity-60 hover:opacity-100"
+              onClick={(event: NativeEvent<HTMLButtonElement, MouseEvent>) => {
+                event.stopPropagation();
+                void unpin(node.rel);
+              }}
+            >
+              <PinOff size={11.5} strokeWidth={2} />
+            </button>
+          </Tooltip>
         }
       </div>
 

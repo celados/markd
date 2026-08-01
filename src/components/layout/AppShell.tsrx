@@ -292,7 +292,7 @@ export function AppShell() @{
                   content={
                     <NoteMenuContent
                       pinned={pins.includes(noteRel!)}
-                      path={path}
+                      rel={noteRel!}
                       markdownSource={markdownSource}
                       onClose={() => setNoteMenuOpen(false)}
                       onTogglePin={() => void togglePin(noteRel!)}
@@ -355,7 +355,7 @@ type NoteMenuButtonProps = {
 
 function NoteMenuContent(props: {
   pinned: boolean;
-  path: string | null;
+  rel: string;
   markdownSource: boolean;
   onClose: () => void;
   onTogglePin: () => void;
@@ -363,7 +363,7 @@ function NoteMenuContent(props: {
 }) @{
   const {
     pinned,
-    path,
+    rel,
     markdownSource,
     onClose,
     onTogglePin,
@@ -389,34 +389,38 @@ function NoteMenuContent(props: {
       }}
     />
     <div className="mx-1 my-1 border-t border-line-soft" />
-    @if (path) {
-      <>
-        <NoteMenuButton
-          icon={Copy}
-          label="Copy path"
-          onClick={() => {
-            onClose();
-            void navigator.clipboard.writeText(path).then(
+    <NoteMenuButton
+      icon={Copy}
+      label="Copy path"
+      onClick={() => {
+        onClose();
+        void ipc.notePath(rel).then(
+          (path) =>
+            navigator.clipboard.writeText(path).then(
               () => toast("Path copied"),
               () => toast.error("Path could not be copied"),
-            );
-          }}
-        />
-        <NoteMenuButton
-          icon={FolderOpen}
-          label={isMac() ? "Reveal in Finder" : "Reveal in File Manager"}
-          onClick={() => {
-            onClose();
-            void revealItemInDir(path).catch((error) =>
+            ),
+          () => toast.error("Path could not be resolved"),
+        );
+      }}
+    />
+    <NoteMenuButton
+      icon={FolderOpen}
+      label={isMac() ? "Reveal in Finder" : "Reveal in File Manager"}
+      onClick={() => {
+        onClose();
+        void ipc.notePath(rel).then(
+          (path) =>
+            revealItemInDir(path).catch((error) =>
               toast.error("Could not reveal note", {
                 description:
                   error instanceof Error ? error.message : String(error),
               }),
-            );
-          }}
-        />
-      </>
-    }
+            ),
+          () => toast.error("Path could not be resolved"),
+        );
+      }}
+    />
     <div className="mx-1 my-1 border-t border-line-soft" />
     <NoteMenuButton
       icon={Download}

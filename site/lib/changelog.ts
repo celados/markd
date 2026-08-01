@@ -10,6 +10,21 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.8",
+    date: "2026-08-01",
+    displayDate: "August 1, 2026",
+    title: "Faster note navigation",
+    summary:
+      "Tabs and pinned notes now expose the actions needed to keep a busy vault organized.",
+    changes: [
+      "Right-click a note tab to pin it, close it, close other tabs, or copy its full or vault-relative path.",
+      "Drag the app window from unused space beside open tabs.",
+      "Unpin a note or folder directly from its sidebar row.",
+      "Read folded and multiline YAML frontmatter values correctly in note properties.",
+    ],
+    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.1.8",
+  },
+  {
     version: "0.1.7",
     date: "2026-08-01",
     displayDate: "August 1, 2026",

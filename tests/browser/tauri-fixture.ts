@@ -65,6 +65,8 @@ export async function installTauriFixture(
         ]
       : [];
     let todoTags = fixtureOptions.taggedTodos ? ["work", "later"] : [];
+    let pins = fixtureOptions.pinnedFolder ? ["Projects"] : [];
+    const clipboard: string[] = [];
     const notes = new Map([
       [
         "README.md",
@@ -136,7 +138,15 @@ export async function installTauriFixture(
           case "bookmark_tags_list":
             return [];
           case "pins_list":
-            return fixtureOptions.pinnedFolder ? ["Projects"] : [];
+            return pins;
+          case "pin_note":
+            pins = Array.from(new Set([...pins, String(args.rel)]));
+            return pins;
+          case "unpin_note":
+            pins = pins.filter((rel) => rel !== String(args.rel));
+            return pins;
+          case "note_path":
+            return `/private/tmp/markd-browser-fixture/${String(args.rel)}`;
           case "todos_list":
             return todos;
           case "todo_tags_list":
@@ -180,6 +190,14 @@ export async function installTauriFixture(
         callbacks.delete(id);
       },
     };
-    Object.assign(window, { __MARKD_TEST__: { commands, notes } });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          clipboard.push(value);
+        },
+      },
+    });
+    Object.assign(window, { __MARKD_TEST__: { clipboard, commands, notes } });
   }, options);
 }

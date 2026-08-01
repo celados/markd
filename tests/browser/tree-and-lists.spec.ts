@@ -77,4 +77,15 @@ test("pinned folders own their subtree without duplicating the main tree", async
   await expect(
     pinnedTree.getByRole("treeitem", { name: "Alpha.md" }),
   ).toBeVisible();
+
+  const unpin = pinnedTree.getByRole("button", {
+    name: "Unpin Projects folder",
+  });
+  await page.mouse.move(1000, 700);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await expect(unpin).toHaveCSS("opacity", "0");
+  await pinnedTree.getByRole("treeitem", { name: "Projects" }).hover();
+  await expect(unpin).toHaveCSS("opacity", "0.6");
+  await unpin.click();
+  await expect(pinnedTree).toHaveCount(0);
 });

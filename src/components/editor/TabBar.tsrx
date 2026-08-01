@@ -1,8 +1,22 @@
-import { LuX as X } from "@/icons/icons.tsrx";
+import {
+  LuCopy as Copy,
+  LuPin as Pin,
+  LuPinOff as PinOff,
+  LuX as X,
+} from "@/icons/icons.tsrx";
 import { motion } from "@octanejs/motion";
+import { toast } from "@octanejs/sonner";
+import { useState } from "octane";
+import {
+  ContextMenu,
+  type MenuItem,
+  type MenuPosition,
+} from "@/components/ui/ContextMenu";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { SPRING_LAYOUT } from "@/lib/ease";
+import { ipc } from "@/lib/ipc";
 import { cx, noteTitle } from "@/lib/utils";
+import { usePins } from "@/stores/pins";
 import { nextAfterClose, useTabs } from "@/stores/tabs";
 import { useVault } from "@/stores/vault";
 
@@ -14,11 +28,17 @@ export function TabBar() @{
   const tabs = useTabs((s) => s.tabs);
   const view = useVault((s) => s.view);
   const active = view?.type === "note" ? view.rel : null;
+  const pins = usePins((s) => s.pins);
+  const [menu, setMenu] = useState<{
+    rel: string;
+    position: MenuPosition;
+  } | null>(null);
   // Octane #333 currently cannot lower a key that refers to an @for index
   // binding, so positional focus identity is materialized before rendering.
   const entries = tabs.map((rel, index) => ({ rel, index }));
 
   @if (entries.length > 0) {
+    <>
     // layoutRoot scopes the sliding active-tab fill to this strip so the
     // horizontal scroll offset can't smear its projection.
     <motion.div
@@ -31,9 +51,24 @@ export function TabBar() @{
           rel={entry.rel}
           active={entry.rel === active}
           focusable={entry.rel === active || (!active && entry.index === 0)}
+          openMenu={(position) => setMenu({ rel: entry.rel, position })}
         />
       }
+      <div
+        data-tauri-drag-region
+        aria-hidden="true"
+        className="min-w-12 flex-1 shrink-0"
+      />
     </motion.div>
+
+    @if (menu) {
+      <ContextMenu
+        position={menu.position}
+        items={tabMenuItems(menu.rel, pins.includes(menu.rel))}
+        onClose={() => setMenu(null)}
+      />
+    }
+    </>
   }
 }
 
@@ -49,12 +84,60 @@ export function closeTab(rel: string) {
   }
 }
 
+function closeOtherTabs(rel: string) {
+  useTabs.getState().closeOthers(rel);
+  useVault.getState().setView({ type: "note", rel });
+}
+
+function copyText(value: string, success: string) {
+  void navigator.clipboard.writeText(value).then(
+    () => toast(success),
+    () => toast.error("Path could not be copied"),
+  );
+}
+
+function tabMenuItems(rel: string, pinned: boolean): MenuItem[] {
+  return [
+    {
+      label: pinned ? "Unpin note" : "Pin note",
+      icon: pinned ? PinOff : Pin,
+      onSelect: () => void usePins.getState().toggle(rel),
+    },
+    {
+      label: "Close",
+      icon: X,
+      onSelect: () => closeTab(rel),
+    },
+    {
+      label: "Close others",
+      icon: X,
+      onSelect: () => closeOtherTabs(rel),
+    },
+    {
+      label: "Copy path",
+      icon: Copy,
+      onSelect: () => {
+        void ipc.notePath(rel).then(
+          (path) => copyText(path, "Path copied"),
+          () => toast.error("Path could not be resolved"),
+        );
+      },
+    },
+    {
+      label: "Copy relative path",
+      icon: Copy,
+      onSelect: () => copyText(rel, "Relative path copied"),
+    },
+  ];
+}
+
 function Tab(props: {
   rel: string;
   active: boolean;
   focusable: boolean;
+  openMenu: (position: MenuPosition) => void;
 }) @{
-  const { rel, active, focusable } = props;
+  const { rel, active, focusable, openMenu } = props;
   const setView = useVault((s) => s.setView);
 
     <div
@@ -72,6 +155,11 @@ function Tab(props: {
       onAuxClick={(event: NativeEvent<HTMLDivElement, MouseEvent>) => {
         // middle-click closes, like every code editor
         if (event.button === 1) closeTab(rel);
+      }}
+      onContextMenu={(event: NativeEvent<HTMLDivElement, MouseEvent>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openMenu({ x: event.clientX, y: event.clientY });
       }}
       onKeyDown={(event: NativeEvent<HTMLDivElement, KeyboardEvent>) => {
         const tabs = Array.from(
