@@ -85,6 +85,7 @@ if [ "$RESUME" -eq 0 ]; then
     -u APPLE_ID \
     -u APPLE_PASSWORD \
     -u APPLE_TEAM_ID \
+    -u APPLE_SIGNING_IDENTITY \
     pnpm exec tauri build --bundles app
 
   echo -e "${YELLOW}✍️  Finalizing the app and updater archive...${NC}"
