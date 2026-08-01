@@ -179,6 +179,7 @@ jobs:
           security import "$intermediate_g2_path" -k "$keychain_path" >/dev/null
           security import "$certificate_path" \
             -P "$P12_PASSWORD" \
+            -f pkcs12 \
             -k "$keychain_path" \
             -T /usr/bin/codesign \
             -T /usr/bin/security >/dev/null
