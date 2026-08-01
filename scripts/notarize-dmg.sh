@@ -24,17 +24,15 @@ IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
   exit 1
 }
 
-KEYCHAIN_ARGS=()
 if [ -n "${APPLE_KEYCHAIN_PATH:-}" ]; then
   [ -f "$APPLE_KEYCHAIN_PATH" ] || {
     echo "❌ APPLE_KEYCHAIN_PATH does not point to a keychain." >&2
     exit 1
   }
-  KEYCHAIN_ARGS=(--keychain "$APPLE_KEYCHAIN_PATH")
 fi
 
 echo "Signing $(basename "$DMG_PATH") with Developer ID..."
-codesign --force "${KEYCHAIN_ARGS[@]}" --sign "$IDENTITY" --timestamp "$DMG_PATH"
+codesign --force --sign "$IDENTITY" --timestamp "$DMG_PATH"
 codesign --verify --verbose=2 "$DMG_PATH"
 
 echo "Uploading $(basename "$DMG_PATH") to Apple's notary service..."
