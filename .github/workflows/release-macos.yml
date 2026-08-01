@@ -58,9 +58,11 @@ jobs:
 
       - name: Prepare persistent workspace
         run: |
-          # Actions uses a non-login shell; expose the toolchains installed for the runner service account.
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          echo "$HOME/Library/pnpm/bin" >> "$GITHUB_PATH"
+          # Actions overrides HOME; resolve the service account's real macOS home before exposing its toolchains.
+          runner_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
+          test -n "$runner_home"
+          echo "$runner_home/.cargo/bin" >> "$GITHUB_PATH"
+          echo "$runner_home/Library/pnpm/bin" >> "$GITHUB_PATH"
 
           # A killed job can leave tracked files dirty, but ignored incremental outputs should survive.
           git reset --hard --quiet "$GITHUB_SHA"
