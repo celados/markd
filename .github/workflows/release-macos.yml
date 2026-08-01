@@ -76,7 +76,25 @@ jobs:
         uses: pnpm/action-setup@v6
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: |
+          cargo_bin="$HOME/.cargo/bin"
+          export PATH="$cargo_bin:$PATH"
+          echo "$cargo_bin" >> "$GITHUB_PATH"
+          echo "RUSTUP_TOOLCHAIN=stable" >> "$GITHUB_ENV"
+
+          # This persistent runner should not need rust-lang.org to be healthy for every release.
+          if command -v rustup >/dev/null && rustup run stable rustc --version >/dev/null 2>&1; then
+            rustup run stable rustc --version
+            exit 0
+          fi
+
+          if ! command -v rustup >/dev/null; then
+            installer="$RUNNER_TEMP/rustup-init.sh"
+            curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o "$installer"
+            sh "$installer" -y --profile minimal --default-toolchain none --no-modify-path
+          fi
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup run stable rustc --version
 
       - name: Validate release contract
         env:
