@@ -21,7 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, "..");
 
-const GITHUB_REPO = "starc007/markd";
+const GITHUB_REPO = "celados/markd";
 const APP_NAME = "Markd";
 
 // Get command line arguments

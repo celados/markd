@@ -44,7 +44,7 @@ describe("release script validation", () => {
         platforms: {
           "darwin-aarch64": {
             signature: "signed",
-            url: `https://github.com/starc007/markd/releases/download/v${projectVersion}/Markd.app.tar.gz`,
+            url: `https://github.com/celados/markd/releases/download/v${projectVersion}/Markd.app.tar.gz`,
           },
         },
       }),

@@ -1,8 +1,18 @@
+---
+type: Backlog
+title: Markd deferred work
+description: Known follow-ups deliberately left outside completed Markd changes.
+status: active
+---
+
 # Deferred work
 
-- 当前 fork 仍沿用上游 `usemarkd.app`、Markd Cloud、更新签名与 release URL。源码 fork
-  可以独立演进；但在 Celados 发布自己的二进制前，必须先裁决产品域名、签名 key、updater
-  endpoint 与 cloud ownership，不能让 fork binary 静默接入上游发布通道。
+- updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。应用仍沿用上游
+  `usemarkd.app` 品牌域名和 Markd Cloud API；在启用 cloud publishing 或部署 fork site 前，必须裁决
+  产品域名与 cloud ownership，不能让 fork binary 静默写入上游服务。
+- Vaultwarden 服务版本尚未兼容 Bitwarden CLI `2026.7.0`，会在解密 item 时抛出
+  `invalid type: JsValue(...), expected a string`。本次发布 setup 受控固定官方 CLI `2026.6.0`；后续应升级
+  Vaultwarden 到支持 2026.7.0+ client 的版本，再删除这个临时版本 pin。
 - production bundle 仍报告大 chunk，尤其 editor 与 AppShell；这是 code-splitting/performance
   follow-up，不是 build correctness failure。
 - Octane 0.1.17 在已挂载 TSX editor branch 切到 lazy `Suspense` source branch 时，会对脱离

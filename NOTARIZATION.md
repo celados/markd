@@ -1,6 +1,15 @@
+---
+type: Playbook
+title: Markd macOS signing and notarization
+description: Build, sign, notarize, verify, and publish Markd macOS releases locally or on the celados self-hosted runner.
+when: Setting up or diagnosing Markd Developer ID signing, Apple notarization, Tauri updater signatures, or macOS releases.
+---
+
 # macOS signing and notarization
 
-Markd releases are signed with a Developer ID Application certificate, submitted to Apple's notary service by Tauri, and stapled before distribution.
+Markd releases are signed with a Developer ID Application certificate, submitted to Apple's notary service, and stapled before distribution. Tauri updater artifacts use a separate minisign keypair; the public verifier lives in `src-tauri/tauri.conf.json`, while the private key remains in Vaultwarden and GitHub Secrets.
+
+The authoritative CI path is `.github/workflows/release-macos.yml`. Manual dispatches build and notarize without publishing by default; tag pushes publish only when the tag matches the app version.
 
 ## 1. Install the signing certificate
 
@@ -66,3 +75,13 @@ pnpm run release -- 0.1.7 --type=feature --resume "Release notes"
 The resume path validates the existing app version, signature, notarization ticket, updater archive, and updater signature before using them. If Tauri's DMG command fails, the release automatically retries with Tauri's generated `create-dmg` helper.
 
 Never use `--skip-stapling` for a public release.
+
+## 5. CI secret mapping
+
+The workflow imports the certificate into an ephemeral Keychain and deletes it in an `always()` cleanup step. Repository secrets are populated from Vaultwarden rather than copied from a developer shell:
+
+- `DEVELOPER_ID_CERT_BASE64`, `P12_PASSWORD`, `KEYCHAIN_PASSWORD`
+- `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
+- `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+The current Apple material is shared with OnType at the team/certificate level. `APPLE_ID_PWD` is mapped to Markd's `APPLE_PASSWORD`; no new Apple app record is required for direct Developer ID distribution.

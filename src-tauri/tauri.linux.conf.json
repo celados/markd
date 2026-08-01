@@ -6,7 +6,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/starc007/markd/releases/latest/download/latest-linux.json"
+        "https://github.com/celados/markd/releases/latest/download/latest-linux.json"
       ]
     }
   }

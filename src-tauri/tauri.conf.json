@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Markd",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "identifier": "app.usemarkd",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -93,9 +93,11 @@
   "plugins": {
     "updater": {
       "active": true,
-      "endpoints": ["https://usemarkd.app/updates/latest.json"],
+      "endpoints": [
+        "https://github.com/celados/markd/releases/latest/download/latest.json"
+      ],
       "dialog": false,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI1NTc1QTg3M0ZEMEZCRTMKUldUais5QS9oMXBYdGRxUWpRYW1IZ0hCbGxhbVdObjkyRVh5NVhWYTZEanVYbUVlaGRrb3hKQ2cK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE5QkI3OUVBNkQ0M0EzNUYKUldSZm8wTnQ2bm03R2EwcmVDbXpFbTBLSkVqYVR4MUl5aEMrb3JnS2VqQjFmb0cwaHNKc2VFZHYK"
     }
   }
 }

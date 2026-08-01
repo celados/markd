@@ -35,6 +35,13 @@ ARCHIVE_PATH="$MACOS_DIR/Markd.app.tar.gz"
 SIGNATURE_PATH="$ARCHIVE_PATH.sig"
 [ -d "$APP_PATH" ] || fail "App bundle not found at $APP_PATH."
 
+KEYCHAIN_ARGS=()
+if [ -n "${APPLE_KEYCHAIN_PATH:-}" ]; then
+  [ -f "$APPLE_KEYCHAIN_PATH" ] || fail "APPLE_KEYCHAIN_PATH does not point to a keychain."
+  # CI imports into an ephemeral keychain so the shared runner login keychain stays untouched.
+  KEYCHAIN_ARGS=(--keychain "$APPLE_KEYCHAIN_PATH")
+fi
+
 APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")
 [ "$APP_VERSION" = "$VERSION" ] || fail "App version is $APP_VERSION, expected $VERSION."
 
@@ -44,6 +51,7 @@ codesign \
   --options runtime \
   --timestamp \
   --entitlements "$PROJECT_ROOT/src-tauri/Entitlements.plist" \
+  "${KEYCHAIN_ARGS[@]}" \
   --sign "$IDENTITY" \
   "$APP_PATH"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"

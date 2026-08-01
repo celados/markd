@@ -169,7 +169,7 @@ pub(crate) fn access_token(app: &tauri::AppHandle) -> AppResult<String> {
 pub(crate) fn client() -> AppResult<Client> {
     Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("Markd/0.1.6")
+        .user_agent(concat!("Markd/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|error| AppError::Network(error.to_string()))
 }

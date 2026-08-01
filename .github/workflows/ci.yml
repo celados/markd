@@ -33,22 +33,25 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
-          bun-version: 1.3.0
+          node-version: 24
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install frontend dependencies
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Run frontend tests
-        run: bun test
+        run: pnpm test
 
       - name: Run TypeScript checks
-        run: bunx tsc --noEmit
+        run: pnpm run typecheck
 
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked

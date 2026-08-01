@@ -192,7 +192,7 @@ async fn publish_release(
         .map_err(|error| AppError::Cloud(format!("invalid publish session: {error}")))?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5 * 60))
-        .user_agent("Markd/0.1.6")
+        .user_agent(concat!("Markd/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(network_error)?;
     stream::iter(session.uploads)

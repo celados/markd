@@ -22,7 +22,7 @@ const manifest = {
   platforms: {
     "linux-x86_64": {
       signature: readFileSync(resolve(signaturePath), "utf8").trim(),
-      url: `https://github.com/starc007/markd/releases/download/v${normalizedVersion}/${fileName}`,
+      url: `https://github.com/celados/markd/releases/download/v${normalizedVersion}/${fileName}`,
     },
   },
 };

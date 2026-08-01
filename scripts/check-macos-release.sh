@@ -37,9 +37,16 @@ case "$IDENTITY" in
   *) fail "APPLE_SIGNING_IDENTITY must be a Developer ID Application certificate, not an Apple Development or ad-hoc identity." ;;
 esac
 
-security find-identity -v -p codesigning | grep -Fq "\"$IDENTITY\"" || {
+IDENTITY_ARGS=(security find-identity -v -p codesigning)
+if [ -n "${APPLE_KEYCHAIN_PATH:-}" ]; then
+  [ -f "$APPLE_KEYCHAIN_PATH" ] || fail "APPLE_KEYCHAIN_PATH does not point to a keychain."
+  IDENTITY_ARGS+=("$APPLE_KEYCHAIN_PATH")
+fi
+
+IDENTITIES="$("${IDENTITY_ARGS[@]}")"
+grep -Fq "\"$IDENTITY\"" <<<"$IDENTITIES" || {
   echo "Available code-signing identities:" >&2
-  security find-identity -v -p codesigning >&2
+  echo "$IDENTITIES" >&2
   fail "APPLE_SIGNING_IDENTITY is not installed with a valid private key."
 }
 

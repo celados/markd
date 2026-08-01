@@ -10,6 +10,21 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.7",
+    date: "2026-08-01",
+    displayDate: "August 1, 2026",
+    title: "An Octane-native foundation",
+    summary:
+      "Markd now runs on Octane while preserving its local-first writing workflow.",
+    changes: [
+      "Move the complete desktop interface from React to Octane and TSRX.",
+      "Keep editor, vault, search, todo, bookmark, and quick-capture behavior intact across the migration.",
+      "Ship Apple Developer ID signed and notarized macOS builds from the Celados release pipeline.",
+      "Verify future in-app updates with a Celados-owned updater signing key.",
+    ],
+    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.1.7",
+  },
+  {
     version: "0.1.6",
     date: "2026-07-21",
     displayDate: "July 21, 2026",
