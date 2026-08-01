@@ -181,7 +181,7 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security import "$root_path" -k "$keychain_path" >/dev/null
+          security add-trusted-cert -r trustRoot -k "$keychain_path" "$root_path"
           security import "$intermediate_g1_path" -k "$keychain_path" >/dev/null
           security import "$intermediate_g2_path" -k "$keychain_path" >/dev/null
           security import "$certificate_path" \
@@ -279,6 +279,9 @@ jobs:
             fi
           fi
 
+          if [ -f "$RUNNER_TEMP/AppleIncRootCertificate.cer" ]; then
+            security remove-trusted-cert "$RUNNER_TEMP/AppleIncRootCertificate.cer" >/dev/null 2>&1 || true
+          fi
           security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
           rm -f \
             "$RUNNER_TEMP/markd-developer-id.p12" \
