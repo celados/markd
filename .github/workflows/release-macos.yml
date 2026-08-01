@@ -149,7 +149,6 @@ jobs:
       - name: Import Developer ID certificate
         run: |
           certificate_path="$RUNNER_TEMP/markd-developer-id.p12"
-          root_path="$RUNNER_TEMP/AppleIncRootCertificate.cer"
           intermediate_g1_path="$RUNNER_TEMP/DeveloperIDCA.cer"
           intermediate_g2_path="$RUNNER_TEMP/DeveloperIDG2CA.cer"
           keychain_path="$RUNNER_TEMP/markd-signing.keychain-db"
@@ -160,21 +159,16 @@ jobs:
           printf '%s' "$DEVELOPER_ID_CERT_BASE64" | /usr/bin/base64 -D > "$certificate_path"
           chmod 600 "$certificate_path"
 
-          # Explicit keychain selection also requires the issuing chain to be available in that keychain.
-          # https://www.apple.com/certificateauthority/
-          curl -fsSL \
-            https://www.apple.com/appleca/AppleIncRootCertificate.cer \
-            -o "$root_path"
+          # Apple requires both Developer ID intermediates while certificates from both chains remain valid.
+          # https://developer.apple.com/support/developer-id-intermediate-certificate/
           curl -fsSL \
             https://www.apple.com/certificateauthority/DeveloperIDCA.cer \
             -o "$intermediate_g1_path"
           curl -fsSL \
             https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer \
             -o "$intermediate_g2_path"
-          root_sha="$(shasum -a 256 "$root_path" | awk '{print $1}')"
           intermediate_g1_sha="$(shasum -a 256 "$intermediate_g1_path" | awk '{print $1}')"
           intermediate_g2_sha="$(shasum -a 256 "$intermediate_g2_path" | awk '{print $1}')"
-          test "$root_sha" = "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024"
           test "$intermediate_g1_sha" = "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"
           test "$intermediate_g2_sha" = "f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a"
 
@@ -185,12 +179,11 @@ jobs:
           security import "$intermediate_g2_path" -k "$keychain_path" >/dev/null
           security import "$certificate_path" \
             -P "$P12_PASSWORD" \
-            -A \
-            -t cert \
-            -f pkcs12 \
-            -k "$keychain_path" >/dev/null
+            -k "$keychain_path" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security >/dev/null
           security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
+            -S apple-tool:,apple: \
             -s \
             -k "$KEYCHAIN_PASSWORD" \
             "$keychain_path" >/dev/null
@@ -226,18 +219,6 @@ jobs:
             exit 1
           fi
 
-          # A dedicated runner may be missing the legacy Apple Root CA used by Developer ID G2.
-          if ! security verify-cert \
-            -c "$leaf_pem" \
-            -k "$keychain_path" \
-            -p codeSign \
-            -q; then
-            sudo -n security add-trusted-cert \
-              -d \
-              -r trustRoot \
-              -k /Library/Keychains/System.keychain \
-              "$root_path"
-          fi
           security verify-cert \
             -c "$leaf_pem" \
             -k "$keychain_path" \
@@ -314,7 +295,6 @@ jobs:
             "$RUNNER_TEMP/markd-developer-id.p12" \
             "$RUNNER_TEMP/markd-developer-id.pem" \
             "$RUNNER_TEMP/markd-codesign-probe" \
-            "$RUNNER_TEMP/AppleIncRootCertificate.cer" \
             "$RUNNER_TEMP/DeveloperIDCA.cer" \
             "$RUNNER_TEMP/DeveloperIDG2CA.cer" \
             "$keychain_list"
