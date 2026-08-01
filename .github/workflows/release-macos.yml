@@ -58,12 +58,6 @@ jobs:
 
       - name: Prepare persistent workspace
         run: |
-          # Actions overrides HOME; resolve the service account's real macOS home before exposing its toolchains.
-          runner_home="$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory | awk '{print $2}')"
-          test -n "$runner_home"
-          echo "$runner_home/.cargo/bin" >> "$GITHUB_PATH"
-          echo "$runner_home/Library/pnpm/bin" >> "$GITHUB_PATH"
-
           # A killed job can leave tracked files dirty, but ignored incremental outputs should survive.
           git reset --hard --quiet "$GITHUB_SHA"
           git clean -fdq
@@ -72,6 +66,17 @@ jobs:
           if [ "${target_gb:-0}" -gt 30 ]; then
             rm -rf src-tauri/target
           fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Validate release contract
         env:
