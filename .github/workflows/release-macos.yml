@@ -226,13 +226,25 @@ jobs:
             exit 1
           fi
 
-          # Fail before compilation if this headless runner cannot use the imported identity.
+          # A dedicated runner may be missing the legacy Apple Root CA used by Developer ID G2.
+          if ! security verify-cert \
+            -c "$leaf_pem" \
+            -k "$keychain_path" \
+            -p codeSign \
+            -q; then
+            sudo -n security add-trusted-cert \
+              -d \
+              -r trustRoot \
+              -k /Library/Keychains/System.keychain \
+              "$root_path"
+          fi
           security verify-cert \
             -c "$leaf_pem" \
-            -r "$root_path" \
             -k "$keychain_path" \
             -p codeSign \
             -v
+
+          # Fail before compilation if this headless runner cannot use the imported identity.
           codesign_probe="$RUNNER_TEMP/markd-codesign-probe"
           cp /usr/bin/true "$codesign_probe"
           codesign \
