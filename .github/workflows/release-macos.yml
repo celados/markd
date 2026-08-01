@@ -102,7 +102,7 @@ jobs:
           INPUT_RELEASE_TYPE: ${{ inputs.release_type }}
           INPUT_PUBLISH: ${{ inputs.publish }}
         run: |
-          for command in node pnpm cargo rustc codesign security xcrun hdiutil spctl curl shasum openssl; do
+          for command in node pnpm cargo rustc codesign security xcrun hdiutil spctl ditto curl shasum openssl; do
             command -v "$command" >/dev/null || {
               echo "Missing required command: $command" >&2
               exit 1

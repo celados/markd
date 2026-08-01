@@ -103,10 +103,29 @@ bash "$SCRIPT_DIR/verify-macos-artifacts.sh" "$VERSION" app
 echo -e "${YELLOW}💿 Creating the DMG from the verified app...${NC}"
 find "$DMG_DIR" -maxdepth 1 -type f \( -name "Markd_${VERSION}_*.dmg" -o -name "rw.*.Markd_${VERSION}_*.dmg" \) -delete 2>/dev/null || true
 
+VERIFIED_APP_BACKUP="$(mktemp -d "${TMPDIR:-/tmp}/markd-verified-app-${VERSION}.XXXXXX")"
+ditto "$MACOS_DIR/Markd.app" "$VERIFIED_APP_BACKUP/Markd.app"
+
+restore_verified_app() {
+  # `tauri bundle --bundles dmg` deletes bundle/macos/Markd.app after packaging.
+  # Keep the already notarized app as the release source of truth for final verification.
+  rm -rf "$MACOS_DIR/Markd.app"
+  ditto "$VERIFIED_APP_BACKUP/Markd.app" "$MACOS_DIR/Markd.app"
+}
+
+cleanup_verified_app_backup() {
+  rm -rf "$VERIFIED_APP_BACKUP"
+}
+
+trap 'restore_verified_app; cleanup_verified_app_backup' EXIT
 if ! pnpm exec tauri bundle --bundles dmg; then
   echo -e "${YELLOW}Tauri DMG packaging failed. Retrying with its generated create-dmg helper...${NC}"
+  restore_verified_app
   bash "$SCRIPT_DIR/create-macos-dmg.sh" "$VERSION"
 fi
+restore_verified_app
+cleanup_verified_app_backup
+trap - EXIT
 
 DMG_MATCHES=()
 while IFS= read -r path; do
