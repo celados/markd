@@ -205,15 +205,15 @@ jobs:
           identity_output="$(security find-identity -v -p codesigning "$keychain_path")"
           # A fingerprint selects this imported certificate even if the runner has an older namesake.
           identity="$(awk '/"Developer ID Application:/ {print $2; exit}' <<< "$identity_output")"
+          leaf_pem="$RUNNER_TEMP/markd-developer-id.pem"
+          security find-certificate \
+            -c "Developer ID Application:" \
+            -p \
+            "$keychain_path" > "$leaf_pem"
           if [ -z "$identity" ]; then
             echo "The imported certificate has no Developer ID Application identity." >&2
             echo "$identity_output" >&2
 
-            leaf_pem="$RUNNER_TEMP/markd-developer-id.pem"
-            security find-certificate \
-              -c "Developer ID Application:" \
-              -p \
-              "$keychain_path" > "$leaf_pem"
             openssl x509 \
               -in "$leaf_pem" \
               -noout \
@@ -226,6 +226,23 @@ jobs:
             security verify-cert -c "$leaf_pem" -p codesigning -v >&2 || true
             exit 1
           fi
+
+          # Fail before compilation if this headless runner cannot use the imported identity.
+          security verify-cert \
+            -c "$leaf_pem" \
+            -r "$root_path" \
+            -k "$keychain_path" \
+            -p codeSign \
+            -v
+          codesign_probe="$RUNNER_TEMP/markd-codesign-probe"
+          cp /usr/bin/true "$codesign_probe"
+          codesign \
+            --force \
+            --timestamp \
+            --keychain "$keychain_path" \
+            --sign "$identity" \
+            "$codesign_probe"
+          codesign --verify --strict --verbose=2 "$codesign_probe"
 
           {
             echo "APPLE_SIGNING_IDENTITY=$identity"
@@ -286,6 +303,7 @@ jobs:
           rm -f \
             "$RUNNER_TEMP/markd-developer-id.p12" \
             "$RUNNER_TEMP/markd-developer-id.pem" \
+            "$RUNNER_TEMP/markd-codesign-probe" \
             "$RUNNER_TEMP/AppleIncRootCertificate.cer" \
             "$RUNNER_TEMP/DeveloperIDCA.cer" \
             "$RUNNER_TEMP/DeveloperIDG2CA.cer" \
