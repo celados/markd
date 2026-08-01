@@ -84,7 +84,7 @@ jobs:
           INPUT_RELEASE_TYPE: ${{ inputs.release_type }}
           INPUT_PUBLISH: ${{ inputs.publish }}
         run: |
-          for command in node pnpm cargo rustc codesign security xcrun hdiutil spctl curl shasum; do
+          for command in node pnpm cargo rustc codesign security xcrun hdiutil spctl curl shasum openssl; do
             command -v "$command" >/dev/null || {
               echo "Missing required command: $command" >&2
               exit 1
@@ -170,15 +170,29 @@ jobs:
           done < "$keychain_list"
           security list-keychains -d user -s "$keychain_path" "${existing_keychains[@]}"
 
-          identity="$(
-            security find-identity -v -p codesigning "$keychain_path" \
-              | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' \
-              | head -n 1
-          )"
-          test -n "$identity" || {
+          identity_output="$(security find-identity -v -p codesigning "$keychain_path")"
+          identity="$(sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' <<< "$identity_output" | head -n 1)"
+          if [ -z "$identity" ]; then
             echo "The imported certificate has no Developer ID Application identity." >&2
+            echo "$identity_output" >&2
+
+            leaf_pem="$RUNNER_TEMP/markd-developer-id.pem"
+            security find-certificate \
+              -c "Developer ID Application:" \
+              -p \
+              "$keychain_path" > "$leaf_pem"
+            openssl x509 \
+              -in "$leaf_pem" \
+              -noout \
+              -subject \
+              -issuer \
+              -dates \
+              -fingerprint \
+              -sha256 >&2
+            security find-key -t private "$keychain_path" >&2 || true
+            security verify-cert -c "$leaf_pem" -p codesigning -v >&2 || true
             exit 1
-          }
+          fi
 
           {
             echo "APPLE_SIGNING_IDENTITY=$identity"
@@ -235,6 +249,7 @@ jobs:
           security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
           rm -f \
             "$RUNNER_TEMP/markd-developer-id.p12" \
+            "$RUNNER_TEMP/markd-developer-id.pem" \
             "$RUNNER_TEMP/DeveloperIDCA.cer" \
             "$keychain_list"
           git reset --hard --quiet "$GITHUB_SHA" || true
