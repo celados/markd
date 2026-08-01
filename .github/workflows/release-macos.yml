@@ -225,7 +225,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Build, sign, and notarize release
-        run: pnpm run release -- "$VERSION" "--type=$RELEASE_TYPE" "$RELEASE_NOTES"
+        run: bash scripts/release.sh "$VERSION" "--type=$RELEASE_TYPE" "$RELEASE_NOTES"
 
       - name: Collect verified artifacts
         run: |

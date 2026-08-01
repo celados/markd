@@ -88,23 +88,23 @@ if [ "$RESUME" -eq 0 ]; then
     pnpm exec tauri build --bundles app
 
   echo -e "${YELLOW}✍️  Finalizing the app and updater archive...${NC}"
-  pnpm run finalize:macos-app -- "$VERSION"
+  bash "$SCRIPT_DIR/finalize-macos-app.sh" "$VERSION"
 else
   echo -e "${YELLOW}↩️  Resuming from existing app and updater artifacts...${NC}"
-  if ! pnpm run release:verify-artifacts -- "$VERSION" app; then
+  if ! bash "$SCRIPT_DIR/verify-macos-artifacts.sh" "$VERSION" app; then
     echo -e "${YELLOW}Existing app artifacts need to be finalized again before resuming...${NC}"
-    pnpm run finalize:macos-app -- "$VERSION"
+    bash "$SCRIPT_DIR/finalize-macos-app.sh" "$VERSION"
   fi
 fi
 
-pnpm run release:verify-artifacts -- "$VERSION" app
+bash "$SCRIPT_DIR/verify-macos-artifacts.sh" "$VERSION" app
 
 echo -e "${YELLOW}💿 Creating the DMG from the verified app...${NC}"
 find "$DMG_DIR" -maxdepth 1 -type f \( -name "Markd_${VERSION}_*.dmg" -o -name "rw.*.Markd_${VERSION}_*.dmg" \) -delete 2>/dev/null || true
 
 if ! pnpm exec tauri bundle --bundles dmg; then
   echo -e "${YELLOW}Tauri DMG packaging failed. Retrying with its generated create-dmg helper...${NC}"
-  pnpm run create:dmg -- "$VERSION"
+  bash "$SCRIPT_DIR/create-macos-dmg.sh" "$VERSION"
 fi
 
 DMG_MATCHES=()
@@ -115,8 +115,8 @@ done < <(find "$DMG_DIR" -maxdepth 1 -type f -name "Markd_${VERSION}_*.dmg" -pri
 DMG_PATH="${DMG_MATCHES[0]}"
 
 echo -e "${YELLOW}🎟️  Signing and notarizing the DMG...${NC}"
-pnpm run notarize:dmg -- "$DMG_PATH"
-pnpm run release:verify-artifacts -- "$VERSION" all
+bash "$SCRIPT_DIR/notarize-dmg.sh" "$DMG_PATH"
+bash "$SCRIPT_DIR/verify-macos-artifacts.sh" "$VERSION" all
 
 echo -e "${YELLOW}📝 Generating and validating updater metadata...${NC}"
 GENERATE_ARGS=("$VERSION" "--require=darwin-aarch64")
@@ -124,7 +124,7 @@ if [ -n "$RELEASE_TYPE" ]; then
   GENERATE_ARGS+=("--type=$RELEASE_TYPE")
 fi
 GENERATE_ARGS+=("$NOTES")
-pnpm run update:generate -- "${GENERATE_ARGS[@]}"
+node "$SCRIPT_DIR/generate-latest-json.js" "${GENERATE_ARGS[@]}"
 node scripts/verify-update-manifest.js "$PROJECT_ROOT/latest.json" "$VERSION" "$RELEASE_TYPE"
 
 SITE_UPDATES="$PROJECT_ROOT/site/public/updates"
