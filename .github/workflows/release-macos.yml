@@ -131,7 +131,8 @@ jobs:
       - name: Import Developer ID certificate
         run: |
           certificate_path="$RUNNER_TEMP/markd-developer-id.p12"
-          intermediate_path="$RUNNER_TEMP/DeveloperIDCA.cer"
+          intermediate_g1_path="$RUNNER_TEMP/DeveloperIDCA.cer"
+          intermediate_g2_path="$RUNNER_TEMP/DeveloperIDG2CA.cer"
           keychain_path="$RUNNER_TEMP/markd-signing.keychain-db"
           keychain_list="$RUNNER_TEMP/markd-keychains-before.txt"
 
@@ -140,18 +141,24 @@ jobs:
           printf '%s' "$DEVELOPER_ID_CERT_BASE64" | /usr/bin/base64 -D > "$certificate_path"
           chmod 600 "$certificate_path"
 
-          # Apple requires the legacy G1 intermediate while this certificate remains valid through 2027.
+          # Apple requires both Developer ID intermediates while certificates from both chains remain valid.
           # https://developer.apple.com/support/developer-id-intermediate-certificate/
           curl -fsSL \
             https://www.apple.com/certificateauthority/DeveloperIDCA.cer \
-            -o "$intermediate_path"
-          intermediate_sha="$(shasum -a 256 "$intermediate_path" | awk '{print $1}')"
-          test "$intermediate_sha" = "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"
+            -o "$intermediate_g1_path"
+          curl -fsSL \
+            https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer \
+            -o "$intermediate_g2_path"
+          intermediate_g1_sha="$(shasum -a 256 "$intermediate_g1_path" | awk '{print $1}')"
+          intermediate_g2_sha="$(shasum -a 256 "$intermediate_g2_path" | awk '{print $1}')"
+          test "$intermediate_g1_sha" = "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"
+          test "$intermediate_g2_sha" = "f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security import "$intermediate_path" -k "$keychain_path" >/dev/null
+          security import "$intermediate_g1_path" -k "$keychain_path" >/dev/null
+          security import "$intermediate_g2_path" -k "$keychain_path" >/dev/null
           security import "$certificate_path" \
             -P "$P12_PASSWORD" \
             -A \
@@ -251,6 +258,7 @@ jobs:
             "$RUNNER_TEMP/markd-developer-id.p12" \
             "$RUNNER_TEMP/markd-developer-id.pem" \
             "$RUNNER_TEMP/DeveloperIDCA.cer" \
+            "$RUNNER_TEMP/DeveloperIDG2CA.cer" \
             "$keychain_list"
           git reset --hard --quiet "$GITHUB_SHA" || true
           git clean -fdq || true
