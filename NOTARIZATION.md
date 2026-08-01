@@ -85,3 +85,5 @@ The workflow imports the certificate into an ephemeral Keychain and deletes it i
 - `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
 The current Apple material is shared with OnType at the team/certificate level. `APPLE_ID_PWD` is mapped to Markd's `APPLE_PASSWORD`; no new Apple app record is required for direct Developer ID distribution.
+
+The current certificate chains through Apple's legacy Developer ID G1 intermediate, which expires on 2027-02-01. The runner downloads that public intermediate from Apple, verifies its pinned SHA-256, and imports it only into the ephemeral Keychain. Apple requires both Developer ID intermediates to remain installed while certificates from the legacy chain are still in use; see [Developer ID Intermediate Certificate Updates](https://developer.apple.com/support/developer-id-intermediate-certificate/).

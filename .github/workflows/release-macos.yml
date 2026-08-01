@@ -84,7 +84,7 @@ jobs:
           INPUT_RELEASE_TYPE: ${{ inputs.release_type }}
           INPUT_PUBLISH: ${{ inputs.publish }}
         run: |
-          for command in node pnpm cargo rustc codesign security xcrun hdiutil spctl; do
+          for command in node pnpm cargo rustc codesign security xcrun hdiutil spctl curl shasum; do
             command -v "$command" >/dev/null || {
               echo "Missing required command: $command" >&2
               exit 1
@@ -131,6 +131,7 @@ jobs:
       - name: Import Developer ID certificate
         run: |
           certificate_path="$RUNNER_TEMP/markd-developer-id.p12"
+          intermediate_path="$RUNNER_TEMP/DeveloperIDCA.cer"
           keychain_path="$RUNNER_TEMP/markd-signing.keychain-db"
           keychain_list="$RUNNER_TEMP/markd-keychains-before.txt"
 
@@ -139,9 +140,18 @@ jobs:
           printf '%s' "$DEVELOPER_ID_CERT_BASE64" | /usr/bin/base64 -D > "$certificate_path"
           chmod 600 "$certificate_path"
 
+          # Apple requires the legacy G1 intermediate while this certificate remains valid through 2027.
+          # https://developer.apple.com/support/developer-id-intermediate-certificate/
+          curl -fsSL \
+            https://www.apple.com/certificateauthority/DeveloperIDCA.cer \
+            -o "$intermediate_path"
+          intermediate_sha="$(shasum -a 256 "$intermediate_path" | awk '{print $1}')"
+          test "$intermediate_sha" = "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"
+
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$intermediate_path" -k "$keychain_path" >/dev/null
           security import "$certificate_path" \
             -P "$P12_PASSWORD" \
             -A \
@@ -223,6 +233,9 @@ jobs:
           fi
 
           security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
-          rm -f "$RUNNER_TEMP/markd-developer-id.p12" "$keychain_list"
+          rm -f \
+            "$RUNNER_TEMP/markd-developer-id.p12" \
+            "$RUNNER_TEMP/DeveloperIDCA.cer" \
+            "$keychain_list"
           git reset --hard --quiet "$GITHUB_SHA" || true
           git clean -fdq || true
