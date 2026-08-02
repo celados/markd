@@ -28,6 +28,36 @@ test("property names commit through portal dismissal paths", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Edit phase property" })).toHaveCount(1);
 });
 
+test("property delete actions follow only their own row hover", async ({ page }) => {
+  await page.getByRole("button", { name: "Note actions" }).click();
+  await page.getByRole("button", { name: "Add property" }).click();
+  const nameInput = page.getByRole("textbox", { name: "Property name" });
+  await nameInput.fill("status");
+  await nameInput.press("Enter");
+  const valueInput = page.getByRole("textbox", { name: "status value" });
+  await valueInput.fill("active");
+  await valueInput.press("Enter");
+
+  const heading = page.getByRole("heading", { name: "README" }).first();
+  const deleteButtons = page.getByRole("button", { name: "Delete property" });
+  await page.locator('[data-note-editor="active"]').evaluate((element) => {
+    // Rows must not inherit hover state from unrelated groups introduced by composition.
+    element.classList.add("group");
+  });
+  await heading.hover();
+  await expect(deleteButtons).toHaveCount(2);
+  await expect(deleteButtons.nth(0)).toHaveCSS("opacity", "0");
+  await expect(deleteButtons.nth(1)).toHaveCSS("opacity", "0");
+
+  await page.getByRole("button", { name: "Edit status property" }).hover();
+  await expect(deleteButtons.nth(0)).toHaveCSS("opacity", "0");
+  await expect(deleteButtons.nth(1)).toHaveCSS("opacity", "1");
+
+  await heading.hover();
+  await expect(deleteButtons.nth(0)).toHaveCSS("opacity", "0");
+  await expect(deleteButtons.nth(1)).toHaveCSS("opacity", "0");
+});
+
 test("command palette preserves result order and keyboard activation", async ({
   page,
 }) => {

@@ -120,7 +120,7 @@ export function PropertyRow({
 
   return (
     <div
-      className="group px-1 py-0.5"
+      className="group/property-row px-1 py-0.5"
       onKeyDown={(event) => {
         if (event.key === "Escape" && !property && !nameMenuOpen) onCancel?.();
       }}
@@ -194,8 +194,9 @@ export function PropertyRow({
         <Tooltip label={property ? "Delete property" : "Cancel"} side="top">
           <button
             type="button"
+            aria-label={property ? "Delete property" : "Cancel new property"}
             onClick={() => (property ? onRemove(property.key) : onCancel?.())}
-            className="grid h-9 w-8 shrink-0 place-items-center rounded-md text-faint opacity-0 transition-[opacity,color,background-color,scale] duration-100 hover:bg-active hover:text-danger group-hover:opacity-100 focus-visible:opacity-100 active:scale-[0.96]"
+            className="grid h-9 w-8 shrink-0 place-items-center rounded-md text-faint opacity-0 transition-[opacity,color,background-color,scale] duration-100 hover:bg-active hover:text-danger group-hover/property-row:opacity-100 focus-visible:opacity-100 active:scale-[0.96]"
           >
             {property ? (
               <Trash2 size={13} strokeWidth={1.8} />

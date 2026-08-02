@@ -1,5 +1,5 @@
 // Release coordinates, kept in sync with scripts/release.sh output.
-export const VERSION = "0.1.8";
+export const VERSION = "0.1.9";
 export const GITHUB_REPO = "celados/markd";
 export const GITHUB = `https://github.com/${GITHUB_REPO}`;
 export const DMG = `${GITHUB}/releases/download/v${VERSION}/Markd_${VERSION}_aarch64.dmg`;

@@ -10,6 +10,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.1.9",
+    date: "2026-08-02",
+    displayDate: "August 2, 2026",
+    title: "Predictable property actions",
+    summary:
+      "Frontmatter controls now stay tied to the property row you are using.",
+    changes: [
+      "Hide each property delete action again when the pointer leaves its row.",
+      "Expose property delete and draft-cancel actions to assistive technology.",
+    ],
+    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.1.9",
+  },
+  {
     version: "0.1.8",
     date: "2026-08-01",
     displayDate: "August 1, 2026",
