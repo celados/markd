@@ -1,16 +1,24 @@
-import { FileFinder, type FileFinderApi, type WatchEvent } from "@ff-labs/fff-node";
+import { FileFinder, type FileFinderApi, type WatchEvent } from "@celados/fff-node";
+import { lstat } from "node:fs/promises";
 import { basename, relative, sep } from "node:path";
 import type { Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
 import { reconcileManagedIgnore } from "./managed-ignore";
 import { isAcceptedVaultRel } from "./vault-path-policy";
 
 const SCAN_TIMEOUT_MS = 15_000;
-const PAGE_SIZE = 4_096;
+// Watch delivery is normally immediate; a short grace period avoids a full
+// rescan on healthy writes without turning a missed event into a frozen UI.
+const MUTATION_OBSERVATION_TIMEOUT_MS = 250;
 
-export type VaultChange = {
-  kind: "created" | "modified" | "removed";
+export type VaultIndexEntry = {
   rel: string;
+  kind: "note" | "folder";
+  modifiedMs: number;
 };
+
+export type VaultChange =
+  | { kind: "created" | "modified"; entry: VaultIndexEntry }
+  | { kind: "removed"; rel: string };
 
 export type VaultIndexEvent =
   | {
@@ -26,54 +34,79 @@ export type VaultIndexEvent =
       changes: VaultChange[];
     };
 
-type IndexListener = (event: VaultIndexEvent) => void;
+export type VaultIndexOptions = {
+  listener?: (event: VaultIndexEvent) => void;
+  allocateEpoch?: () => number;
+  onFatal?: (error: Error) => void;
+  createFinder?: (root: string) =>
+    | { ok: true; value: FileFinderApi }
+    | { ok: false; error: string };
+  statPath?: (path: string) => Promise<{
+    isDirectory: () => boolean;
+    isSymbolicLink: () => boolean;
+    mtimeMs: number;
+  }>;
+  entryTimeoutMs?: number;
+};
 
 export class VaultIndex {
   readonly #root: string;
   readonly #theme: Theme;
   readonly #finder: FileFinderApi;
-  readonly #listener: IndexListener;
-  #indexEpoch = 1;
+  readonly #listener: (event: VaultIndexEvent) => void;
+  readonly #allocateEpoch: () => number;
+  readonly #onFatal: (error: Error) => void;
+  readonly #statPath: NonNullable<VaultIndexOptions["statPath"]>;
+  readonly #entryTimeoutMs: number;
+  #indexEpoch = 0;
   #sequence = 0;
   #unsubscribe: (() => void) | null = null;
   #eventQueue = Promise.resolve();
   #destroyed = false;
+  #fatalReported = false;
+  #terminalError: Error | null = null;
+  #entries = new Map<string, VaultIndexEntry>();
 
   private constructor(
     root: string,
     theme: Theme,
     finder: FileFinderApi,
-    listener: IndexListener,
+    options: VaultIndexOptions,
   ) {
     this.#root = root;
     this.#theme = theme;
     this.#finder = finder;
-    this.#listener = listener;
+    this.#listener = options.listener ?? (() => {});
+    let localEpoch = 0;
+    this.#allocateEpoch = options.allocateEpoch ?? (() => ++localEpoch);
+    this.#onFatal = options.onFatal ?? (() => {});
+    this.#statPath = options.statPath ?? lstat;
+    this.#entryTimeoutMs = options.entryTimeoutMs ?? MUTATION_OBSERVATION_TIMEOUT_MS;
   }
 
   static async open(
     root: string,
     theme: Theme,
-    listener: IndexListener = () => {},
-    initialEpoch = 1,
+    options: VaultIndexOptions = {},
   ): Promise<VaultIndex> {
     await reconcileManagedIgnore(root);
-    const created = FileFinder.create({
-      basePath: root,
-      disableMmapCache: true,
-      disableContentIndexing: false,
-      followSymlinks: false,
-    });
+    const created = options.createFinder?.(root) ?? FileFinder.create({
+        basePath: root,
+        disableMmapCache: true,
+        disableContentIndexing: false,
+        followSymlinks: false,
+      });
     if (!created.ok) throw new Error(`FFF initialization failed: ${created.error}`);
 
-    const index = new VaultIndex(root, theme, created.value, listener);
-    index.#indexEpoch = initialEpoch;
+    const index = new VaultIndex(root, theme, created.value, options);
     try {
       await index.#waitForScan();
+      await index.#waitForWatcher();
       const watched = created.value.watch((events) => index.#enqueue(events));
       if (!watched.ok) throw new Error(`FFF watcher failed: ${watched.error}`);
       index.#unsubscribe = watched.value;
-      index.#emitReplacement(await index.snapshot());
+      index.#entries = readAllEntries(created.value);
+      index.#replaceEpoch();
       return index;
     } catch (error) {
       index.destroy();
@@ -82,33 +115,65 @@ export class VaultIndex {
   }
 
   async snapshot(): Promise<VaultSnapshot> {
-    const entries = allEntries(this.#finder);
-    return {
-      root: this.#root,
-      name: basename(this.#root),
-      tree: projectTree(entries),
-      theme: this.#theme,
-    };
+    this.#assertAvailable();
+    return this.#snapshot();
+  }
+
+  synchronize(): VaultIndexEvent {
+    this.#assertAvailable();
+    // A sequence-zero snapshot already defines a safe shared cursor. Only a
+    // live generation with consumed changes needs a fresh global epoch.
+    return this.#sequence === 0 ? this.#baseline() : this.#replaceEpoch();
   }
 
   async rescan(): Promise<void> {
-    await this.#replaceSnapshot();
+    this.#assertAvailable();
+    await this.#schedule(async () => {
+      this.#assertAvailable();
+      await this.#replaceSnapshot();
+    });
   }
 
-  async waitForEntry(rel: string, present: boolean): Promise<void> {
-    const deadline = Date.now() + SCAN_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      const entries = allEntries(this.#finder);
-      const prefix = `${rel}/`;
-      const found = entries.files.some(
-        (file) => file.rel === rel || file.rel.startsWith(prefix),
-      ) || entries.directories.some(
-        (directory) => directory === rel || directory.startsWith(prefix),
+  acceptsPath(rel: string, isDirectory = false): boolean {
+    this.#assertAvailable();
+    try {
+      return unwrap(
+        this.#finder.acceptsPath(rel, isDirectory),
+        "FFF path policy query failed",
       );
-      if (found === present) return;
+    } catch (cause) {
+      this.#fail(cause);
+      throw cause;
+    }
+  }
+
+  async ensureCreated(rel: string): Promise<void> {
+    if (await this.#waitForEntry(rel, true)) return;
+    await this.rescan();
+    if (this.#hasEntry(rel, true) || !this.acceptsPath(rel)) return;
+    const error = new Error(`FFF index remained inconsistent after creating ${rel}.`);
+    this.#fail(error);
+    throw error;
+  }
+
+  async ensureRemoved(rel: string): Promise<void> {
+    if (await this.#waitForEntry(rel, false)) return;
+    await this.rescan();
+    if (this.#hasEntry(rel, false)) return;
+    const error = new Error(`FFF index remained inconsistent after removing ${rel}.`);
+    this.#fail(error);
+    throw error;
+  }
+
+  async #waitForEntry(rel: string, present: boolean): Promise<boolean> {
+    const deadline = Date.now() + this.#entryTimeoutMs;
+    while (Date.now() < deadline) {
+      this.#assertAvailable();
+      if (this.#hasEntry(rel, present)) return true;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    throw new Error(`FFF index did not observe ${rel}.`);
+    this.#assertAvailable();
+    return false;
   }
 
   destroy(): void {
@@ -119,11 +184,16 @@ export class VaultIndex {
   }
 
   #enqueue(events: WatchEvent[]): void {
-    this.#eventQueue = this.#eventQueue
-      .then(() => this.#handleEvents(events))
-      .catch((error: unknown) => {
-        console.error("[markd-engine] Vault Index event failed", error);
-      });
+    void this.#schedule(() => this.#handleEvents(events));
+  }
+
+  #schedule<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#eventQueue.then(operation);
+    this.#eventQueue = result.then(
+      () => undefined,
+      (cause: unknown) => this.#fail(cause),
+    );
+    return result;
   }
 
   async #handleEvents(events: WatchEvent[]): Promise<void> {
@@ -133,29 +203,129 @@ export class VaultIndex {
       return;
     }
 
-    const changes = events
-      .map(normalizeChange(this.#root))
-      .filter((change): change is VaultChange => change !== null);
-    if (changes.length === 0) return;
+    const changes = new Map<string, VaultChange>();
+    for (const event of events) {
+      if (this.#destroyed) return;
+      const rel = normalizeFffRel(relative(this.#root, event.path));
+      if (!rel || rel.startsWith("../") || !isAcceptedVaultRel(rel)) continue;
+      if (event.kind === "removed") {
+        this.#removeEntry(rel, changes);
+        continue;
+      }
+      if (event.kind === "rescan") continue;
+      await this.#upsertPath(rel, event.path, event.kind, changes);
+    }
+    if (changes.size === 0 || this.#destroyed) return;
     this.#sequence += 1;
     this.#listener({
       kind: "changes",
       indexEpoch: this.#indexEpoch,
       sequence: this.#sequence,
-      changes,
+      changes: [...changes.values()].sort(compareChanges),
     });
   }
 
+  async #upsertPath(
+    rel: string,
+    path: string,
+    eventKind: "created" | "modified",
+    changes: Map<string, VaultChange>,
+  ): Promise<void> {
+    let metadata;
+    try {
+      metadata = await this.#statPath(path);
+    } catch (error) {
+      if (isNotFound(error)) {
+        this.#removeEntry(rel, changes);
+        return;
+      }
+      throw error;
+    }
+    const kind = metadata.isSymbolicLink()
+      ? null
+      : metadata.isDirectory()
+      ? "folder"
+      : rel.endsWith(".md")
+      ? "note"
+      : null;
+    if (!kind) {
+      this.#removeEntry(rel, changes);
+      return;
+    }
+    const previous = this.#entries.get(rel);
+    if (previous && previous.kind !== kind) this.#removeEntry(rel, changes);
+    this.#ensureParentFolders(rel, changes);
+    const entry: VaultIndexEntry = {
+      rel,
+      kind,
+      modifiedMs: kind === "note" ? metadata.mtimeMs : 0,
+    };
+    this.#entries.set(rel, entry);
+    const pending = changes.get(rel);
+    const changeKind = previous
+      ? "modified"
+      : pending?.kind === "created" || eventKind === "created"
+      ? "created"
+      : "modified";
+    changes.set(rel, {
+      kind: changeKind,
+      entry,
+    });
+  }
+
+  #ensureParentFolders(rel: string, changes: Map<string, VaultChange>): void {
+    const parts = rel.split("/");
+    for (let index = 1; index < parts.length; index += 1) {
+      const folderRel = parts.slice(0, index).join("/");
+      if (this.#entries.has(folderRel)) continue;
+      const entry: VaultIndexEntry = { rel: folderRel, kind: "folder", modifiedMs: 0 };
+      this.#entries.set(folderRel, entry);
+      changes.set(folderRel, { kind: "created", entry });
+    }
+  }
+
+  #removeEntry(rel: string, changes: Map<string, VaultChange>): void {
+    const prefix = `${rel}/`;
+    for (const entryRel of [...this.#entries.keys()]) {
+      if (entryRel !== rel && !entryRel.startsWith(prefix)) continue;
+      this.#entries.delete(entryRel);
+      changes.set(entryRel, { kind: "removed", rel: entryRel });
+    }
+  }
+
   async #replaceSnapshot(): Promise<void> {
-    await this.#waitForScan();
     await reconcileManagedIgnore(this.#root);
-    // A replacement epoch is only truthful after a new matcher and full scan;
-    // this also closes the callback-order race around native overflow events.
     unwrap(this.#finder.scanFiles(), "FFF rescan failed");
     await this.#waitForScan();
-    this.#indexEpoch += 1;
+    if (this.#destroyed) return;
+    this.#entries = readAllEntries(this.#finder);
+    this.#replaceEpoch();
+  }
+
+  #replaceEpoch(): Extract<VaultIndexEvent, { kind: "replacement" }> {
+    this.#indexEpoch = this.#allocateEpoch();
     this.#sequence = 0;
-    this.#emitReplacement(await this.snapshot());
+    const event = this.#baseline();
+    this.#listener(event);
+    return event;
+  }
+
+  #baseline(): Extract<VaultIndexEvent, { kind: "replacement" }> {
+    return {
+      kind: "replacement",
+      indexEpoch: this.#indexEpoch,
+      sequence: 0,
+      snapshot: this.#snapshot(),
+    };
+  }
+
+  #snapshot(): VaultSnapshot {
+    return {
+      root: this.#root,
+      name: basename(this.#root),
+      tree: projectTree(this.#entries.values()),
+      theme: this.#theme,
+    };
   }
 
   async #waitForScan(): Promise<void> {
@@ -164,76 +334,99 @@ export class VaultIndex {
     if (!waited.value) throw new Error("FFF scan timed out.");
   }
 
-  #emitReplacement(snapshot: VaultSnapshot): void {
-    this.#listener({
-      kind: "replacement",
-      indexEpoch: this.#indexEpoch,
-      sequence: 0,
-      snapshot,
-    });
-  }
-}
-
-type IndexedEntries = {
-  files: Array<{ rel: string; modifiedMs: number }>;
-  directories: string[];
-};
-
-function allEntries(finder: FileFinderApi): IndexedEntries {
-  const files: IndexedEntries["files"] = [];
-  const directories: string[] = [];
-  for (let pageIndex = 0; ; pageIndex += 1) {
-    const page = unwrap(
-      finder.mixedSearch("", { pageIndex, pageSize: PAGE_SIZE }),
-      "FFF index query failed",
-    );
-    for (const entry of page.items) {
-      if (entry.type === "file") {
-        const rel = normalizeFffRel(entry.item.relativePath);
-        if (rel.endsWith(".md") && isAcceptedVaultRel(rel)) {
-          files.push({ rel, modifiedMs: entry.item.modified * 1_000 });
-        }
-      } else {
-        const rel = normalizeFffRel(entry.item.relativePath).replace(/\/$/, "");
-        if (rel && isAcceptedVaultRel(rel)) directories.push(rel);
-      }
+  async #waitForWatcher(): Promise<void> {
+    const deadline = Date.now() + SCAN_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const progress = unwrap(
+        this.#finder.getScanProgress(),
+        "FFF watcher readiness failed",
+      );
+      if (!progress.isScanning && progress.isWatcherReady) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    if ((pageIndex + 1) * PAGE_SIZE >= page.totalMatched) break;
+    throw new Error("FFF watcher readiness timed out.");
   }
-  return { files, directories };
+
+  #fail(cause: unknown): void {
+    if (this.#destroyed || this.#fatalReported) return;
+    this.#fatalReported = true;
+    const error = cause instanceof Error ? cause : new Error(String(cause));
+    this.#terminalError = error;
+    this.destroy();
+    this.#onFatal(error);
+  }
+
+  #assertAvailable(): void {
+    if (this.#terminalError) throw this.#terminalError;
+    if (this.#destroyed) throw new Error("FFF index is no longer available.");
+  }
+
+  #hasEntry(rel: string, present: boolean): boolean {
+    const prefix = `${rel}/`;
+    const found = [...this.#entries.keys()].some(
+      (entryRel) => entryRel === rel || entryRel.startsWith(prefix),
+    );
+    return found === present;
+  }
 }
 
-function projectTree(entries: IndexedEntries): TreeNode[] {
+function readAllEntries(finder: FileFinderApi): Map<string, VaultIndexEntry> {
+  const entries = new Map<string, VaultIndexEntry>();
+  const resident = unwrap(
+    finder.residentEntries(),
+    "FFF resident index query failed",
+  );
+  for (const result of resident) {
+    const rel = normalizeFffRel(result.relativePath).replace(/\/$/, "");
+    if (!rel || !isAcceptedVaultRel(rel)) continue;
+    if (result.type === "file") {
+      if (!rel.endsWith(".md")) continue;
+      ensureParentFolders(entries, rel);
+      entries.set(rel, {
+        rel,
+        kind: "note",
+        modifiedMs: result.modified * 1_000,
+      });
+    } else {
+      entries.set(rel, { rel, kind: "folder", modifiedMs: 0 });
+    }
+  }
+  return entries;
+}
+
+function ensureParentFolders(entries: Map<string, VaultIndexEntry>, rel: string): void {
+  const parts = rel.split("/");
+  for (let index = 1; index < parts.length; index += 1) {
+    const folderRel = parts.slice(0, index).join("/");
+    if (!entries.has(folderRel)) {
+      entries.set(folderRel, { rel: folderRel, kind: "folder", modifiedMs: 0 });
+    }
+  }
+}
+
+function projectTree(entries: Iterable<VaultIndexEntry>): TreeNode[] {
   const root: TreeNode[] = [];
   const children = new Map<string, TreeNode[]>([["", root]]);
-  const directories = new Set(entries.directories);
-  for (const file of entries.files) {
-    const parts = file.rel.split("/");
-    for (let index = 1; index < parts.length; index += 1) {
-      directories.add(parts.slice(0, index).join("/"));
-    }
-  }
-
-  for (const rel of [...directories].sort(pathDepthThenName)) {
-    const parent = parentRel(rel);
+  const ordered = [...entries].sort((left, right) => pathDepthThenName(left.rel, right.rel));
+  for (const entry of ordered.filter((value) => value.kind === "folder")) {
     const node: TreeNode = {
-      name: basename(rel),
-      rel,
+      name: basename(entry.rel),
+      rel: entry.rel,
       kind: "folder",
       children: [],
       modifiedMs: 0,
     };
-    const parentChildren = children.get(parent);
+    const parentChildren = children.get(parentRel(entry.rel));
     if (!parentChildren) continue;
     parentChildren.push(node);
-    children.set(rel, node.children!);
+    children.set(entry.rel, node.children!);
   }
-  for (const file of entries.files) {
-    children.get(parentRel(file.rel))?.push({
-      name: basename(file.rel),
-      rel: file.rel,
+  for (const entry of ordered.filter((value) => value.kind === "note")) {
+    children.get(parentRel(entry.rel))?.push({
+      name: basename(entry.rel),
+      rel: entry.rel,
       kind: "note",
-      modifiedMs: file.modifiedMs,
+      modifiedMs: entry.modifiedMs,
     });
   }
   sortTree(root);
@@ -245,23 +438,7 @@ function sortTree(nodes: TreeNode[]): void {
     if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
     return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
   });
-  for (const node of nodes) {
-    if (node.children) sortTree(node.children);
-  }
-}
-
-function normalizeChange(root: string): (event: WatchEvent) => VaultChange | null {
-  return (event) => {
-    const rel = normalizeFffRel(relative(root, event.path));
-    if (
-      event.kind === "rescan" ||
-      !rel.endsWith(".md") ||
-      !isAcceptedVaultRel(rel)
-    ) {
-      return null;
-    }
-    return { kind: event.kind, rel };
-  };
+  for (const node of nodes) if (node.children) sortTree(node.children);
 }
 
 function normalizeFffRel(rel: string): string {
@@ -276,6 +453,16 @@ function parentRel(rel: string): string {
 function pathDepthThenName(left: string, right: string): number {
   const depth = left.split("/").length - right.split("/").length;
   return depth || left.localeCompare(right, undefined, { sensitivity: "base" });
+}
+
+function compareChanges(left: VaultChange, right: VaultChange): number {
+  const leftRel = left.kind === "removed" ? left.rel : left.entry.rel;
+  const rightRel = right.kind === "removed" ? right.rel : right.entry.rel;
+  return pathDepthThenName(leftRel, rightRel);
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 function unwrap<T>(

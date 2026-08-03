@@ -12,9 +12,18 @@ import {
   type DesktopErrorData,
   type EngineRequest,
   type EngineState,
+  type VaultIndexEventData,
   windowKindSchema,
 } from "./bridge-contract";
 import { assetUrl } from "./asset-url";
+import {
+  deliverIndexListener,
+  type IndexListenerRegistration,
+} from "./index-listeners";
+import {
+  advanceVaultIndexCursor,
+  type VaultIndexCursor,
+} from "./vault-index-protocol";
 
 type DesktopResult<T> = { ok: true; value: T } | { ok: false; error: DesktopErrorData };
 
@@ -43,12 +52,31 @@ const windowKind = v.parse(
   windowKindSchema,
   ipcRenderer.sendSync("markd:window-kind"),
 );
-const notesChangedListeners = new Set<() => void>();
 const captureOpenListeners = new Set<() => void>();
+const indexListeners = new Map<
+  (event: VaultIndexEventData) => void,
+  IndexListenerRegistration
+>();
+let indexCursor: VaultIndexCursor | null = null;
+let resyncRequestedFor = "";
 
-ipcRenderer.on("markd:notes-changed", () => {
-  for (const listener of notesChangedListeners) listener();
-});
+function deliverIndexEvent(
+  listener: (event: VaultIndexEventData) => void,
+  registration: IndexListenerRegistration,
+  event: VaultIndexEventData,
+  allowPending = false,
+): unknown | null {
+  const key = `${activeEpoch}:${event.indexEpoch}:${event.sequence}`;
+  return deliverIndexListener(
+    indexListeners,
+    listener,
+    registration,
+    key,
+    event,
+    allowPending,
+  );
+}
+
 ipcRenderer.on("markd:capture-open", () => {
   for (const listener of captureOpenListeners) listener();
 });
@@ -177,6 +205,10 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
   }
 
   if (port && port !== nextPort) port.close();
+  if (epoch !== activeEpoch) {
+    indexCursor = null;
+    resyncRequestedFor = "";
+  }
   port = nextPort;
   activeEpoch = epoch;
   if (!currentState || currentState.epoch < epoch) {
@@ -194,6 +226,46 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
     if (message.type === "ready") {
       applyEngineState({ state: "ready", epoch });
       ipcRenderer.send("markd:engine-ready", { epoch });
+      return;
+    }
+
+    if (message.type === "vault-index") {
+      const outcome = advanceVaultIndexCursor(indexCursor, {
+        engineEpoch: message.epoch,
+        indexEpoch: message.event.indexEpoch,
+        sequence: message.event.sequence,
+        replacement: message.event.kind === "replacement",
+      });
+      indexCursor = outcome.cursor;
+      if (outcome.decision === "ignore") return;
+      if (outcome.decision === "resync") {
+        const key = `${message.epoch}:${message.event.indexEpoch}`;
+        if (resyncRequestedFor !== key) {
+          resyncRequestedFor = key;
+          void requestEngine("vault.index.rescan", null).then((result) => {
+            if (!result.ok) console.error("[markd-preload] Vault Index rescan failed");
+          });
+        }
+        return;
+      }
+      resyncRequestedFor = "";
+      let listenerFailed = false;
+      for (const [listener, registration] of indexListeners) {
+        const pendingBaseline = !registration.active && message.event.kind === "replacement";
+        const failure = deliverIndexEvent(
+          listener,
+          registration,
+          message.event,
+          pendingBaseline,
+        );
+        if (failure) {
+          listenerFailed = true;
+          console.error("[markd-preload] Vault Index listener failed", failure);
+        }
+      }
+      if (listenerFailed) {
+        invalidateGeneration(nextPort, "A Vault Index listener rejected an update.");
+      }
       return;
     }
 
@@ -406,10 +478,6 @@ async function openFromDialog(create: boolean): Promise<DesktopResult<unknown>> 
 contextBridge.exposeInMainWorld("markd", {
   app: {
     windowKind,
-    onNotesChanged: (listener: () => void) => {
-      notesChangedListeners.add(listener);
-      return () => notesChangedListeners.delete(listener);
-    },
     onEngineLifecycle: (listener: (event: EngineState) => void) => {
       lifecycleListeners.add(listener);
       if (currentState) queueMicrotask(() => listener(currentState!));
@@ -424,7 +492,6 @@ contextBridge.exposeInMainWorld("markd", {
         "capture.create",
         { title, content },
       );
-      if (result.ok) ipcRenderer.send("markd:notes-changed", result.value.rel);
       return result;
     },
     append: async (rel: string, content: string) => {
@@ -432,7 +499,6 @@ contextBridge.exposeInMainWorld("markd", {
         "capture.append",
         { rel, content },
       );
-      if (result.ok) ipcRenderer.send("markd:notes-changed", result.value.rel);
       return result;
     },
     onOpen: (listener: () => void) => {
@@ -445,6 +511,35 @@ contextBridge.exposeInMainWorld("markd", {
     choose: () => openFromDialog(false),
     create: () => openFromDialog(true),
     snapshot: () => requestEngine("vault.snapshot", null),
+    onIndexEvent: (listener: (event: VaultIndexEventData) => void) => {
+      const registration: IndexListenerRegistration = { active: false, key: "" };
+      indexListeners.set(listener, registration);
+      void requestEngine<VaultIndexEventData | null>(
+        "vault.index.synchronize",
+        null,
+      ).then((result) => {
+        if (indexListeners.get(listener) !== registration) return;
+        // A long-lived renderer subscription can predate both the utility
+        // generation and the first opened Vault. Its first replacement event
+        // will establish the baseline when either becomes available.
+        if (!result.ok || !result.value || registration.active) return;
+        const baseline = result.value;
+        const outcome = advanceVaultIndexCursor(indexCursor, {
+          engineEpoch: activeEpoch,
+          indexEpoch: baseline.indexEpoch,
+          sequence: baseline.sequence,
+          replacement: baseline.kind === "replacement",
+        });
+        indexCursor = outcome.cursor;
+        const failure = deliverIndexEvent(listener, registration, baseline, true);
+        if (failure && port) {
+          invalidateGeneration(port, "A Vault Index listener rejected its baseline.");
+        }
+      });
+      return () => {
+        if (indexListeners.get(listener) === registration) indexListeners.delete(listener);
+      };
+    },
     createNote: (dir: string, title: string, content = "") =>
       requestEngine("vault.note.create", { dir, title, content }),
     readNote: (rel: string) => requestEngine("vault.note.read", { rel }),

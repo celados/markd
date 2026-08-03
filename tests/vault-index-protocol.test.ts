@@ -22,10 +22,48 @@ describe("Vault Index protocol", () => {
   });
 
   test("requires a replacement snapshot after a sequence gap", () => {
-    expect(advanceVaultIndexCursor(initial, {
+    const gap = advanceVaultIndexCursor(initial, {
       engineEpoch: 4,
       indexEpoch: 2,
       sequence: 6,
+      replacement: false,
+    });
+    expect(gap).toEqual({
+      decision: "resync",
+      cursor: { ...initial, synchronized: false },
+    });
+
+    expect(advanceVaultIndexCursor(gap.cursor, {
+      engineEpoch: 4,
+      indexEpoch: 2,
+      sequence: 7,
+      replacement: false,
+    })).toEqual({
+      decision: "resync",
+      cursor: { ...initial, synchronized: false },
+    });
+
+    expect(advanceVaultIndexCursor(gap.cursor, {
+      engineEpoch: 4,
+      indexEpoch: 3,
+      sequence: 0,
+      replacement: true,
+    })).toEqual({
+      decision: "accept",
+      cursor: {
+        engineEpoch: 4,
+        indexEpoch: 3,
+        sequence: 0,
+        synchronized: true,
+      },
+    });
+  });
+
+  test("requires a full snapshot before accepting a replacement utility", () => {
+    expect(advanceVaultIndexCursor(initial, {
+      engineEpoch: 5,
+      indexEpoch: 1,
+      sequence: 1,
       replacement: false,
     })).toEqual({
       decision: "resync",

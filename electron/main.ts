@@ -631,12 +631,6 @@ ipcMain.on("markd:window-kind", (event) => {
   event.returnValue = v.parse(windowKindSchema, windowKinds.get(event.sender.id));
 });
 
-ipcMain.on("markd:notes-changed", (event, input: unknown) => {
-  if (senderKind(event) !== "quick-capture" || typeof input !== "string") return;
-  const window = mainWindow;
-  if (window && !window.isDestroyed()) window.webContents.send("markd:notes-changed", input);
-});
-
 app.whenReady().then(() => {
   console.log("[markd-main] app ready");
   protocol.handle("markd-asset", handleAssetRequest);

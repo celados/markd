@@ -35,6 +35,20 @@ describe("Vault Engine path policy", () => {
     );
   });
 
+  test.each([".secret", "AGENTS", "CLAUDE"])(
+    "rejects hard-policy title %s before creating a file",
+    async (title) => {
+      const { engine, root } = await setupEngine();
+
+      await expect(engine.createNote("", title, "content")).rejects.toEqual(
+        expect.objectContaining({ kind: "INVALID_PATH" }),
+      );
+      await expect(readFile(join(root, `${title}.md`), "utf8")).rejects.toEqual(
+        expect.objectContaining({ code: "ENOENT" }),
+      );
+    },
+  );
+
   test("rejects symlinked leaves and ancestors even when they stay inside the Vault", async () => {
     const trashCalls: string[] = [];
     const { engine, root } = await setupEngine(trashCalls);
@@ -65,6 +79,20 @@ describe("Vault Engine path policy", () => {
       expect.objectContaining({ kind: "INVALID_PATH" }),
     );
   });
+
+  test("rejects an ignored Note before creating a file", async () => {
+    const { engine, root } = await setupEngine([], async (vaultRoot) => {
+      await writeFile(join(vaultRoot, ".gitignore"), "Ignored.md\n");
+    });
+
+    await expect(engine.createNote("", "Ignored", "draft")).rejects.toEqual(
+      expect.objectContaining({ kind: "IGNORED_PATH" }),
+    );
+    await expect(readFile(join(root, "Ignored.md"), "utf8")).rejects.toEqual(
+      expect.objectContaining({ code: "ENOENT" }),
+    );
+  });
+
 });
 
 describe("Vault Engine Pins", () => {
@@ -316,6 +344,7 @@ describe("Vault Engine Quick Capture", () => {
     await engine.captureCreate("Inbox", "base");
     await engine.captureAppend("Inbox.md", "captured");
     await engine.moveToTrash("Inbox.md");
+    await writeFile(join(root, "Inbox.md"), "base\ncaptured");
     await expect(
       engine.writeNote("Inbox.md", "edited", "base"),
     ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
@@ -350,15 +379,20 @@ describe("Vault Engine Quick Capture", () => {
   });
 });
 
-async function setupEngine(trashCalls: string[] = []) {
+async function setupEngine(
+  trashCalls: string[] = [],
+  beforeOpen: (root: string) => Promise<void> = async () => {},
+) {
   const scratch = await mkdtemp(join(tmpdir(), "markd-vault-engine-"));
   scratchPaths.push(scratch);
   const root = join(scratch, "vault");
   const config = join(scratch, "config");
   await mkdir(root);
+  await beforeOpen(root);
   const engine = new VaultEngine(config, {
     moveToTrash: async (_vaultRoot, path) => {
       trashCalls.push(path);
+      await rm(path, { recursive: true });
     },
     stageAssetRoot: async () => "stage",
     commitAssetRoot: async () => undefined,

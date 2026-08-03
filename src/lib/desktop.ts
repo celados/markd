@@ -28,6 +28,30 @@ export type EngineLifecycle =
   | { state: "ready"; epoch: number }
   | { state: "unavailable"; epoch: number; error: DesktopErrorData };
 
+export type VaultIndexEntry = {
+  rel: string;
+  kind: "note" | "folder";
+  modifiedMs: number;
+};
+
+export type VaultChange =
+  | { kind: "created" | "modified"; entry: VaultIndexEntry }
+  | { kind: "removed"; rel: string };
+
+export type VaultIndexEvent =
+  | {
+      kind: "replacement";
+      indexEpoch: number;
+      sequence: 0;
+      snapshot: VaultSnapshot;
+    }
+  | {
+      kind: "changes";
+      indexEpoch: number;
+      sequence: number;
+      changes: VaultChange[];
+    };
+
 export type DesktopUpdate = {
   id: string;
   currentVersion: string;
@@ -39,7 +63,6 @@ export type DesktopUpdate = {
 export type MarkdDesktop = {
   app: {
     windowKind: "main" | "quick-capture";
-    onNotesChanged: (listener: () => void) => () => void;
     onEngineLifecycle: (listener: (event: EngineLifecycle) => void) => () => void;
   };
   capture: {
@@ -60,6 +83,7 @@ export type MarkdDesktop = {
     choose: () => Promise<DesktopResult<VaultSnapshot | null>>;
     create: () => Promise<DesktopResult<VaultSnapshot | null>>;
     snapshot: () => Promise<DesktopResult<VaultSnapshot>>;
+    onIndexEvent: (listener: (event: VaultIndexEvent) => void) => () => void;
     createNote: (
       dir: string,
       title: string,
@@ -184,7 +208,7 @@ export function getWindowKind(): "main" | "quick-capture" {
 }
 
 export async function onNotesChanged(listener: () => void): Promise<() => void> {
-  if (window.markd) return window.markd.app.onNotesChanged(listener);
+  if (window.markd) return () => {};
   const { listen } = await import("@tauri-apps/api/event");
   return listen("markd:notes-changed", listener);
 }

@@ -99,7 +99,6 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
     window.markd = {
       app: {
         windowKind: "main",
-        onNotesChanged: () => () => {},
         onEngineLifecycle: () => () => {},
       },
       capture: {
@@ -117,6 +116,7 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
         onOpen: () => () => {},
       },
       vault: {
+        onIndexEvent: () => () => {},
         startup: async () => success(snapshot()),
         choose: async () => success(snapshot()),
         create: async () => success(snapshot()),

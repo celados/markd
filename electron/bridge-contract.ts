@@ -87,6 +87,40 @@ export const vaultSnapshotSchema = v.object({
   theme: v.picklist(["system", "light", "dark"]),
 });
 
+const vaultIndexEntrySchema = v.object({
+  rel: entryRelSchema,
+  kind: v.picklist(["note", "folder"]),
+  modifiedMs: v.number(),
+});
+const vaultChangeSchema = v.variant("kind", [
+  v.object({
+    kind: v.picklist(["created", "modified"]),
+    entry: vaultIndexEntrySchema,
+  }),
+  v.object({ kind: v.literal("removed"), rel: entryRelSchema }),
+]);
+
+export const vaultIndexEventSchema = v.variant("kind", [
+  v.object({
+    kind: v.literal("replacement"),
+    indexEpoch: epochSchema,
+    sequence: v.literal(0),
+    snapshot: vaultSnapshotSchema,
+  }),
+  v.object({
+    kind: v.literal("changes"),
+    indexEpoch: epochSchema,
+    sequence: epochSchema,
+    changes: v.array(vaultChangeSchema),
+  }),
+]);
+
+export const vaultIndexMessageSchema = v.object({
+  type: v.literal("vault-index"),
+  epoch: epochSchema,
+  event: vaultIndexEventSchema,
+});
+
 export const pinSnapshotSchema = v.object({
   pins: v.array(relSchema),
   stale: v.array(relSchema),
@@ -142,6 +176,18 @@ export const engineRequestSchema = v.variant("method", [
     type: v.literal("request"),
     id: operationIdSchema,
     method: v.literal("vault.snapshot"),
+    params: v.null(),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.index.rescan"),
+    params: v.null(),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.index.synchronize"),
     params: v.null(),
   }),
   v.object({
@@ -375,7 +421,11 @@ export const engineResponseSchema = v.variant("ok", [
   }),
 ]);
 
-export const engineMessageSchema = v.variant("type", [engineReadySchema, engineResponseSchema]);
+export const engineMessageSchema = v.variant("type", [
+  engineReadySchema,
+  engineResponseSchema,
+  vaultIndexMessageSchema,
+]);
 
 export const controlResponseSchema = v.variant("ok", [
   v.object({
@@ -493,6 +543,7 @@ export type EngineResponse = v.InferOutput<typeof engineResponseSchema>;
 export type ControlResponse = v.InferOutput<typeof controlResponseSchema>;
 export type EngineState = v.InferOutput<typeof engineStateSchema>;
 export type NativeRequest = v.InferOutput<typeof nativeRequestSchema>;
+export type VaultIndexEventData = v.InferOutput<typeof vaultIndexEventSchema>;
 
 export function validateResponseValue(
   method: EngineRequest["method"] | ControlRequest["method"],
@@ -503,6 +554,10 @@ export function validateResponseValue(
     case "vault.open":
     case "vault.snapshot":
       return v.safeParse(v.nullable(vaultSnapshotSchema), value).success;
+    case "vault.index.rescan":
+      return v.safeParse(v.null(), value).success;
+    case "vault.index.synchronize":
+      return v.safeParse(v.nullable(vaultIndexEventSchema), value).success;
     case "vault.note.create":
       return v.safeParse(v.object({ rel: relSchema, snapshot: vaultSnapshotSchema }), value)
         .success;

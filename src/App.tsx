@@ -40,6 +40,7 @@ export default function App() {
   const root = useVault((s) => s.root);
   const startup = useVault((s) => s.startup);
   const refreshTree = useVault((s) => s.refreshTree);
+  const applyIndexEvent = useVault((s) => s.applyIndexEvent);
 
   useEffect(() => {
     initSessionSync();
@@ -64,17 +65,26 @@ export default function App() {
     }
   }, [status, root]);
 
-  // Pick up edits made outside the app when the window regains focus.
   useEffect(() => {
     const onFocus = () => {
       invalidatePublishStatus();
-      void refreshTree();
+      // Tauri remains a comparison shell only; Electron receives live index events.
+      if (!window.markd) void refreshTree();
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshTree]);
 
   useEffect(() => {
+    if (window.markd) {
+      return window.markd.vault.onIndexEvent((event) => {
+        applyIndexEvent(event);
+        if (event.kind === "replacement" || event.changes.some((change) => change.kind === "removed")) {
+          void usePins.getState().load();
+        }
+        notifyBacklinksChanged();
+      });
+    }
     let unlisten: (() => void) | undefined;
     let disposed = false;
     void onNotesChanged(() => {
@@ -88,7 +98,7 @@ export default function App() {
       disposed = true;
       unlisten?.();
     };
-  }, [refreshTree]);
+  }, [applyIndexEvent, refreshTree]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

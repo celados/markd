@@ -6,6 +6,10 @@ import {
   notifyNotesRewritten,
 } from "@/lib/backlinks";
 import type { Theme, TreeNode, VaultSnapshot, View } from "@/lib/types";
+import type { VaultChange, VaultIndexEvent } from "@/lib/desktop";
+import { applyVaultChanges, diffVaultTrees } from "@/lib/vault-tree-changes";
+import { notifyVaultNoteChanged } from "@/lib/vault-note-events";
+import { flushNoteWrites } from "@/lib/note-write-barrier";
 import { parentDir } from "@/lib/utils";
 import { applyTheme } from "@/lib/theme";
 import { useTabs } from "@/stores/tabs";
@@ -28,6 +32,7 @@ interface VaultState {
   chooseVault: () => Promise<void>;
   createVault: () => Promise<void>;
   refreshTree: () => Promise<void>;
+  applyIndexEvent: (event: VaultIndexEvent) => void;
   setView: (view: View | null) => void;
   pushRecent: (rel: string) => void;
   toggleExpanded: (rel: string) => void;
@@ -106,6 +111,49 @@ function remapRecents(
   });
 }
 
+function reconcileExternalNoteChanges(
+  set: (partial: Partial<VaultState>) => void,
+  get: () => VaultState,
+  changes: VaultChange[],
+): void {
+  for (const change of changes) {
+    if (change.kind !== "removed" && change.entry.kind === "note") {
+      notifyVaultNoteChanged({ rel: change.entry.rel, kind: "modified" });
+    }
+  }
+
+  const removed = changes
+    .filter((change): change is Extract<VaultChange, { kind: "removed" }> =>
+      change.kind === "removed",
+    )
+    .map((change) => change.rel);
+  if (removed.length === 0) return;
+  const gone = (rel: string) => removed.some(
+    (removedRel) => rel === removedRel || rel.startsWith(`${removedRel}/`),
+  );
+  const tabs = useTabs.getState();
+  const before = tabs.tabs;
+  const protectedDrafts = new Set(
+    before.filter((rel) => gone(rel) && !notifyVaultNoteChanged({ rel, kind: "removed" })),
+  );
+  for (const rel of before) {
+    if (gone(rel) && !protectedDrafts.has(rel)) tabs.close(rel);
+  }
+  set({
+    recentNotes: get().recentNotes.filter(
+      (rel) => !gone(rel) || protectedDrafts.has(rel),
+    ),
+  });
+
+  const view = get().view;
+  if (view?.type !== "note" || !gone(view.rel) || protectedDrafts.has(view.rel)) return;
+  const index = before.indexOf(view.rel);
+  const survivors = useTabs.getState().tabs;
+  const right = before.slice(index + 1).find((rel) => survivors.includes(rel));
+  const next = right ?? survivors[survivors.length - 1] ?? null;
+  get().setView(next ? { type: "note", rel: next } : null);
+}
+
 export const useVault = create<VaultState>((set, get) => ({
   status: "loading",
   root: "",
@@ -142,6 +190,7 @@ export const useVault = create<VaultState>((set, get) => ({
 
   chooseVault: async () => {
     try {
+      await flushNoteWrites();
       openVaultSnapshot(set, await ipc.chooseVault());
     } catch (err) {
       oops(err);
@@ -150,6 +199,7 @@ export const useVault = create<VaultState>((set, get) => ({
 
   createVault: async () => {
     try {
+      await flushNoteWrites();
       openVaultSnapshot(set, await ipc.createVault());
     } catch (err) {
       oops(err);
@@ -164,6 +214,24 @@ export const useVault = create<VaultState>((set, get) => ({
     } catch {
       // transient (e.g. vault briefly unavailable) — next refresh wins
     }
+  },
+
+  applyIndexEvent: (event) => {
+    if (event.kind === "replacement") {
+      const snapshot = event.snapshot;
+      if (get().status !== "ready" || get().root !== snapshot.root) {
+        openVaultSnapshot(set, snapshot);
+        return;
+      }
+      const changes = diffVaultTrees(get().tree, snapshot.tree);
+      applyTheme(snapshot.theme);
+      set({ name: snapshot.name, tree: snapshot.tree, theme: snapshot.theme });
+      reconcileExternalNoteChanges(set, get, changes);
+      return;
+    }
+    if (get().status !== "ready") return;
+    set({ tree: applyVaultChanges(get().tree, event.changes) });
+    reconcileExternalNoteChanges(set, get, event.changes);
   },
 
   setView: (view) => {

@@ -22,7 +22,7 @@ export default defineConfig(async ({ mode }) => ({
                   rolldownOptions: {
                     // ffi-rs loads platform binaries at runtime; bundling its
                     // native package would turn the binary into invalid JS.
-                    external: ["@ff-labs/fff-node"],
+                    external: ["@celados/fff-node"],
                   },
                 },
               },

@@ -23,6 +23,7 @@ import {
   type ExportPreparation,
   type NativeVaultOperations,
 } from "../electron/vault-engine";
+import type { VaultIndexEvent } from "../electron/vault-index";
 
 const scratchPaths: string[] = [];
 const validPng =
@@ -35,6 +36,125 @@ afterEach(async () => {
 });
 
 describe("Vault Engine assets", () => {
+  test("publishes only the committed Vault generation after its response", async () => {
+    const scratch = await scratchDirectory("markd-open-ordering-");
+    const firstRoot = join(scratch, "first");
+    const secondRoot = join(scratch, "second");
+    await mkdir(firstRoot);
+    await mkdir(secondRoot);
+    await writeFile(join(firstRoot, "First.md"), "first");
+    const stageGate = deferred<void>();
+    let stageCount = 0;
+    const events: VaultIndexEvent[] = [];
+    const engine = new VaultEngine(
+      join(scratch, "config"),
+      {
+        ...nativeOperations(),
+        stageAssetRoot: async () => {
+          stageCount += 1;
+          if (stageCount === 2) await stageGate.promise;
+          return `stage-${stageCount}`;
+        },
+      },
+      (event) => events.push(event),
+    );
+    try {
+      engine.holdIndexEvents();
+      await engine.open(firstRoot, false);
+      engine.releaseIndexEvents();
+      events.splice(0);
+
+      engine.holdIndexEvents();
+      const opening = engine.open(secondRoot, false);
+      await waitUntil(() => stageCount === 2);
+      await engine.rescanIndex();
+      await writeFile(join(secondRoot, "During Stage.md"), "new");
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(events).toEqual([]);
+
+      stageGate.resolve();
+      const response = await opening;
+      expect(flattenTree(response.tree)).toContain("During Stage.md");
+      expect(events).toEqual([]);
+      engine.releaseIndexEvents();
+      const replacementEvents = events.filter((event) => event.kind === "replacement");
+      const canonicalSecondRoot = await realpath(secondRoot);
+      expect(replacementEvents.length).toBeGreaterThan(0);
+      expect(replacementEvents.every(
+        (event) => event.snapshot.root === canonicalSecondRoot,
+      )).toBe(true);
+      expect(new Set(replacementEvents.map((event) => event.indexEpoch)).size).toBe(
+        replacementEvents.length,
+      );
+      expect(events.at(-1)).toEqual(expect.objectContaining({
+        kind: "changes",
+        changes: [expect.objectContaining({
+          kind: expect.stringMatching(/^(created|modified)$/),
+          entry: expect.objectContaining({ rel: "During Stage.md" }),
+        })],
+      }));
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  test("drops held changes when the active index becomes fatal", async () => {
+    const scratch = await scratchDirectory("markd-index-fatal-");
+    const root = join(scratch, "vault");
+    await mkdir(root);
+    const events: VaultIndexEvent[] = [];
+    const fatals: Error[] = [];
+    const engine = new VaultEngine(
+      join(scratch, "config"),
+      nativeOperations(),
+      (event) => events.push(event),
+      undefined,
+      (error) => fatals.push(error),
+    );
+    await engine.open(root, false);
+    engine.releaseIndexEvents();
+    events.splice(0);
+    engine.holdIndexEvents();
+    await writeFile(join(root, "Pending.md"), "pending");
+    await waitUntil(async () => flattenTree((await engine.snapshot()).tree).includes("Pending.md"));
+    await rm(root, { recursive: true });
+
+    await expect(engine.rescanIndex()).rejects.toBeInstanceOf(Error);
+    expect(fatals).toHaveLength(1);
+    engine.releaseIndexEvents();
+    expect(events).toEqual([]);
+    expect(() => engine.synchronizeIndex()).toThrow(fatals[0]);
+    await expect(engine.rescanIndex()).rejects.toBe(fatals[0]);
+  });
+
+  test("makes deferred index delivery failure fatal", async () => {
+    const scratch = await scratchDirectory("markd-index-delivery-fatal-");
+    const root = join(scratch, "vault");
+    await mkdir(root);
+    const fatals: Error[] = [];
+    let rejectDelivery = false;
+    const engine = new VaultEngine(
+      join(scratch, "config"),
+      nativeOperations(),
+      (event) => {
+        if (rejectDelivery) throw new Error(`renderer rejected ${event.kind}`);
+      },
+      undefined,
+      (error) => fatals.push(error),
+    );
+    await engine.open(root, false);
+    engine.releaseIndexEvents();
+    rejectDelivery = true;
+    engine.holdIndexEvents();
+    await writeFile(join(root, "Pending.md"), "pending");
+    await waitUntil(async () => flattenTree((await engine.snapshot()).tree).includes("Pending.md"));
+
+    engine.releaseIndexEvents();
+    expect(fatals).toHaveLength(1);
+    expect(() => engine.synchronizeIndex()).toThrow(fatals[0]);
+    await expect(engine.rescanIndex()).rejects.toBe(fatals[0]);
+  });
+
   test("saves validated image data beneath the canonical asset root", async () => {
     const { engine, root, activatedRoots } = await setupEngine();
 
@@ -149,6 +269,7 @@ describe("Vault Engine assets", () => {
     const engine = new VaultEngine(
       configDir,
       native.operations,
+      () => {},
       async (path, content) => {
         configCommits += 1;
         if (configCommits === 2) throw new Error("config commit rejected");
@@ -183,6 +304,7 @@ describe("Vault Engine assets", () => {
     const engine = new VaultEngine(
       configDir,
       native.operations,
+      () => {},
       async (path, content) => {
         configCommits += 1;
         if (configCommits === 3) throw new Error("config restore rejected");
@@ -386,6 +508,34 @@ function nativeDouble() {
       rejectCommit = true;
     },
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function waitUntil(predicate: () => boolean | Promise<boolean>): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (!await predicate()) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for condition.");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+function flattenTree(tree: Array<{ rel: string; children?: unknown[] }>): string[] {
+  const result: string[] = [];
+  const visit = (nodes: Array<{ rel: string; children?: unknown[] }>) => {
+    for (const node of nodes) {
+      result.push(node.rel);
+      if (node.children) visit(node.children as Array<{ rel: string; children?: unknown[] }>);
+    }
+  };
+  visit(tree);
+  return result;
 }
 
 async function scratchDirectory(prefix: string): Promise<string> {
