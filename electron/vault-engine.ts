@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import type { DesktopErrorData } from "./bridge-contract";
 import { CollectionsEngine } from "./collections-engine";
@@ -37,6 +37,7 @@ export class VaultEngine {
   }
 
   async startup(): Promise<VaultSnapshot | null> {
+    if (this.#root) return this.snapshot();
     const config = await this.#readConfig();
     this.#theme = config.theme ?? "system";
     if (!config.vaultPath) return null;
@@ -121,6 +122,23 @@ export class VaultEngine {
     }
     await writeFile(target, content, { flag: "wx" });
     return { rel: toVaultRel(root, target), snapshot: await this.snapshot() };
+  }
+
+  async captureCreate(
+    title: string,
+    content: string,
+  ): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    return this.createNote("", title, content);
+  }
+
+  async captureAppend(
+    rel: string,
+    content: string,
+  ): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    const path = await this.#existingPath(rel, "note");
+    const current = await readFile(path, "utf8");
+    await appendFile(path, `${current.length > 0 && !current.endsWith("\n") ? "\n" : ""}${content}`);
+    return { rel: toVaultRel(this.#requireRoot(), path), snapshot: await this.snapshot() };
   }
 
   async readNote(rel: string): Promise<string> {

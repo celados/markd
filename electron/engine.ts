@@ -33,7 +33,10 @@ const nativeCalls = new Map<
   }
 >();
 
-let connected = false;
+let activeEpoch = 0;
+let activeConfigDir = "";
+let vault: VaultEngine | null = null;
+let initialization: Promise<void> | null = null;
 
 parentPort.on("message", (event) => {
   const nativeResponse = v.safeParse(nativeResponseSchema, event.data);
@@ -46,15 +49,22 @@ parentPort.on("message", (event) => {
     return;
   }
 
-  if (connected) return;
   const connection = v.safeParse(engineConnectSchema, event.data);
   const port = event.ports[0];
   if (!connection.success || !port) {
     throw new Error("Markd Engine received an invalid renderer channel");
   }
-  connected = true;
   const { epoch, configDir } = connection.output;
-  const vault = new VaultEngine(configDir, (root, path) => requestTrash(epoch, root, path));
+  if (!vault) {
+    activeEpoch = epoch;
+    activeConfigDir = configDir;
+    vault = new VaultEngine(configDir, (root, path) => requestTrash(epoch, root, path));
+    initialization = vault.startup().then(() => undefined);
+  } else if (epoch !== activeEpoch || configDir !== activeConfigDir) {
+    port.close();
+    throw new Error("Markd Engine rejected a renderer from another generation");
+  }
+  const activeVault = vault;
 
   const becomeReady = () => {
     port.on("message", (messageEvent) => {
@@ -64,7 +74,7 @@ parentPort.on("message", (event) => {
         process.exit(1);
         return;
       }
-      void handleRequest(vault, parsed.output)
+      void handleRequest(activeVault, parsed.output)
         .then((value) =>
           respond(port, {
             type: "response",
@@ -88,12 +98,25 @@ parentPort.on("message", (event) => {
     port.postMessage(v.parse(engineReadySchema, { type: "ready", epoch }));
     console.log(`[markd-engine] ready epoch=${epoch}`);
   };
-  const delay = Number(process.env.MARKD_ENGINE_READY_DELAY_MS ?? 0);
-  if (Number.isFinite(delay) && delay > 0) setTimeout(becomeReady, delay);
-  else becomeReady();
+  void initialization
+    ?.then(() => {
+      const delay = Number(process.env.MARKD_ENGINE_READY_DELAY_MS ?? 0);
+      if (Number.isFinite(delay) && delay > 0) setTimeout(becomeReady, delay);
+      else becomeReady();
+    })
+    .catch((error: unknown) => {
+      console.error("[markd-engine] failed to restore the active Vault", error);
+      process.exit(1);
+    });
 });
 
 async function handleRequest(vault: VaultEngine, request: EngineRequest): Promise<unknown> {
+  if (request.method.startsWith("capture.")) {
+    const delay = Number(process.env.MARKD_ENGINE_TEST_CAPTURE_DELAY_MS ?? 0);
+    if (Number.isFinite(delay) && delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
   switch (request.method) {
     case "vault.startup":
       return vault.startup();
@@ -138,6 +161,10 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
       return vault.createCollectionTag(request.params.collection, request.params.name);
     case "collections.tags.delete":
       return vault.deleteCollectionTag(request.params.collection, request.params.name);
+    case "capture.create":
+      return vault.captureCreate(request.params.title, request.params.content);
+    case "capture.append":
+      return vault.captureAppend(request.params.rel, request.params.content);
   }
 }
 

@@ -86,6 +86,20 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
         onNotesChanged: () => () => {},
         onEngineLifecycle: () => () => {},
       },
+      capture: {
+        open: async () => success(null),
+        close: async () => success(null),
+        create: async (title, content) => {
+          const rel = `${title}.md`;
+          notes.set(rel, content);
+          return success({ rel, snapshot: snapshot() });
+        },
+        append: async (rel, content) => {
+          notes.set(rel, `${notes.get(rel) ?? ""}\n${content}`);
+          return success({ rel, snapshot: snapshot() });
+        },
+        onOpen: () => () => {},
+      },
       vault: {
         startup: async () => success(snapshot()),
         choose: async () => success(snapshot()),

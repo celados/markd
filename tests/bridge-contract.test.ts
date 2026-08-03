@@ -23,6 +23,14 @@ describe("Electron bridge contract", () => {
     expect(
       v.safeParse(engineRequestSchema, {
         type: "request",
+        id: "capture-append",
+        method: "capture.append",
+        params: { rel: "inbox.md", content: "A captured thought" },
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
         id: "operation-pin",
         method: "vault.pins.add",
         params: { rel: "notes/idea.md" },
@@ -142,6 +150,17 @@ describe("Electron bridge contract", () => {
       }),
     ).toBe(true);
     expect(validateResponseValue("collections.snapshot", { todos: {} })).toBe(false);
+    expect(
+      validateResponseValue("capture.append", {
+        rel: "inbox.md",
+        snapshot: {
+          root: "/tmp/vault",
+          name: "vault",
+          tree: [],
+          theme: "system",
+        },
+      }),
+    ).toBe(true);
   });
 
   test("keeps expected failures as tagged data until the renderer boundary", async () => {

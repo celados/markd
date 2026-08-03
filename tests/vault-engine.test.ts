@@ -151,6 +151,32 @@ describe("Vault Engine Pins", () => {
   });
 });
 
+describe("Vault Engine Quick Capture", () => {
+  test("creates a Note and appends Markdown with one line boundary", async () => {
+    const { engine, root } = await setupEngine();
+
+    const created = await engine.captureCreate("Inbox", "first thought");
+    expect(created.rel).toBe("Inbox.md");
+    expect(await readFile(join(root, created.rel), "utf8")).toBe("first thought");
+
+    const appended = await engine.captureAppend(created.rel, "second thought");
+    expect(appended.rel).toBe("Inbox.md");
+    expect(await readFile(join(root, created.rel), "utf8")).toBe(
+      "first thought\nsecond thought",
+    );
+  });
+
+  test("rejects append without an active Vault or a non-Note target", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-capture-unavailable-"));
+    scratchPaths.push(scratch);
+    const engine = new VaultEngine(join(scratch, "config"), async () => {});
+
+    await expect(engine.captureAppend("Inbox.md", "thought")).rejects.toEqual(
+      expect.objectContaining({ kind: "NO_ACTIVE_VAULT" }),
+    );
+  });
+});
+
 async function setupEngine(trashCalls: string[] = []) {
   const scratch = await mkdtemp(join(tmpdir(), "markd-vault-engine-"));
   scratchPaths.push(scratch);

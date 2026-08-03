@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { launchMarkd } from "./launch-markd";
+import { launchMarkd, markdWindow } from "./launch-markd";
 
 test("secure shell boots with a validated semantic bridge and diagnostics", async () => {
   const application = await launchMarkd();
@@ -11,7 +11,7 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
     diagnostics.push(String(chunk));
   });
   try {
-    const page = await application.firstWindow();
+    const page = await markdWindow(application, "main");
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
 
@@ -38,7 +38,7 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
         })),
       )
       .toEqual({
-        bridgeModules: ["app", "collections", "updates", "vault"],
+        bridgeModules: ["app", "capture", "collections", "updates", "vault"],
         hasNodeProcess: false,
         hasRequire: false,
         hasIpcRenderer: false,
@@ -80,7 +80,7 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
     env: { MARKD_TEST_CONFIG_DIR: configDir },
   });
   try {
-    const page = await application.firstWindow();
+    const page = await markdWindow(application, "main");
     await expect(page.getByRole("treeitem", { name: "Existing.md" })).toBeVisible();
 
     await application.evaluate(({ dialog }, path) => {
@@ -188,7 +188,7 @@ test("native Trash failure remains tagged and leaves the snapshot coherent", asy
     },
   });
   try {
-    const page = await application.firstWindow();
+    const page = await markdWindow(application, "main");
     await expect
       .poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({
@@ -226,9 +226,8 @@ test("Pins persist in the Vault and canonical paths expand a Vault symlink", asy
 
   const first = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
   try {
-    const page = await first.firstWindow();
-    await expect
-      .poll(() => page.evaluate(() => window.markd!.vault.startup()))
+    const page = await markdWindow(first, "main");
+    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
     expect(await page.evaluate(() => window.markd!.vault.pins.add("Kept.md"))).toEqual({
       ok: true,
@@ -249,9 +248,8 @@ test("Pins persist in the Vault and canonical paths expand a Vault symlink", asy
   await rm(join(vault, "Removed.md"));
   const second = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
   try {
-    const page = await second.firstWindow();
-    await expect
-      .poll(() => page.evaluate(() => window.markd!.vault.startup()))
+    const page = await markdWindow(second, "main");
+    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
     expect(await page.evaluate(() => window.markd!.vault.pins.list())).toEqual({
       ok: true,
@@ -378,7 +376,7 @@ test("Collections persist across Vault switches and utility restarts", async () 
 test("utility crash rejects outstanding calls and spends one restart", async () => {
   const application = await launchMarkd();
   try {
-    const page = await application.firstWindow();
+    const page = await markdWindow(application, "main");
     await expect(page).toHaveTitle("Markd");
     await expect
       .poll(() => page.evaluate(() => window.markd!.vault.startup()))
@@ -462,7 +460,7 @@ test("pre-port generation failure resolves startup and restarts only once", asyn
     diagnostics.push(String(chunk));
   });
   try {
-    const page = await application.firstWindow();
+    const page = await markdWindow(application, "main");
     const result = await page.evaluate(() => window.markd!.vault.startup());
     expect(result).toEqual({
       ok: false,
@@ -489,21 +487,164 @@ test("development shortcut opens Chromium DevTools", async () => {
     env: { MARKD_ENABLE_DEVTOOLS: "1" },
   });
   try {
-    await application.firstWindow();
-    await application.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0]?.webContents.sendInputEvent({
-        type: "keyDown",
-        keyCode: "F12",
-      });
+    await markdWindow(application, "main");
+    await application.evaluate(async ({ BrowserWindow }) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        const kind = await window.webContents.executeJavaScript(
+          "window.markd.app.windowKind",
+        );
+        if (kind !== "main") continue;
+        window.webContents.sendInputEvent({ type: "keyDown", keyCode: "F12" });
+      }
     });
     await expect
       .poll(() =>
-        application.evaluate(({ BrowserWindow }) =>
-          BrowserWindow.getAllWindows()[0]?.webContents.isDevToolsOpened(),
-        ),
+        application.evaluate(async ({ BrowserWindow }) => {
+          for (const window of BrowserWindow.getAllWindows()) {
+            const kind = await window.webContents.executeJavaScript(
+              "window.markd.app.windowKind",
+            );
+            if (kind === "main") return window.webContents.isDevToolsOpened();
+          }
+          return false;
+        }),
       )
       .toBe(true);
   } finally {
     await application.close();
+  }
+});
+
+test("Quick Capture shares the Engine without foreground activation", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-capture-"));
+  const configDir = join(scratch, "config");
+  const vault = join(scratch, "vault");
+  await mkdir(configDir, { recursive: true });
+  await mkdir(vault, { recursive: true });
+  await writeFile(
+    join(configDir, "config.json"),
+    JSON.stringify({ vaultPath: vault, theme: "system" }),
+  );
+  const application = await launchMarkd({
+    env: {
+      MARKD_TEST_CONFIG_DIR: configDir,
+      MARKD_ENGINE_TEST_CAPTURE_DELAY_MS: "400",
+      // Exercise a real OS registration without stealing the user's production shortcut.
+      MARKD_TEST_QUICK_CAPTURE_ACCELERATOR: "F24",
+    },
+  });
+  try {
+    await expect.poll(() => application.windows().length).toBe(2);
+    const pages = application.windows();
+    const kinds = await Promise.all(
+      pages.map(async (page) => [
+        await page.evaluate(() => window.markd!.app.windowKind),
+        page,
+      ] as const),
+    );
+    const mainPage = kinds.find(([kind]) => kind === "main")?.[1];
+    const capturePage = kinds.find(([kind]) => kind === "quick-capture")?.[1];
+    if (!mainPage || !capturePage) throw new Error("Markd windows did not load");
+
+    await expect
+      .poll(() => mainPage.evaluate(() => window.markd!.vault.startup()))
+      .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
+    expect(
+      await application.evaluate(({ globalShortcut }) =>
+        globalShortcut.isRegistered("F24"),
+      ),
+    ).toBe(true);
+    expect(await mainPage.evaluate(() => window.markd!.capture.open())).toEqual({
+      ok: true,
+      value: null,
+    });
+
+    const backgroundState = await application.evaluate(({ app, BrowserWindow }) => ({
+      active: process.platform === "darwin" ? app.isActive() : null,
+      focused: BrowserWindow.getFocusedWindow() !== null,
+      visible: BrowserWindow.getAllWindows().some((window) => window.isVisible()),
+    }));
+    expect(backgroundState.visible).toBe(false);
+    expect(backgroundState.focused).toBe(false);
+    if (process.platform === "darwin") expect(backgroundState.active).toBe(false);
+
+    await capturePage.getByPlaceholder("Title").fill("Inbox");
+    await capturePage
+      .getByPlaceholder("Write something worth keeping…")
+      .fill("first thought");
+    await capturePage.getByRole("button", { name: "Create captured note" }).click();
+    await application.evaluate(async ({ BrowserWindow }) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        const kind = await window.webContents.executeJavaScript(
+          "window.markd.app.windowKind",
+        );
+        if (kind === "quick-capture") window.close();
+      }
+    });
+    expect(await mainPage.evaluate(() => window.markd!.capture.open())).toEqual({
+      ok: true,
+      value: null,
+    });
+    await expect(capturePage.getByPlaceholder("Title")).toBeDisabled();
+    await expect(capturePage.getByPlaceholder("Title")).toHaveValue("Inbox");
+    await expect(
+      capturePage.getByPlaceholder("Write something worth keeping…"),
+    ).toHaveValue("first thought");
+    await expect
+      .poll(() => readFile(join(vault, "Inbox.md"), "utf8").catch(() => null))
+      .toBe("first thought");
+    expect(await mainPage.evaluate(() => window.markd!.capture.open())).toEqual({
+      ok: true,
+      value: null,
+    });
+    await expect(capturePage.getByPlaceholder("Title")).toBeEnabled();
+    await expect(capturePage.getByPlaceholder("Title")).toHaveValue("");
+    expect(await capturePage.evaluate(() =>
+      window.markd!.capture.append("Inbox.md", "second thought"),
+    )).toEqual({
+      ok: true,
+      value: expect.objectContaining({ rel: "Inbox.md" }),
+    });
+    expect(await readFile(join(vault, "Inbox.md"), "utf8")).toBe(
+      "first thought\nsecond thought",
+    );
+
+    const firstEnginePid = await application.evaluate(
+      ({ app }) =>
+        app.getAppMetrics().find((candidate) => candidate.name === "Markd Engine")
+          ?.pid,
+    );
+    if (!firstEnginePid) throw new Error("Markd Engine process was not registered");
+    await application.evaluate((_electron, pid) => process.kill(pid), firstEnginePid);
+    await expect
+      .poll(() =>
+        application.evaluate(
+          ({ app }, oldPid) =>
+            app
+              .getAppMetrics()
+              .some(
+                (candidate) =>
+                  candidate.name === "Markd Engine" && candidate.pid !== oldPid,
+              ),
+          firstEnginePid,
+        ),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        capturePage.evaluate(() =>
+          window.markd!.capture.append("Inbox.md", "after restart"),
+        ),
+      )
+      .toEqual({
+        ok: true,
+        value: expect.objectContaining({ rel: "Inbox.md" }),
+      });
+    expect(await readFile(join(vault, "Inbox.md"), "utf8")).toBe(
+      "first thought\nsecond thought\nafter restart",
+    );
+  } finally {
+    await application.close();
+    await rm(scratch, { recursive: true, force: true });
   }
 });

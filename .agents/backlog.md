@@ -11,8 +11,8 @@ status: active
   choose/create/reopen、Note CRUD 与 native Trash 提供 coherent tree。它没有 watcher、search 或完整
   ignore precedence，只做 `.markd`/hidden、`node_modules` 与 reserved root 的最低限度排除，不能作为最终
   ignore correctness 证据。#5 引入 fff
-  Vault Index 时必须删除这个 builder，让 Snapshot/Change/search 共用唯一 index。Quick Capture、Cloud
-  与其余 Tauri adapter 仍待 Phase 4 迁移；在此之前不能宣称 Electron feature-complete。
+  Vault Index 时必须删除这个 builder，让 Snapshot/Change/search 共用唯一 index。Cloud 与其余 Tauri
+  adapter 仍待 Phase 4 迁移；在此之前不能宣称 Electron feature-complete。
 - Todos 与 Bookmarks CRUD 已由 utility-owned Collections interface 接管；Bookmark 的远程 metadata
   enrichment 与 markdown export 仍是 legacy Tauri capability，不属于 #9 的 CRUD seam。迁移这些 effect
   时应继续通过 semantic bridge 进入 utility/native owner，不能恢复 renderer-side fetch 或 raw invoke。

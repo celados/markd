@@ -80,8 +80,14 @@ export const ipc = {
         )
       : call<string>("create_note_with_content", { dir, title, content }),
   openDailyNote: (date: string) => call<string>("open_daily_note", { date }),
-  showQuickCapture: () => call<void>("show_quick_capture"),
-  closeQuickCapture: () => call<void>("close_quick_capture"),
+  showQuickCapture: () =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.capture.open())
+      : call<void>("show_quick_capture"),
+  closeQuickCapture: () =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.capture.close())
+      : call<void>("close_quick_capture"),
   createFolder: (dir: string, name: string) => call<string>("create_folder", { dir, name }),
   renameEntry: (rel: string, name: string) => call<string>("rename_entry", { rel, name }),
   moveEntry: (rel: string, dir: string) => call<string>("move_entry", { rel, dir }),

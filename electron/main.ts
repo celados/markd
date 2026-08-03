@@ -2,9 +2,11 @@ import {
   app,
   BrowserWindow,
   dialog,
+  globalShortcut,
   ipcMain,
   MessageChannelMain,
   protocol,
+  screen,
   shell,
   utilityProcess,
   type UtilityProcess,
@@ -25,6 +27,7 @@ import {
   type ControlResponse,
   type DesktopErrorData,
   type EngineState,
+  windowKindSchema,
 } from "./bridge-contract";
 import { createEngineGenerationTerminal } from "./engine-generation";
 
@@ -41,9 +44,23 @@ if (backgroundE2e && process.platform === "darwin") {
 }
 let engine: UtilityProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
+let captureWindow: BrowserWindow | null = null;
 let engineEpoch = 0;
 let restartAvailable = true;
 let engineState: EngineState | null = null;
+let engineSpawned = false;
+let quitting = false;
+const attachedWebContents = new Set<number>();
+const loadedWebContents = new Set<number>();
+const windowKinds = new Map<number, v.InferOutput<typeof windowKindSchema>>();
+const captureAccelerator =
+  process.env.MARKD_TEST_QUICK_CAPTURE_ACCELERATOR ?? "Control+Shift+Space";
+
+if (process.platform === "linux") {
+  // Wayland exposes global accelerators through the desktop portal rather than
+  // X11 grabs. Electron requires this feature switch before app readiness.
+  app.commandLine.appendSwitch("enable-features", "GlobalShortcutsPortal");
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -100,18 +117,78 @@ function createMainWindow(): BrowserWindow {
   });
 
   attachWindowDiagnostics(window.webContents);
+  wireRendererWindow(window, "main");
+  return window;
+}
+
+function createCaptureWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    show: false,
+    focusable: !backgroundE2e,
+    skipTaskbar: true,
+    width: 500,
+    height: 356,
+    minWidth: 500,
+    minHeight: 356,
+    maxWidth: 500,
+    maxHeight: 356,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    frame: false,
+    alwaysOnTop: true,
+    webPreferences: {
+      preload: join(moduleDir, "preload.mjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  attachWindowDiagnostics(window.webContents);
+  wireRendererWindow(window, "quick-capture");
+  window.on("close", (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    window.hide();
+  });
+  return window;
+}
+
+function wireRendererWindow(
+  window: BrowserWindow,
+  kind: v.InferOutput<typeof windowKindSchema>,
+): void {
+  windowKinds.set(window.webContents.id, kind);
+  window.webContents.on("did-start-loading", () => {
+    attachedWebContents.delete(window.webContents.id);
+    loadedWebContents.delete(window.webContents.id);
+  });
+  window.webContents.on("did-finish-load", () => {
+    loadedWebContents.add(window.webContents.id);
+    attachRendererToEngine(window);
+  });
+  window.webContents.on("destroyed", () => {
+    attachedWebContents.delete(window.webContents.id);
+    loadedWebContents.delete(window.webContents.id);
+    windowKinds.delete(window.webContents.id);
+  });
   if (process.env.VITE_DEV_SERVER_URL) {
     void window.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     void window.loadFile(join(moduleDir, "../dist/index.html"));
   }
-  return window;
+}
+
+function markdWindows(): BrowserWindow[] {
+  return [mainWindow, captureWindow].filter(
+    (window): window is BrowserWindow => Boolean(window && !window.isDestroyed()),
+  );
 }
 
 function publishEngineState(state: EngineState): void {
   engineState = v.parse(engineStateSchema, state);
-  const window = mainWindow;
-  if (window && !window.isDestroyed()) {
+  for (const window of markdWindows()) {
     window.webContents.send("markd:engine-state", engineState);
   }
 }
@@ -120,8 +197,10 @@ function unavailableError(message: string): DesktopErrorData {
   return { kind: "ENGINE_UNAVAILABLE", message };
 }
 
-function connectEngine(window: BrowserWindow): UtilityProcess {
+function connectEngine(): UtilityProcess {
   const epoch = ++engineEpoch;
+  engineSpawned = false;
+  attachedWebContents.clear();
   publishEngineState({ state: "starting", epoch });
   const child = utilityProcess.fork(join(moduleDir, "engine.js"), [], {
     serviceName: "Markd Engine",
@@ -134,64 +213,23 @@ function connectEngine(window: BrowserWindow): UtilityProcess {
           : "",
     },
   });
-  const { port1, port2 } = new MessageChannelMain();
-  let childReady = false;
-  let rendererReady = !window.webContents.isLoadingMainFrame();
-  let transferred = false;
-  let transferTimer: ReturnType<typeof setTimeout> | null = null;
   const terminal = createEngineGenerationTerminal((message) => {
-    if (transferTimer) clearTimeout(transferTimer);
     publishEngineState({
       state: "unavailable",
       epoch,
       error: unavailableError(message),
     });
     if (engine === child) engine = null;
-    if (mainWindow !== window || window.isDestroyed() || !restartAvailable) return;
+    if (quitting || !restartAvailable || markdWindows().length === 0) return;
     restartAvailable = false;
     console.log(`[markd-main] restarting engine after epoch=${epoch}`);
-    engine = connectEngine(window);
+    engine = connectEngine();
   });
-
-  const performTransfer = () => {
-    transferTimer = null;
-    if (
-      transferred ||
-      terminal.isTerminal() ||
-      !childReady ||
-      !rendererReady ||
-      window.isDestroyed()
-    ) {
-      return;
-    }
-    transferred = true;
-    child.postMessage({
-      type: "connect",
-      epoch,
-      configDir: process.env.MARKD_TEST_CONFIG_DIR ?? app.getPath("userData"),
-    }, [port1]);
-    window.webContents.postMessage("markd:engine-port", { epoch }, [port2]);
-  };
-  const transfer = () => {
-    if (!childReady || !rendererReady || transferred || terminal.isTerminal()) return;
-    const delay = Number(process.env.MARKD_TEST_ENGINE_TRANSFER_DELAY_MS ?? 0);
-    if (Number.isFinite(delay) && delay > 0) {
-      if (!transferTimer) transferTimer = setTimeout(performTransfer, delay);
-      return;
-    }
-    performTransfer();
-  };
   child.once("spawn", () => {
-    childReady = true;
+    engineSpawned = true;
     console.log(`[markd-main] engine spawned epoch=${epoch} pid=${child.pid}`);
-    transfer();
+    for (const window of markdWindows()) attachRendererToEngine(window);
   });
-  if (!rendererReady) {
-    window.webContents.once("did-finish-load", () => {
-      rendererReady = true;
-      transfer();
-    });
-  }
   child.on("exit", (code) => {
     console.error(`[markd-main] engine exited epoch=${epoch} code=${code}`);
     terminal.terminate("Markd Engine exited unexpectedly.");
@@ -232,6 +270,38 @@ function connectEngine(window: BrowserWindow): UtilityProcess {
   return child;
 }
 
+function attachRendererToEngine(window: BrowserWindow): void {
+  const child = engine;
+  const webContents = window.webContents;
+  if (
+    !child ||
+    !engineSpawned ||
+    !loadedWebContents.has(webContents.id) ||
+    attachedWebContents.has(webContents.id) ||
+    window.isDestroyed()
+  ) {
+    return;
+  }
+  attachedWebContents.add(webContents.id);
+  const { port1, port2 } = new MessageChannelMain();
+  const transfer = () => {
+    if (engine !== child || window.isDestroyed()) {
+      port1.close();
+      port2.close();
+      return;
+    }
+    child.postMessage({
+      type: "connect",
+      epoch: engineEpoch,
+      configDir: process.env.MARKD_TEST_CONFIG_DIR ?? app.getPath("userData"),
+    }, [port1]);
+    webContents.postMessage("markd:engine-port", { epoch: engineEpoch }, [port2]);
+  };
+  const delay = Number(process.env.MARKD_TEST_ENGINE_TRANSFER_DELAY_MS ?? 0);
+  if (Number.isFinite(delay) && delay > 0) setTimeout(transfer, delay);
+  else transfer();
+}
+
 async function performNativeRequest(
   request: v.InferOutput<typeof nativeRequestSchema>,
 ): Promise<void> {
@@ -261,7 +331,7 @@ function acceptEngineControl(
   const control = v.safeParse(engineControlSchema, input);
   if (
     !control.success ||
-    event.sender !== mainWindow?.webContents ||
+    !windowKinds.has(event.sender.id) ||
     control.output.epoch !== engineEpoch
   ) {
     return null;
@@ -269,9 +339,43 @@ function acceptEngineControl(
   return control.output.epoch;
 }
 
+function senderKind(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) {
+  return windowKinds.get(event.sender.id) ?? null;
+}
+
+function showQuickCapture(): void {
+  const window = captureWindow;
+  if (!window || window.isDestroyed()) {
+    captureWindow = createCaptureWindow();
+    captureWindow.webContents.once("did-finish-load", showQuickCapture);
+    return;
+  }
+  if (!loadedWebContents.has(window.webContents.id)) {
+    window.webContents.once("did-finish-load", showQuickCapture);
+    return;
+  }
+  window.webContents.send("markd:capture-open");
+  if (backgroundE2e) return;
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const bounds = window.getBounds();
+  window.setPosition(
+    Math.round(display.workArea.x + (display.workArea.width - bounds.width) / 2),
+    Math.round(display.workArea.y + (display.workArea.height - bounds.height) * 0.4),
+  );
+  window.show();
+  window.focus();
+}
+
+function closeQuickCapture(): void {
+  const window = captureWindow;
+  if (!window || window.isDestroyed()) return;
+  window.hide();
+}
+
 ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlResponse> => {
   const request = v.safeParse(controlRequestSchema, input);
-  if (!request.success || event.sender !== mainWindow?.webContents) {
+  const kind = senderKind(event);
+  if (!request.success || !kind) {
     return v.parse(controlResponseSchema, {
       type: "response",
       id: "invalid-request",
@@ -285,6 +389,14 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
 
   const { id, method } = request.output;
   if (method === "dialog.chooseVault") {
+    if (kind !== "main" || !mainWindow) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "INVALID_REQUEST", message: "Only the main window can choose a Vault." },
+      });
+    }
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: "Choose Vault",
       properties: ["openDirectory", "createDirectory"],
@@ -297,6 +409,14 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
     });
   }
   if (method === "dialog.createVault") {
+    if (kind !== "main" || !mainWindow) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "INVALID_REQUEST", message: "Only the main window can create a Vault." },
+      });
+    }
     const result = await dialog.showSaveDialog(mainWindow!, {
       title: "Create Vault",
       defaultPath: "Markd Vault",
@@ -326,6 +446,8 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
       app.exit(0);
     });
   }
+  if (method === "capture.open") showQuickCapture();
+  if (method === "capture.close") closeQuickCapture();
   return v.parse(controlResponseSchema, {
     type: "response",
     id,
@@ -335,7 +457,7 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
 });
 
 ipcMain.handle("markd:engine-state", (event): EngineState => {
-  if (event.sender !== mainWindow?.webContents || !engineState) {
+  if (!windowKinds.has(event.sender.id) || !engineState) {
     throw new Error("Markd Desktop rejected an invalid engine state request.");
   }
   return v.parse(engineStateSchema, engineState);
@@ -358,28 +480,55 @@ ipcMain.on("markd:engine-protocol-error", (event, input: unknown) => {
 
 ipcMain.on("markd:engine-channel-error", (event, input: unknown) => {
   const failure = v.safeParse(engineChannelFailureSchema, input);
-  if (!failure.success || event.sender !== mainWindow?.webContents) return;
+  if (!failure.success || !windowKinds.has(event.sender.id)) return;
   console.error(`[markd-main] invalid engine channel epoch=${engineEpoch}`);
   engine?.kill();
+});
+
+ipcMain.on("markd:window-kind", (event) => {
+  event.returnValue = v.parse(windowKindSchema, windowKinds.get(event.sender.id));
+});
+
+ipcMain.on("markd:notes-changed", (event, input: unknown) => {
+  if (senderKind(event) !== "quick-capture" || typeof input !== "string") return;
+  const window = mainWindow;
+  if (window && !window.isDestroyed()) window.webContents.send("markd:notes-changed", input);
 });
 
 app.whenReady().then(() => {
   console.log("[markd-main] app ready");
   mainWindow = createMainWindow();
-  engine = connectEngine(mainWindow);
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (!captureWindow || captureWindow.isDestroyed()) {
+      captureWindow = createCaptureWindow();
+    }
+  });
+  engine = connectEngine();
   mainWindow.on("closed", () => {
     mainWindow = null;
-    engine?.kill();
-    engine = null;
+    if (process.platform !== "darwin") app.quit();
   });
 
+  const registered = globalShortcut.register(captureAccelerator, showQuickCapture);
+  if (!registered) {
+    console.error(`[markd-main] Quick Capture shortcut unavailable: ${captureAccelerator}`);
+  }
+
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length > 0) return;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      return;
+    }
     mainWindow = createMainWindow();
-    engine = connectEngine(mainWindow);
+    mainWindow.on("closed", () => {
+      mainWindow = null;
+    });
   });
 });
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+app.on("before-quit", () => {
+  quitting = true;
+  globalShortcut.unregisterAll();
+  engine?.kill();
+  engine = null;
 });

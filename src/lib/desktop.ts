@@ -37,6 +37,19 @@ export type MarkdDesktop = {
     onNotesChanged: (listener: () => void) => () => void;
     onEngineLifecycle: (listener: (event: EngineLifecycle) => void) => () => void;
   };
+  capture: {
+    open: () => Promise<DesktopResult<null>>;
+    close: () => Promise<DesktopResult<null>>;
+    create: (
+      title: string,
+      content: string,
+    ) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
+    append: (
+      rel: string,
+      content: string,
+    ) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
+    onOpen: (listener: () => void) => () => void;
+  };
   vault: {
     startup: () => Promise<DesktopResult<VaultSnapshot | null>>;
     choose: () => Promise<DesktopResult<VaultSnapshot | null>>;
@@ -115,6 +128,10 @@ export class DesktopError extends Error {
     this.kind = data.kind;
     this.details = data.details;
   }
+}
+
+export function onQuickCaptureOpen(listener: () => void): () => void {
+  return window.markd?.capture.onOpen(listener) ?? (() => {});
 }
 
 declare global {

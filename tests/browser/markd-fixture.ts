@@ -146,6 +146,29 @@ export async function installMarkdFixture(page: Page): Promise<void> {
         onNotesChanged: () => () => {},
         onEngineLifecycle: () => () => {},
       },
+      capture: {
+        open: async () => success(null),
+        close: async () => success(null),
+        create: async (title, content) => success({
+          rel: `${title}.md`,
+          snapshot: {
+            root: "/tmp/markd-fixture",
+            name: "Fixture Vault",
+            tree: [],
+            theme: "system" as const,
+          },
+        }),
+        append: async (rel) => success({
+          rel,
+          snapshot: {
+            root: "/tmp/markd-fixture",
+            name: "Fixture Vault",
+            tree: [],
+            theme: "system" as const,
+          },
+        }),
+        onOpen: () => () => {},
+      },
       vault: {
         startup: async () => success(null),
         choose: async () => success(null),
@@ -228,6 +251,20 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         windowKind: "main",
         onNotesChanged: () => () => {},
         onEngineLifecycle: () => () => {},
+      },
+      capture: {
+        open: async () => success(null),
+        close: async () => success(null),
+        create: async (title, content) => {
+          const rel = `${title}.md`;
+          notes.set(rel, content);
+          return success({ rel, snapshot: snapshot() });
+        },
+        append: async (rel, content) => {
+          notes.set(rel, `${notes.get(rel) ?? ""}\n${content}`);
+          return success({ rel, snapshot: snapshot() });
+        },
+        onOpen: () => () => {},
       },
       vault: {
         startup: async () => success(snapshot()),

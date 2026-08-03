@@ -205,6 +205,18 @@ export const engineRequestSchema = v.variant("method", [
     method: v.literal("collections.tags.delete"),
     params: v.object({ collection: v.picklist(["todos", "bookmarks"]), name: v.string() }),
   }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("capture.create"),
+    params: v.object({ title: v.string(), content: v.string() }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("capture.append"),
+    params: v.object({ rel: entryRelSchema, content: v.string() }),
+  }),
 ]);
 
 export const controlRequestSchema = v.variant("method", [
@@ -236,6 +248,18 @@ export const controlRequestSchema = v.variant("method", [
     type: v.literal("request"),
     id: operationIdSchema,
     method: v.literal("app.relaunch"),
+    params: v.null(),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("capture.open"),
+    params: v.null(),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("capture.close"),
     params: v.null(),
   }),
 ]);
@@ -288,6 +312,8 @@ export const engineConnectSchema = v.object({
   epoch: epochSchema,
   configDir: v.pipe(v.string(), v.minLength(1)),
 });
+
+export const windowKindSchema = v.picklist(["main", "quick-capture"]);
 
 export const nativeRequestSchema = v.object({
   type: v.literal("native-request"),
@@ -383,12 +409,17 @@ export function validateResponseValue(
         v.object({ snapshot: collectionsSnapshotSchema, item: bookmarkSchema }),
         value,
       ).success;
+    case "capture.create":
+    case "capture.append":
+      return v.safeParse(v.object({ rel: relSchema, snapshot: vaultSnapshotSchema }), value).success;
     case "dialog.chooseVault":
     case "dialog.createVault":
       return v.safeParse(v.nullable(v.string()), value).success;
     case "updates.check":
     case "updates.install":
     case "app.relaunch":
+    case "capture.open":
+    case "capture.close":
       return v.safeParse(v.null(), value).success;
   }
 }

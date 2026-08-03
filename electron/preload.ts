@@ -12,6 +12,7 @@ import {
   type DesktopErrorData,
   type EngineRequest,
   type EngineState,
+  windowKindSchema,
 } from "./bridge-contract";
 
 type DesktopResult<T> = { ok: true; value: T } | { ok: false; error: DesktopErrorData };
@@ -37,6 +38,19 @@ const pending = new Map<string, PendingCall>();
 const portWaiters = new Set<PortWaiter>();
 const lifecycleListeners = new Set<(event: EngineState) => void>();
 const engineUnavailableMessage = "Markd Engine is unavailable.";
+const windowKind = v.parse(
+  windowKindSchema,
+  ipcRenderer.sendSync("markd:window-kind"),
+);
+const notesChangedListeners = new Set<() => void>();
+const captureOpenListeners = new Set<() => void>();
+
+ipcRenderer.on("markd:notes-changed", () => {
+  for (const listener of notesChangedListeners) listener();
+});
+ipcRenderer.on("markd:capture-open", () => {
+  for (const listener of captureOpenListeners) listener();
+});
 
 function engineUnavailable(): {
   ok: false;
@@ -390,12 +404,39 @@ async function openFromDialog(create: boolean): Promise<DesktopResult<unknown>> 
 
 contextBridge.exposeInMainWorld("markd", {
   app: {
-    windowKind: "main",
-    onNotesChanged: () => () => {},
+    windowKind,
+    onNotesChanged: (listener: () => void) => {
+      notesChangedListeners.add(listener);
+      return () => notesChangedListeners.delete(listener);
+    },
     onEngineLifecycle: (listener: (event: EngineState) => void) => {
       lifecycleListeners.add(listener);
       if (currentState) queueMicrotask(() => listener(currentState!));
       return () => lifecycleListeners.delete(listener);
+    },
+  },
+  capture: {
+    open: () => requestControl(controlRequestInput("capture.open", null)),
+    close: () => requestControl(controlRequestInput("capture.close", null)),
+    create: async (title: string, content: string) => {
+      const result = await requestEngine<{ rel: string; snapshot: unknown }>(
+        "capture.create",
+        { title, content },
+      );
+      if (result.ok) ipcRenderer.send("markd:notes-changed", result.value.rel);
+      return result;
+    },
+    append: async (rel: string, content: string) => {
+      const result = await requestEngine<{ rel: string; snapshot: unknown }>(
+        "capture.append",
+        { rel, content },
+      );
+      if (result.ok) ipcRenderer.send("markd:notes-changed", result.value.rel);
+      return result;
+    },
+    onOpen: (listener: () => void) => {
+      captureOpenListeners.add(listener);
+      return () => captureOpenListeners.delete(listener);
     },
   },
   vault: {

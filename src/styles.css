@@ -1,4 +1,15 @@
 @import "tailwindcss";
+
+.window-drag {
+  -webkit-app-region: drag;
+}
+
+.window-no-drag,
+.window-drag button,
+.window-drag input,
+.window-drag textarea {
+  -webkit-app-region: no-drag;
+}
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 
