@@ -9,9 +9,9 @@ import { toast } from "@octanejs/sonner";
 import { useEffect, useMemo, useRef } from "octane";
 import type { MenuItem } from "@/components/ui/ContextMenu";
 import {
+  applyExternalTreesReconcile,
   createTreesProjection,
   fromTreesPath,
-  planExternalTreesReconcile,
   type TreesProjection,
 } from "@/lib/trees-projection";
 import { parentDir } from "@/lib/utils";
@@ -470,9 +470,8 @@ function syncCanonicalProjection(
 }
 
 function applyProjection(runtime: Runtime, next: TreesProjection): void {
-  const reconcile = planExternalTreesReconcile(runtime.projection, next);
+  applyExternalTreesReconcile(runtime.model, runtime.projection, next);
   runtime.projection = next;
-  if (reconcile.kind === "batch") runtime.model.batch(reconcile.operations);
   consumePendingRename(runtime);
 }
 

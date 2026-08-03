@@ -1,5 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
+  applyExternalTreesReconcile,
   createTreesProjection,
   diffTreesProjection,
   fromTreesPath,
@@ -83,5 +84,18 @@ describe("Vault tree to Trees projection", () => {
       kind: "batch",
       operations,
     });
+    const batch = vi.fn();
+    expect(applyExternalTreesReconcile({ batch }, previous, next)).toEqual({
+      kind: "batch",
+      operations,
+    });
+    expect(batch).toHaveBeenCalledOnce();
+    expect(batch).toHaveBeenCalledWith(operations);
+
+    batch.mockClear();
+    expect(applyExternalTreesReconcile({ batch }, next, next)).toEqual({
+      kind: "unchanged",
+    });
+    expect(batch).not.toHaveBeenCalled();
   });
 });

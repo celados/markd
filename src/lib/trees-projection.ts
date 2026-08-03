@@ -64,6 +64,16 @@ export function planExternalTreesReconcile(
     : { kind: "batch", operations };
 }
 
+export function applyExternalTreesReconcile(
+  target: Pick<{ batch(operations: readonly FileTreeBatchOperation[]): void }, "batch">,
+  previous: TreesProjection,
+  next: TreesProjection,
+): ExternalTreesReconcile {
+  const reconcile = planExternalTreesReconcile(previous, next);
+  if (reconcile.kind === "batch") target.batch(reconcile.operations);
+  return reconcile;
+}
+
 export function fromTreesPath(path: string): string {
   return path.endsWith("/") ? path.slice(0, -1) : path;
 }
