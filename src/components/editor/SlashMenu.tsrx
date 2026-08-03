@@ -15,7 +15,7 @@ import {
   LuTextQuote as TextQuote,
 } from "@/icons/icons.tsrx";
 import { motion } from "@octanejs/motion";
-import { useEffect, useMemo, useRef, useState } from "octane";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "octane";
 import { cx } from "@/lib/utils";
 
 export type SlashMenuState = {
@@ -149,7 +149,9 @@ export function SlashMenu(props: SlashMenuProps) @{
       ?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
-  useEffect(() => {
+  // The menu is keyboard-driven while focus stays in ProseMirror. Register
+  // before paint so a visible command can never precede its Enter handler.
+  useLayoutEffect(() => {
     if (!menu || !editor) return;
     const execute = (command: SlashCommand) => {
       // The note-link command hands off to the picker, which owns deleting
