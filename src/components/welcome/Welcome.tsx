@@ -12,7 +12,7 @@ export function Welcome() {
 
   return (
     <div
-      data-tauri-drag-region
+      data-markd-drag-region
       className="relative flex h-full flex-col items-center justify-center bg-bg"
     >
       {/* dot grid backdrop */}

@@ -1,5 +1,6 @@
 import type {
   CloudAccountStatus,
+  PinSnapshot,
   VaultSnapshot,
 } from "./types";
 
@@ -47,6 +48,12 @@ export type MarkdDesktop = {
     moveToTrash: (
       rel: string,
     ) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
+    resolveNotePath: (rel: string) => Promise<DesktopResult<string>>;
+    pins: {
+      list: () => Promise<DesktopResult<PinSnapshot>>;
+      add: (rel: string) => Promise<DesktopResult<PinSnapshot>>;
+      remove: (rel: string) => Promise<DesktopResult<PinSnapshot>>;
+    };
   };
   cloud?: {
     accountStatus: () => Promise<DesktopResult<CloudAccountStatus>>;

@@ -89,3 +89,19 @@ test("pinned folders own their subtree without duplicating the main tree", async
   await unpin.click();
   await expect(pinnedTree).toHaveCount(0);
 });
+
+test("stale Pins stay visible and can be explicitly removed", async ({ page }) => {
+  await installTauriFixture(page, { stalePin: "Gone.md" });
+  await page.goto("/");
+
+  const pinnedTree = page.getByRole("tree", {
+    name: "Pinned notes and folders",
+  });
+  const missing = pinnedTree.getByRole("treeitem", { name: /Gone\.md Missing/ });
+  await expect(missing).toHaveAttribute("data-status", "stale");
+  const unpin = missing.getByRole("button", { name: "Unpin missing Gone.md" });
+  await missing.hover();
+  await expect(unpin).toHaveCSS("opacity", "0.6");
+  await unpin.click();
+  await expect(pinnedTree).toHaveCount(0);
+});

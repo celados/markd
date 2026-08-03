@@ -171,6 +171,27 @@ test("tab context menu manages tabs, pins, and both path forms", async ({
   await expect(readmeTab).toHaveAttribute("aria-selected", "true");
 });
 
+test("tab strip blank space is draggable while tabs and menus stay interactive", async ({
+  page,
+}) => {
+  const blank = page.locator("[data-tab-strip-drag-region]");
+  await expect(blank).toHaveCSS("-webkit-app-region", "drag");
+  await expect(page.locator("[data-markd-drag-region]").first()).toHaveCSS(
+    "-webkit-app-region",
+    "drag",
+  );
+  await expect(page.getByRole("tab", { name: /README/ })).toHaveCSS(
+    "-webkit-app-region",
+    "no-drag",
+  );
+
+  await page.getByRole("tab", { name: /README/ }).click({ button: "right" });
+  await expect(page.getByRole("menu")).toHaveCSS(
+    "-webkit-app-region",
+    "no-drag",
+  );
+});
+
 test("autosave and close flush preserve frontmatter and the owning path", async ({
   page,
 }) => {

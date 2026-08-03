@@ -413,6 +413,12 @@ contextBridge.exposeInMainWorld("markd", {
     writeNote: (rel: string, content: string) =>
       requestEngine("vault.note.write", { rel, content }),
     moveToTrash: (rel: string) => requestEngine("vault.trash", { rel }),
+    resolveNotePath: (rel: string) => requestEngine("vault.note.path", { rel }),
+    pins: {
+      list: () => requestEngine("vault.pins.list", null),
+      add: (rel: string) => requestEngine("vault.pins.add", { rel }),
+      remove: (rel: string) => requestEngine("vault.pins.remove", { rel }),
+    },
   },
   updates: {
     check: () => requestControl(controlRequestInput("updates.check", null)),

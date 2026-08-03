@@ -27,6 +27,7 @@ type PinnedMenu = {
 
 export function PinnedNotes() {
   const pins = usePins((state) => state.pins);
+  const stale = usePins((state) => state.stale);
   const tree = useVault((state) => state.tree);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<PinnedMenu | null>(null);
@@ -35,7 +36,7 @@ export function PinnedNotes() {
     [pins, tree],
   );
 
-  if (nodes.length === 0) return null;
+  if (nodes.length === 0 && stale.length === 0) return null;
 
   return (
     <section className="px-2 pb-1">
@@ -62,6 +63,9 @@ export function PinnedNotes() {
             }
           />
         }
+        @for (const rel of stale; key rel) {
+          <StalePinnedRow rel={rel} />
+        }
       </div>
 
       @if (menu) {
@@ -78,6 +82,33 @@ export function PinnedNotes() {
       <div className="mx-2 my-2 border-t border-line-soft" />
     </section>
   );
+}
+
+function StalePinnedRow(props: { rel: string }) @{
+  const { rel } = props;
+  const unpin = usePins((state) => state.unpin);
+  const name = rel.split("/").at(-1) ?? rel;
+
+  <div
+    role="treeitem"
+    data-status="stale"
+    data-rel={rel}
+    className="group flex h-[30px] items-center rounded-md px-2 text-[13px] text-faint"
+  >
+    <FileText size={14} strokeWidth={1.75} className="mr-2 shrink-0" />
+    <span className="min-w-0 flex-1 truncate line-through" title={rel}>{name}</span>
+    <span className="mr-1 text-[10px] uppercase tracking-wide">Missing</span>
+    <Tooltip label={`Unpin missing ${name}`} side="right">
+      <button
+        type="button"
+        aria-label={`Unpin missing ${name}`}
+        className="grid h-5 w-5 shrink-0 place-items-center rounded opacity-0 transition-opacity duration-100 hover:bg-active group-hover:opacity-60 group-focus-within:opacity-60 hover:opacity-100"
+        onClick={() => void unpin(rel)}
+      >
+        <PinOff size={11.5} strokeWidth={2} />
+      </button>
+    </Tooltip>
+  </div>
 }
 
 function PinnedRow(props: {

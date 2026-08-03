@@ -1,4 +1,12 @@
-import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import {
   basename,
   dirname,
@@ -10,7 +18,12 @@ import {
   sep,
 } from "node:path";
 import type { DesktopErrorData } from "./bridge-contract";
-import type { Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
+import type {
+  PinSnapshot,
+  Theme,
+  TreeNode,
+  VaultSnapshot,
+} from "../src/lib/types";
 
 type NativeTrash = (root: string, path: string) => Promise<void>;
 
@@ -100,12 +113,81 @@ export class VaultEngine {
   async moveToTrash(rel: string): Promise<{ snapshot: VaultSnapshot }> {
     const path = await this.#existingPath(rel, "entry");
     await this.#trash(this.#requireRoot(), path);
+    try {
+      await this.#removePinsUnder(rel);
+    } catch (error) {
+      // Trash already succeeded and cannot be rolled back. A failed cleanup is
+      // surfaced as an explicit stale Pin on the next load, not a false delete failure.
+      console.error("[markd-engine] failed to clean Pins after Trash", error);
+    }
     return { snapshot: await this.snapshot() };
+  }
+
+  async resolveNotePath(rel: string): Promise<string> {
+    return this.#existingPath(rel, "note");
+  }
+
+  async listPins(): Promise<PinSnapshot> {
+    const stored = dedupe(await this.#readPins());
+    const active: Array<{ rel: string; folder: boolean }> = [];
+    const stale: string[] = [];
+    for (const rel of stored) {
+      try {
+        const path = await this.#existingPath(rel, "pin");
+        active.push({ rel, folder: (await stat(path)).isDirectory() });
+      } catch (error) {
+        if (
+          error instanceof VaultEngineError &&
+          ["NOT_FOUND", "INVALID_PATH"].includes(error.kind)
+        ) {
+          stale.push(rel);
+          continue;
+        }
+        throw error;
+      }
+    }
+    const folderPins = active.filter((pin) => pin.folder).map((pin) => pin.rel);
+    return {
+      pins: active
+        .map((pin) => pin.rel)
+        .filter(
+          (rel) =>
+            !folderPins.some(
+              (folder) => rel !== folder && rel.startsWith(`${folder}/`),
+            ),
+        ),
+      stale,
+    };
+  }
+
+  async pin(rel: string): Promise<PinSnapshot> {
+    if (rel === "") {
+      throw domainError("INVALID_PATH", "The Vault root cannot be pinned.");
+    }
+    const path = await this.#existingPath(rel, "pin");
+    const folder = (await stat(path)).isDirectory();
+    const current = await this.listPins();
+    for (const pin of current.pins) {
+      const candidate = await this.#existingPath(pin, "pin");
+      if ((await stat(candidate)).isDirectory() && rel.startsWith(`${pin}/`)) {
+        return current;
+      }
+    }
+    let pins = current.pins;
+    if (folder) pins = pins.filter((pin) => !pin.startsWith(`${rel}/`));
+    if (!pins.includes(rel)) pins = [rel, ...pins];
+    await this.#writePins([...pins, ...current.stale]);
+    return this.listPins();
+  }
+
+  async unpin(rel: string): Promise<PinSnapshot> {
+    await this.#writePins((await this.#readPins()).filter((pin) => pin !== rel));
+    return this.listPins();
   }
 
   async #existingPath(
     rel: string,
-    expected: "folder" | "note" | "entry",
+    expected: "folder" | "note" | "entry" | "pin",
   ): Promise<string> {
     const root = this.#requireRoot();
     const candidate = resolveVaultRel(root, rel);
@@ -122,10 +204,50 @@ export class VaultEngine {
     const metadata = await stat(canonical);
     const valid =
       expected === "entry" ||
+      (expected === "pin" &&
+        (metadata.isDirectory() ||
+          (metadata.isFile() && canonical.endsWith(".md")))) ||
       (expected === "folder" && metadata.isDirectory()) ||
       (expected === "note" && metadata.isFile() && canonical.endsWith(".md"));
     if (!valid) throw domainError("INVALID_PATH", `Invalid Vault path: ${rel}`);
     return canonical;
+  }
+
+  async #readPins(): Promise<string[]> {
+    try {
+      const input: unknown = JSON.parse(
+        await readFile(join(this.#requireRoot(), ".markd", "pins.json"), "utf8"),
+      );
+      if (
+        !Array.isArray(input) ||
+        !input.every((value) => typeof value === "string")
+      ) {
+        throw domainError("PIN_STORE_INVALID", "The Vault Pin store is invalid.");
+      }
+      return input;
+    } catch (error) {
+      if (error instanceof VaultEngineError) throw error;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw domainError(
+        "PIN_STORE_INVALID",
+        "The Vault Pin store could not be read.",
+      );
+    }
+  }
+
+  async #writePins(pins: string[]): Promise<void> {
+    const target = join(this.#requireRoot(), ".markd", "pins.json");
+    const temporary = `${target}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(dedupe(pins), null, 2)}\n`);
+    await rename(temporary, target);
+  }
+
+  async #removePinsUnder(rel: string): Promise<void> {
+    const pins = await this.#readPins();
+    const next = pins.filter(
+      (pin) => pin !== rel && !pin.startsWith(`${rel}/`),
+    );
+    if (next.length !== pins.length) await this.#writePins(next);
   }
 
   #requireRoot(): string {
@@ -254,4 +376,8 @@ async function exists(path: string): Promise<boolean> {
 
 function domainError(kind: string, message: string): VaultEngineError {
   return new VaultEngineError({ kind, message });
+}
+
+function dedupe(values: string[]): string[] {
+  return Array.from(new Set(values));
 }

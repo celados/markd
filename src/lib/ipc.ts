@@ -8,6 +8,7 @@ import type {
   PublishPageDraft,
   PublishedShare,
   OtpChallenge,
+  PinSnapshot,
   SearchHit,
   Theme,
   Todo,
@@ -137,10 +138,22 @@ export const ipc = {
   ) => call<PublishedShare>("update_published_note", { rel, title, content, pages }),
   revokePublishedNote: (rel: string) =>
     call<void>("revoke_published_note", { rel }),
-  pinsList: () => call<string[]>("pins_list"),
-  pinNote: (rel: string) => call<string[]>("pin_note", { rel }),
-  unpinNote: (rel: string) => call<string[]>("unpin_note", { rel }),
-  notePath: (rel: string) => call<string>("note_path", { rel }),
+  pinsList: () =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.pins.list())
+      : call<string[]>("pins_list").then((pins): PinSnapshot => ({ pins, stale: [] })),
+  pinNote: (rel: string) =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.pins.add(rel))
+      : call<string[]>("pin_note", { rel }).then((pins): PinSnapshot => ({ pins, stale: [] })),
+  unpinNote: (rel: string) =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.pins.remove(rel))
+      : call<string[]>("unpin_note", { rel }).then((pins): PinSnapshot => ({ pins, stale: [] })),
+  notePath: (rel: string) =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.resolveNotePath(rel))
+      : call<string>("note_path", { rel }),
 
   todosList: () => call<Todo[]>("todos_list"),
   todoAdd: (text: string) => call<Todo>("todo_add", { text }),

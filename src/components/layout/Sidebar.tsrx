@@ -37,7 +37,7 @@ export function Sidebar() @{
       className="flex h-full w-full shrink-0 flex-col border-r border-line-soft bg-panel"
     >
       {/* drag region + traffic-light clearance */}
-      <div data-tauri-drag-region className="flex h-12 items-end px-3 pb-1" />
+      <div data-markd-drag-region className="flex h-12 items-end px-3 pb-1" />
 
       <div className="px-2 pb-2">
         <button

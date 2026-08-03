@@ -235,6 +235,59 @@ test("native Trash failure remains tagged and leaves the snapshot coherent", asy
   }
 });
 
+test("Pins persist in the Vault and canonical paths expand a Vault symlink", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-pins-"));
+  const configDir = join(scratch, "config");
+  const vault = join(scratch, "vault");
+  const vaultAlias = join(scratch, "vault-alias");
+  await mkdir(configDir, { recursive: true });
+  await mkdir(vault, { recursive: true });
+  await writeFile(join(vault, "Kept.md"), "kept");
+  await writeFile(join(vault, "Removed.md"), "removed");
+  await symlink(vault, vaultAlias);
+  await writeFile(
+    join(configDir, "config.json"),
+    JSON.stringify({ vaultPath: vaultAlias, theme: "system" }),
+  );
+
+  const first = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
+  try {
+    const page = await first.firstWindow();
+    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
+      .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
+    expect(await page.evaluate(() => window.markd!.vault.pins.add("Kept.md")))
+      .toEqual({ ok: true, value: { pins: ["Kept.md"], stale: [] } });
+    expect(await page.evaluate(() => window.markd!.vault.pins.add("Removed.md")))
+      .toEqual({
+        ok: true,
+        value: { pins: ["Removed.md", "Kept.md"], stale: [] },
+      });
+    expect(await page.evaluate(() => window.markd!.vault.resolveNotePath("Kept.md")))
+      .toEqual({ ok: true, value: join(await realpath(vault), "Kept.md") });
+  } finally {
+    await first.close();
+  }
+
+  await rm(join(vault, "Removed.md"));
+  const second = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
+  try {
+    const page = await second.firstWindow();
+    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
+      .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
+    expect(await page.evaluate(() => window.markd!.vault.pins.list())).toEqual({
+      ok: true,
+      value: { pins: ["Kept.md"], stale: ["Removed.md"] },
+    });
+    expect(await page.evaluate(() => window.markd!.vault.pins.remove("Removed.md")))
+      .toEqual({ ok: true, value: { pins: ["Kept.md"], stale: [] } });
+    expect(JSON.parse(await readFile(join(vault, ".markd", "pins.json"), "utf8")))
+      .toEqual(["Kept.md"]);
+  } finally {
+    await second.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
 test("utility crash rejects outstanding calls and spends one restart", async () => {
   const application = await launchMarkd();
   try {

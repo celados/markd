@@ -109,6 +109,14 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
       return null;
     case "vault.trash":
       return vault.moveToTrash(request.params.rel);
+    case "vault.note.path":
+      return vault.resolveNotePath(request.params.rel);
+    case "vault.pins.list":
+      return vault.listPins();
+    case "vault.pins.add":
+      return vault.pin(request.params.rel);
+    case "vault.pins.remove":
+      return vault.unpin(request.params.rel);
   }
 }
 

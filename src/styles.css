@@ -4,6 +4,15 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+[data-markd-drag-region] {
+    -webkit-app-region: drag;
+}
+
+[data-markd-no-drag],
+[data-markd-drag-region] :where(button, [role="tab"], input, textarea, select, a) {
+    -webkit-app-region: no-drag;
+}
+
 @layer base {
     button:not(:disabled),
     [role="button"]:not(:disabled),

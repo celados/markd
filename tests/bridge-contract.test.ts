@@ -23,6 +23,30 @@ describe("Electron bridge contract", () => {
     expect(
       v.safeParse(engineRequestSchema, {
         type: "request",
+        id: "operation-pin",
+        method: "vault.pins.add",
+        params: { rel: "notes/idea.md" },
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: "operation-path",
+        method: "vault.note.path",
+        params: { rel: "notes/idea.md" },
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: "operation-empty-pin",
+        method: "vault.pins.add",
+        params: { rel: "" },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
         id: "operation-2",
         method: "vault.open",
         params: { root: "/tmp/vault", create: false },
@@ -86,6 +110,15 @@ describe("Electron bridge contract", () => {
     expect(validateResponseValue("vault.startup", null)).toBe(true);
     expect(validateResponseValue("vault.note.read", "# note")).toBe(true);
     expect(validateResponseValue("vault.note.read", null)).toBe(false);
+    expect(
+      validateResponseValue("vault.pins.list", {
+        pins: ["notes/idea.md"],
+        stale: ["gone.md"],
+      }),
+    ).toBe(true);
+    expect(validateResponseValue("vault.note.path", "/tmp/vault/idea.md")).toBe(
+      true,
+    );
   });
 
   test("keeps expected failures as tagged data until the renderer boundary", async () => {

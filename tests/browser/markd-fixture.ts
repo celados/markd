@@ -11,6 +11,39 @@ export async function installMarkdFixture(page: Page): Promise<void> {
       },
       vault: {
         startup: async () => success(null),
+        choose: async () => success(null),
+        create: async () => success(null),
+        snapshot: async () => success({
+          root: "/tmp/markd-fixture",
+          name: "Fixture Vault",
+          tree: [],
+          theme: "system" as const,
+        }),
+        createNote: async () => success({
+          rel: "Untitled.md",
+          snapshot: {
+            root: "/tmp/markd-fixture",
+            name: "Fixture Vault",
+            tree: [],
+            theme: "system" as const,
+          },
+        }),
+        readNote: async () => success(""),
+        writeNote: async () => success(null),
+        moveToTrash: async () => success({
+          snapshot: {
+            root: "/tmp/markd-fixture",
+            name: "Fixture Vault",
+            tree: [],
+            theme: "system" as const,
+          },
+        }),
+        resolveNotePath: async (rel) => success(`/tmp/markd-fixture/${rel}`),
+        pins: {
+          list: async () => success({ pins: [], stale: [] }),
+          add: async (rel) => success({ pins: [rel], stale: [] }),
+          remove: async () => success({ pins: [], stale: [] }),
+        },
       },
       cloud: {
         accountStatus: async () => success({ account: null }),
@@ -75,6 +108,12 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
           tree = tree.filter((node) => node.rel !== rel);
           notes.delete(rel);
           return success({ snapshot: snapshot() });
+        },
+        resolveNotePath: async (rel) => success(`${root}/${rel}`),
+        pins: {
+          list: async () => success({ pins: [], stale: [] }),
+          add: async (rel) => success({ pins: [rel], stale: [] }),
+          remove: async () => success({ pins: [], stale: [] }),
         },
       },
       cloud: {

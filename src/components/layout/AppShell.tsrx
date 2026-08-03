@@ -148,7 +148,7 @@ export function AppShell() @{
             recessed (panel); the active tab takes the content bg so it reads
             as merged with the pane below, code-editor style. */}
         <motion.div
-          data-tauri-drag-region
+          data-markd-drag-region
           className="flex h-11 shrink-0 items-stretch gap-1.5 bg-sunken pr-3"
           animate={{ paddingLeft: sidebarHidden ? 84 : 10 }}
           initial={false}

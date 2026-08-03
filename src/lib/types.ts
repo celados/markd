@@ -18,6 +18,11 @@ export interface VaultSnapshot {
   theme: Theme;
 }
 
+export type PinSnapshot = {
+  pins: string[];
+  stale: string[];
+};
+
 export interface Todo {
   id: string;
   text: string;

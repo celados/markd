@@ -3,6 +3,7 @@ import * as v from "valibot";
 const operationIdSchema = v.pipe(v.string(), v.minLength(1));
 const epochSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 const relSchema = v.string();
+const entryRelSchema = v.pipe(v.string(), v.minLength(1));
 
 export const treeNodeSchema: v.GenericSchema = v.object({
   name: v.string(),
@@ -19,6 +20,11 @@ export const vaultSnapshotSchema = v.object({
   theme: v.picklist(["system", "light", "dark"]),
 });
 
+export const pinSnapshotSchema = v.object({
+  pins: v.array(relSchema),
+  stale: v.array(relSchema),
+});
+
 export const desktopErrorSchema = v.object({
   kind: v.pipe(v.string(), v.minLength(1)),
   message: v.pipe(v.string(), v.minLength(1)),
@@ -33,6 +39,10 @@ export const engineRequestSchema = v.variant("method", [
   v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.note.read"), params: v.object({ rel: relSchema }) }),
   v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.note.write"), params: v.object({ rel: relSchema, content: v.string() }) }),
   v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.trash"), params: v.object({ rel: relSchema }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.note.path"), params: v.object({ rel: entryRelSchema }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.pins.list"), params: v.null() }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.pins.add"), params: v.object({ rel: entryRelSchema }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.pins.remove"), params: v.object({ rel: entryRelSchema }) }),
 ]);
 
 export const controlRequestSchema = v.variant("method", [
@@ -179,6 +189,12 @@ export function validateResponseValue(
       return v.safeParse(v.null(), value).success;
     case "vault.trash":
       return v.safeParse(v.object({ snapshot: vaultSnapshotSchema }), value).success;
+    case "vault.note.path":
+      return v.safeParse(v.pipe(v.string(), v.minLength(1)), value).success;
+    case "vault.pins.list":
+    case "vault.pins.add":
+    case "vault.pins.remove":
+      return v.safeParse(pinSnapshotSchema, value).success;
     case "dialog.chooseVault":
     case "dialog.createVault":
       return v.safeParse(v.nullable(v.string()), value).success;

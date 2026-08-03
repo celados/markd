@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { VaultEngine } from "../electron/vault-engine";
@@ -51,6 +59,94 @@ describe("Vault Engine path policy", () => {
 
     await expect(engine.readNote("Escape.md")).rejects.toEqual(
       expect.objectContaining({ kind: "INVALID_PATH" }),
+    );
+  });
+});
+
+describe("Vault Engine Pins", () => {
+  test("persists valid note and folder Pins without duplicating descendants", async () => {
+    const { engine, root } = await setupEngine();
+    await mkdir(join(root, "Projects"));
+    await writeFile(join(root, "Root.md"), "root");
+    await writeFile(join(root, "Projects", "Plan.md"), "plan");
+
+    expect(await engine.pin("Projects/Plan.md")).toEqual({
+      pins: ["Projects/Plan.md"],
+      stale: [],
+    });
+    expect(await engine.pin("Projects")).toEqual({
+      pins: ["Projects"],
+      stale: [],
+    });
+    expect(await engine.pin("Projects/Plan.md")).toEqual({
+      pins: ["Projects"],
+      stale: [],
+    });
+    expect(JSON.parse(await readFile(join(root, ".markd", "pins.json"), "utf8")))
+      .toEqual(["Projects"]);
+  });
+
+  test("reports externally removed Pin targets as stale until explicitly unpinned", async () => {
+    const { engine, root } = await setupEngine();
+    await writeFile(join(root, "Missing.md"), "soon gone");
+    await engine.pin("Missing.md");
+    await rm(join(root, "Missing.md"));
+
+    expect(await engine.listPins()).toEqual({ pins: [], stale: ["Missing.md"] });
+    expect(await engine.unpin("Missing.md")).toEqual({ pins: [], stale: [] });
+  });
+
+  test("rejects Pin requests for missing and non-Markdown targets", async () => {
+    const { engine, root } = await setupEngine();
+    await writeFile(join(root, "Attachment.txt"), "attachment");
+    await writeFile(join(root, "Invisible.MD"), "not in the Note tree");
+
+    await expect(engine.pin("Missing.md")).rejects.toEqual(
+      expect.objectContaining({ kind: "NOT_FOUND" }),
+    );
+    await expect(engine.pin("Attachment.txt")).rejects.toEqual(
+      expect.objectContaining({ kind: "INVALID_PATH" }),
+    );
+    await expect(engine.pin("Invisible.MD")).rejects.toEqual(
+      expect.objectContaining({ kind: "INVALID_PATH" }),
+    );
+    await expect(engine.pin("")).rejects.toEqual(
+      expect.objectContaining({ kind: "INVALID_PATH" }),
+    );
+    expect(await engine.listPins()).toEqual({ pins: [], stale: [] });
+  });
+
+  test("removes Pins beneath an entry after native Trash succeeds", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-trash-"));
+    scratchPaths.push(scratch);
+    const root = join(scratch, "vault");
+    await mkdir(root);
+    const engine = new VaultEngine(join(scratch, "config"), async (_root, path) => {
+      await rm(path, { recursive: true });
+    });
+    await engine.open(root, false);
+    await mkdir(join(root, "Projects"));
+    await writeFile(join(root, "Projects", "Plan.md"), "plan");
+    await engine.pin("Projects");
+
+    await engine.moveToTrash("Projects");
+
+    expect(await engine.listPins()).toEqual({ pins: [], stale: [] });
+  });
+
+  test("resolves the canonical full path from a symlinked Vault root", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-alias-"));
+    scratchPaths.push(scratch);
+    const root = join(scratch, "real-vault");
+    const alias = join(scratch, "vault-alias");
+    await mkdir(root);
+    await writeFile(join(root, "Note.md"), "note");
+    await symlink(root, alias);
+    const engine = new VaultEngine(join(scratch, "config"), async () => {});
+    await engine.open(alias, false);
+
+    expect(await engine.resolveNotePath("Note.md")).toBe(
+      join(await realpath(root), "Note.md"),
     );
   });
 });

@@ -2,27 +2,29 @@ import { create } from "@octanejs/zustand";
 import { toast } from "@octanejs/sonner";
 import { ipc } from "@/lib/ipc";
 
-interface PinsState {
+type PinsState = {
   pins: string[];
+  stale: string[];
   loading: boolean;
   load: () => Promise<void>;
   pin: (rel: string) => Promise<void>;
   unpin: (rel: string) => Promise<void>;
   toggle: (rel: string) => Promise<void>;
   clear: () => void;
-}
+};
 
 const showError = (error: unknown) =>
   toast.error(error instanceof Error ? error.message : String(error));
 
 export const usePins = create<PinsState>((set, get) => ({
   pins: [],
+  stale: [],
   loading: false,
 
   load: async () => {
     set({ loading: true });
     try {
-      set({ pins: await ipc.pinsList() });
+      set(await ipc.pinsList());
     } catch (error) {
       showError(error);
     } finally {
@@ -32,7 +34,7 @@ export const usePins = create<PinsState>((set, get) => ({
 
   pin: async (rel) => {
     try {
-      set({ pins: await ipc.pinNote(rel) });
+      set(await ipc.pinNote(rel));
     } catch (error) {
       showError(error);
     }
@@ -40,7 +42,7 @@ export const usePins = create<PinsState>((set, get) => ({
 
   unpin: async (rel) => {
     try {
-      set({ pins: await ipc.unpinNote(rel) });
+      set(await ipc.unpinNote(rel));
     } catch (error) {
       showError(error);
     }
@@ -54,5 +56,5 @@ export const usePins = create<PinsState>((set, get) => ({
     }
   },
 
-  clear: () => set({ pins: [], loading: false }),
+  clear: () => set({ pins: [], stale: [], loading: false }),
 }));

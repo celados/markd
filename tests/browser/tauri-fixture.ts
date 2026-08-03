@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 type TauriFixtureOptions = {
   pinnedFolder?: boolean;
+  stalePin?: string;
   taggedTodos?: boolean;
 };
 
@@ -66,6 +67,7 @@ export async function installTauriFixture(
       : [];
     let todoTags = fixtureOptions.taggedTodos ? ["work", "later"] : [];
     let pins = fixtureOptions.pinnedFolder ? ["Projects"] : [];
+    let stalePins = fixtureOptions.stalePin ? [fixtureOptions.stalePin] : [];
     const clipboard: string[] = [];
     const notes = new Map([
       [
@@ -77,7 +79,7 @@ export async function installTauriFixture(
     const commands: Array<{ command: string; args: Record<string, unknown> }> = [];
     const success = <T>(value: T) => ({ ok: true as const, value });
     const snapshot = () => ({
-      root: "/tmp/markd-browser-fixture",
+      root: "/private/tmp/markd-browser-fixture",
       name: "Fixture Vault",
       tree,
       theme: "system" as const,
@@ -116,6 +118,21 @@ export async function installTauriFixture(
           notes.delete(rel);
           tree = tree.filter((node) => node.rel !== rel);
           return success({ snapshot: snapshot() });
+        },
+        resolveNotePath: async (rel) =>
+          success(`/private/tmp/markd-browser-fixture/${rel}`),
+        pins: {
+          list: async () => success({ pins, stale: stalePins }),
+          add: async (rel) => {
+            stalePins = stalePins.filter((pin) => pin !== rel);
+            pins = Array.from(new Set([rel, ...pins]));
+            return success({ pins, stale: stalePins });
+          },
+          remove: async (rel) => {
+            pins = pins.filter((pin) => pin !== rel);
+            stalePins = stalePins.filter((pin) => pin !== rel);
+            return success({ pins, stale: stalePins });
+          },
         },
       },
       cloud: {
