@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-type TauriFixtureOptions = {
+type DesktopFixtureOptions = {
   cloudLifecycle?: boolean;
   cloudSignOutFailure?: boolean;
   largeTreeSize?: number;
@@ -11,10 +11,8 @@ type TauriFixtureOptions = {
   taggedTodos?: boolean;
 };
 
-export async function installTauriFixture(page: Page, options: TauriFixtureOptions = {}) {
+export async function installDesktopFixture(page: Page, options: DesktopFixtureOptions = {}) {
   await page.addInitScript((fixtureOptions) => {
-    let nextCallbackId = 1;
-    const callbacks = new Map<number, { callback: (data: unknown) => void; once: boolean }>();
     let tree: import("@/lib/types").TreeNode[] = fixtureOptions.largeTreeSize
       ? Array.from({ length: fixtureOptions.largeTreeSize }, (_, index) => ({
           name: `Note ${String(index).padStart(4, "0")}.md`,
@@ -95,7 +93,7 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
       ["README.md", "---\nfixture: preserved\n---\n# README\n\nOctane + pnpm verification."],
       ["Projects/Alpha.md", "# Alpha\n\nSecond live editor."],
     ]);
-    const commands: Array<{ command: string; args: Record<string, unknown> }> = [];
+    const operations: Array<{ method: string; params: Record<string, unknown> }> = [];
     const success = <T>(value: T) => ({ ok: true as const, value });
     const snapshot = () => ({
       root: "/private/tmp/markd-browser-fixture",
@@ -104,12 +102,20 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
       theme: "system" as const,
     });
 
-    // The renderer journey uses the same semantic Vault boundary as Electron.
-    // Legacy Tauri calls remain only for slices that have not migrated yet.
+    // Browser journeys replace only the secure preload boundary. Product code
+    // still consumes the same semantic desktop surface as packaged Electron.
     window.markd = {
       app: {
         windowKind: "main",
         onEngineLifecycle: () => () => {},
+        openWebUrl: async (url) => {
+          openedExternalUrls.push(url);
+          return success(null);
+        },
+        revealVaultEntry: async (rel) => {
+          operations.push({ method: "external.revealVaultEntry", params: { rel } });
+          return success(null);
+        },
       },
       capture: {
         open: async () => success(null),
@@ -138,9 +144,48 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
           tree = [...tree, { name: `${title}.md`, rel, kind: "note", modifiedMs: Date.now() }];
           return success({ rel, snapshot: snapshot() });
         },
+        openDailyNote: async (date) => {
+          const rel = `${date}.md`;
+          if (!notes.has(rel)) notes.set(rel, `# ${date}\n`);
+          return success({ rel, snapshot: snapshot() });
+        },
+        createFolder: async (dir, name) => {
+          operations.push({ method: "vault.entries.createFolder", params: { dir, name } });
+          const rel = dir ? `${dir}/${name}` : name;
+          tree = insertTreeEntry(tree, dir, {
+            name,
+            rel,
+            kind: "folder",
+            modifiedMs: Date.now(),
+            children: [],
+          });
+          return success({ rel, snapshot: snapshot() });
+        },
+        renameEntry: async (rel, name) => {
+          operations.push({ method: "vault.entries.rename", params: { rel, name } });
+          if (fixtureOptions.mutationFailure) {
+            return { ok: false as const, error: { kind: "IO_ERROR", message: "Rename rejected by disk" } };
+          }
+          const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+          const persistedName = fixtureOptions.mutationCollision ? withCollisionSuffix(name) : name;
+          const next = parent ? `${parent}/${persistedName}` : persistedName;
+          tree = remapTree(tree, rel, next);
+          return success({ rel: next, snapshot: snapshot() });
+        },
+        moveEntry: async (rel, dir) => {
+          operations.push({ method: "vault.entries.move", params: { rel, dir } });
+          if (fixtureOptions.mutationFailure) {
+            return { ok: false as const, error: { kind: "IO_ERROR", message: "Move rejected by disk" } };
+          }
+          const requestedName = rel.slice(rel.lastIndexOf("/") + 1);
+          const name = fixtureOptions.mutationCollision ? withCollisionSuffix(requestedName) : requestedName;
+          const next = dir ? `${dir}/${name}` : name;
+          tree = moveTreeEntry(tree, rel, next);
+          return success({ rel: next, snapshot: snapshot() });
+        },
         readNote: async (rel) => success(notes.get(rel) ?? ""),
         writeNote: async (rel, content) => {
-          commands.push({ command: "write_note", args: { rel, content } });
+          operations.push({ method: "vault.notes.write", params: { rel, content } });
           notes.set(rel, content);
           return success(content);
         },
@@ -150,6 +195,8 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
           return success({ snapshot: snapshot() });
         },
         resolveNotePath: async (rel) => success(`/private/tmp/markd-browser-fixture/${rel}`),
+        getTheme: async () => success("system" as const),
+        setTheme: async () => success(null),
         search: async () => success([
           {
             rel: "Projects/Alpha.md",
@@ -165,10 +212,15 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
           },
         ]),
         recordSearchAccess: async (rel) => {
-          commands.push({ command: "record_search_access", args: { rel } });
+          operations.push({ method: "vault.search.recordAccess", params: { rel } });
           return success(null);
         },
         backlinks: async () => success([]),
+        assets: {
+          save: async () => success(".markd/assets/fixture.png"),
+          url: (rel) => `markd-asset://vault/${rel}`,
+        },
+        exportNote: async () => success(null),
         pins: {
           list: async () => success({ pins, stale: stalePins }),
           add: async (rel) => {
@@ -255,10 +307,17 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
             bookmarks = bookmarks.map((bookmark) => (bookmark.id === id ? item : bookmark));
             return success({ snapshot: { todos, todoTags, bookmarks, bookmarkTags }, item });
           },
+          fetchMetadata: async (id) => {
+            const item = bookmarks.find((bookmark) => bookmark.id === id)!;
+            const updated = { ...item, metaFetched: true };
+            bookmarks = bookmarks.map((bookmark) => bookmark.id === id ? updated : bookmark);
+            return success({ snapshot: { todos, todoTags, bookmarks, bookmarkTags }, item: updated });
+          },
           remove: async (id) => {
             bookmarks = bookmarks.filter((bookmark) => bookmark.id !== id);
             return success({ todos, todoTags, bookmarks, bookmarkTags });
           },
+          export: async () => success(null),
         },
         tags: {
           create: async (collection, name) => {
@@ -350,150 +409,6 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
       },
     };
 
-    // Browser journeys exercise the public UI seam; this bridge only replaces
-    // the Tauri transport that is unavailable in system Chrome.
-    window.__TAURI_INTERNALS__ = {
-      metadata: {
-        currentWindow: { label: "main" },
-        currentWebview: { windowLabel: "main", label: "main" },
-      },
-      transformCallback(callback: (data: unknown) => void, once = false) {
-        const id = nextCallbackId++;
-        callbacks.set(id, { callback, once });
-        return id;
-      },
-      unregisterCallback(id: number) {
-        callbacks.delete(id);
-      },
-      runCallback(id: number, data: unknown) {
-        const entry = callbacks.get(id);
-        if (!entry) return;
-        entry.callback(data);
-        if (entry.once) callbacks.delete(id);
-      },
-      callbacks,
-      convertFileSrc(path: string, protocol = "asset") {
-        return `${protocol}://localhost/${encodeURIComponent(path)}`;
-      },
-      async invoke(command: string, args: Record<string, unknown> = {}) {
-        commands.push({ command, args });
-        switch (command) {
-          case "startup":
-            return {
-              root: "/tmp/markd-browser-fixture",
-              name: "Fixture Vault",
-              tree,
-              theme: "system",
-            };
-          case "load_tree":
-            return tree;
-          case "read_note":
-            return notes.get(String(args.rel)) ?? "";
-          case "write_note":
-            notes.set(String(args.rel), String(args.content));
-            return null;
-          case "search_notes":
-            return [
-              {
-                rel: "Projects/Alpha.md",
-                title: "Alpha result",
-                snippet: "first result",
-                titleMatch: true,
-              },
-              {
-                rel: "README.md",
-                title: "README result",
-                snippet: "second result",
-                titleMatch: false,
-              },
-            ];
-          case "backlinks_for":
-          case "bookmarks_list":
-          case "bookmark_tags_list":
-            return [];
-          case "pins_list":
-            return pins;
-          case "pin_note":
-            pins = Array.from(new Set([...pins, String(args.rel)]));
-            return pins;
-          case "unpin_note":
-            pins = pins.filter((rel) => rel !== String(args.rel));
-            return pins;
-          case "note_path":
-            return `/private/tmp/markd-browser-fixture/${String(args.rel)}`;
-          case "todos_list":
-            return todos;
-          case "todo_tags_list":
-            return todoTags;
-          case "todo_set_tags": {
-            const id = String(args.id);
-            const tags = Array.isArray(args.tags) ? args.tags.map((tag) => String(tag)) : [];
-            todos = todos.map((todo) => (todo.id === id ? { ...todo, tags } : todo));
-            return todos.find((todo) => todo.id === id);
-          }
-          case "todo_tag_delete": {
-            const name = String(args.name);
-            todoTags = todoTags.filter((tag) => tag !== name);
-            todos = todos.map((todo) => ({
-              ...todo,
-              tags: todo.tags.filter((tag) => tag !== name),
-            }));
-            return todoTags;
-          }
-          case "is_note_published":
-            return false;
-          case "cloud_account_status":
-            return { account: null };
-          case "plugin:event|listen":
-            return args.handler ?? 1;
-          case "plugin:event|unlisten":
-          case "plugin:updater|check":
-            return null;
-          case "create_folder": {
-            const dir = String(args.dir);
-            const name = String(args.name);
-            const rel = dir ? `${dir}/${name}` : name;
-            tree = insertTreeEntry(tree, dir, {
-              name,
-              rel,
-              kind: "folder",
-              modifiedMs: Date.now(),
-              children: [],
-            });
-            return rel;
-          }
-          case "rename_entry": {
-            if (fixtureOptions.mutationFailure) throw new Error("Rename rejected by disk");
-            const rel = String(args.rel);
-            const name = String(args.name);
-            const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
-            const persistedName = fixtureOptions.mutationCollision ? withCollisionSuffix(name) : name;
-            const next = parent ? `${parent}/${persistedName}` : persistedName;
-            tree = remapTree(tree, rel, next);
-            return next;
-          }
-          case "move_entry": {
-            if (fixtureOptions.mutationFailure) throw new Error("Move rejected by disk");
-            const rel = String(args.rel);
-            const dir = String(args.dir);
-            const requestedName = rel.slice(rel.lastIndexOf("/") + 1);
-            const name = fixtureOptions.mutationCollision
-              ? withCollisionSuffix(requestedName)
-              : requestedName;
-            const next = dir ? `${dir}/${name}` : name;
-            tree = moveTreeEntry(tree, rel, next);
-            return next;
-          }
-          default:
-            return null;
-        }
-      },
-    };
-    window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
-      unregisterListener(_event: string, id: number) {
-        callbacks.delete(id);
-      },
-    };
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -503,7 +418,7 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
       },
     });
     Object.assign(window, {
-      __MARKD_TEST__: { clipboard, commands, notes, openedExternalUrls },
+      __MARKD_TEST__: { clipboard, operations, notes, openedExternalUrls },
     });
     function remapTree(
       nodes: import("@/lib/types").TreeNode[],

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Spinner } from "@/components/ui/Spinner";
-import { IpcError, ipc } from "@/lib/ipc";
+import { cloudDesktop } from "@/lib/desktop-services";
 import { DesktopError } from "@/lib/desktop";
 import { invalidatePublishStatus } from "@/lib/queryClient";
 import type { CloudAccount, OtpChallenge } from "@/lib/types";
@@ -48,8 +48,8 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
 
   useEffect(() => {
     let disposed = false;
-    void ipc
-      .cloudAccountStatus()
+    void cloudDesktop
+      .accountStatus()
       .then((status) => {
         if (!disposed) updateAccount(status.account);
       })
@@ -75,7 +75,7 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
   }, [resendIn]);
 
   const message = (cause: unknown) =>
-    cause instanceof IpcError
+    cause instanceof DesktopError
       ? cause.message
       : cause instanceof Error
         ? cause.message
@@ -85,7 +85,7 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
     setBusy("request");
     setError(null);
     try {
-      const next = await ipc.cloudRequestOtp(email.trim());
+      const next = await cloudDesktop.requestOtp(email.trim());
       setChallenge(next);
       setEmail(next.email);
       setCode("");
@@ -103,7 +103,7 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
     setBusy("verify");
     setError(null);
     try {
-      const next = await ipc.cloudVerifyOtp(challenge.challengeId, code);
+      const next = await cloudDesktop.verifyOtp(challenge.challengeId, code);
       updateAccount(next);
       setStep("account");
       setChallenge(null);
@@ -119,7 +119,7 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
     setBusy("signout");
     setError(null);
     try {
-      await ipc.cloudSignOut();
+      await cloudDesktop.signOut();
       updateAccount(null);
       setEmail("");
     } catch (cause) {
@@ -336,7 +336,7 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
 }
 
 function locallySignedOut(cause: unknown): boolean {
-  if (!(cause instanceof IpcError || cause instanceof DesktopError)) return false;
+  if (!(cause instanceof DesktopError)) return false;
   return Boolean(
     cause.details &&
     typeof cause.details === "object" &&

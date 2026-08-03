@@ -2,7 +2,7 @@ appId: app.usemarkd
 productName: Markd
 directories:
   output: release/electron
-  buildResources: src-tauri/icons
+  buildResources: build-resources
 files:
   - dist/**
   - dist-electron/**
@@ -34,7 +34,7 @@ publish:
   repo: markd
 mac:
   category: public.app-category.productivity
-  icon: src-tauri/icons/icon.icns
+  icon: build-resources/icon.icns
   hardenedRuntime: true
   notarize: true
   entitlements: electron/entitlements.mac.plist

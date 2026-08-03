@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { installTauriFixture } from "./tauri-fixture";
+import { installDesktopFixture } from "./desktop-fixture";
 
 test.beforeEach(async ({ page }) => {
-  await installTauriFixture(page, { taggedTodos: true });
+  await installDesktopFixture(page, { taggedTodos: true });
   await page.goto("/");
   await page.getByRole("button", { name: /^Todos/ }).click();
 });

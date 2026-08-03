@@ -100,6 +100,17 @@ export async function installMarkdFixture(page: Page): Promise<void> {
           };
           return success({ snapshot: collectionsSnapshot, item });
         },
+        fetchMetadata: async (id) => {
+          const item = collectionsSnapshot.bookmarks.find((bookmark) => bookmark.id === id)!;
+          const updated = { ...item, metaFetched: true };
+          collectionsSnapshot = {
+            ...collectionsSnapshot,
+            bookmarks: collectionsSnapshot.bookmarks.map((bookmark) =>
+              bookmark.id === id ? updated : bookmark,
+            ),
+          };
+          return success({ snapshot: collectionsSnapshot, item: updated });
+        },
         remove: async (id) => {
           collectionsSnapshot = {
             ...collectionsSnapshot,
@@ -107,6 +118,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
           };
           return success(collectionsSnapshot);
         },
+        export: async () => success("/tmp/bookmarks.md"),
       },
       tags: {
         create: async (collection, name) => {
@@ -149,6 +161,8 @@ export async function installMarkdFixture(page: Page): Promise<void> {
       app: {
         windowKind: "main",
         onEngineLifecycle: () => () => {},
+        openWebUrl: async () => success(null),
+        revealVaultEntry: async () => success(null),
       },
       capture: {
         open: async () => success(null),
@@ -195,6 +209,22 @@ export async function installMarkdFixture(page: Page): Promise<void> {
               theme: "system" as const,
             },
           }),
+        openDailyNote: async (date) => success({
+          rel: `${date}.md`,
+          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+        }),
+        createFolder: async (_dir, name) => success({
+          rel: name,
+          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+        }),
+        renameEntry: async (rel) => success({
+          rel,
+          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+        }),
+        moveEntry: async (rel) => success({
+          rel,
+          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+        }),
         readNote: async () => success(""),
         writeNote: async (_rel, content) => success(content),
         moveToTrash: async () =>
@@ -207,6 +237,8 @@ export async function installMarkdFixture(page: Page): Promise<void> {
             },
           }),
         resolveNotePath: async (rel) => success(`/tmp/markd-fixture/${rel}`),
+        getTheme: async () => success("system" as const),
+        setTheme: async () => success(null),
         search: async () => success([]),
         recordSearchAccess: async () => success(null),
         backlinks: async () => success([]),
@@ -289,6 +321,8 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
       app: {
         windowKind: "main",
         onEngineLifecycle: () => () => {},
+        openWebUrl: async () => success(null),
+        revealVaultEntry: async () => success(null),
       },
       capture: {
         open: async () => success(null),
@@ -322,6 +356,10 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
           tree = [...tree, { name: rel, rel, kind: "note", modifiedMs: 2 }];
           return success({ rel, snapshot: snapshot() });
         },
+        openDailyNote: async (date) => success({ rel: `${date}.md`, snapshot: snapshot() }),
+        createFolder: async (_dir, name) => success({ rel: name, snapshot: snapshot() }),
+        renameEntry: async (rel) => success({ rel, snapshot: snapshot() }),
+        moveEntry: async (rel) => success({ rel, snapshot: snapshot() }),
         readNote: async (rel) => success(notes.get(rel) ?? ""),
         writeNote: async (rel, content) => {
           operations.push(`write:${rel}`);
@@ -345,6 +383,8 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
           return success({ snapshot: snapshot() });
         },
         resolveNotePath: async (rel) => success(`${root}/${rel}`),
+        getTheme: async () => success("system" as const),
+        setTheme: async () => success(null),
         search: async () => success([]),
         recordSearchAccess: async () => success(null),
         backlinks: async () => success([]),
@@ -378,21 +418,6 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         check: async () => success(null),
         install: async () => success(null),
         relaunch: async () => success(null),
-      },
-    };
-    window.__TAURI_INTERNALS__ = {
-      metadata: {
-        currentWindow: { label: "main" },
-        currentWebview: { windowLabel: "main", label: "main" },
-      },
-      transformCallback: () => 1,
-      unregisterCallback: () => {},
-      runCallback: () => {},
-      callbacks: new Map(),
-      convertFileSrc: (path: string) => path,
-      invoke: async (command: string) => {
-        if (command === "pins_list" || command === "bookmarks_list") return [];
-        return null;
       },
     };
     Object.assign(window, {

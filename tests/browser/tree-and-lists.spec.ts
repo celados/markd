@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { installTauriFixture } from "./tauri-fixture";
+import { installDesktopFixture } from "./desktop-fixture";
 
 test.beforeEach(async ({ page }) => {
-  await installTauriFixture(page);
+  await installDesktopFixture(page);
   await page.goto("/");
 });
 
@@ -19,7 +19,7 @@ test("tree keyboard navigation is not captured by drag sensors", async ({ page }
 });
 
 test("large Vaults virtualize rows while preserving End navigation", async ({ page }) => {
-  await installTauriFixture(page, { largeTreeSize: 1_000 });
+  await installDesktopFixture(page, { largeTreeSize: 1_000 });
   await page.goto("/");
 
   const tree = page.getByRole("tree", { name: "Notes", exact: true });
@@ -37,7 +37,7 @@ test("large Vaults virtualize rows while preserving End navigation", async ({ pa
 });
 
 test("failed rename restores canonical disk projection", async ({ page }) => {
-  await installTauriFixture(page, { mutationFailure: true });
+  await installDesktopFixture(page, { mutationFailure: true });
   await page.goto("/");
 
   const readme = page.getByRole("treeitem", { name: "README.md" });
@@ -65,21 +65,21 @@ test("nested row wins over the root drop zone", async ({ page }) => {
       page.evaluate(() => {
         const state = window as Window & {
           __MARKD_TEST__?: {
-            commands: Array<{
-              command: string;
-              args: Record<string, unknown>;
+            operations: Array<{
+              method: string;
+              params: Record<string, unknown>;
             }>;
           };
         };
-        return state.__MARKD_TEST__?.commands.filter(
-          ({ command }) => command === "move_entry",
+        return state.__MARKD_TEST__?.operations.filter(
+          ({ method }) => method === "vault.entries.move",
         );
       }),
     )
     .toEqual([
       {
-        command: "move_entry",
-        args: { rel: "Projects/Alpha.md", dir: "Archive" },
+        method: "vault.entries.move",
+        params: { rel: "Projects/Alpha.md", dir: "Archive" },
       },
     ]);
   await expect(page.getByRole("treeitem", { name: "Alpha.md" })).toHaveAttribute(
@@ -89,7 +89,7 @@ test("nested row wins over the root drop zone", async ({ page }) => {
 });
 
 test("failed drag does not remain optimistically moved", async ({ page }) => {
-  await installTauriFixture(page, { mutationFailure: true });
+  await installDesktopFixture(page, { mutationFailure: true });
   await page.goto("/");
   await page.getByRole("treeitem", { name: "Projects" }).click();
   const source = page.getByRole("treeitem", { name: "Alpha.md" });
@@ -106,7 +106,7 @@ test("failed drag does not remain optimistically moved", async ({ page }) => {
 });
 
 test("disk collision suffix wins over the optimistic drop path", async ({ page }) => {
-  await installTauriFixture(page, { mutationCollision: true });
+  await installDesktopFixture(page, { mutationCollision: true });
   await page.goto("/");
   await page.getByRole("treeitem", { name: "Projects" }).click();
   await page
@@ -127,7 +127,7 @@ test("disk collision suffix wins over the optimistic drop path", async ({ page }
 test("folder rename preserves its expanded selected and focused interaction", async ({
   page,
 }) => {
-  await installTauriFixture(page, { mutationCollision: true });
+  await installDesktopFixture(page, { mutationCollision: true });
   await page.goto("/");
   const projects = page.getByRole("treeitem", { name: "Projects" });
   await projects.click();
@@ -177,7 +177,7 @@ test("new folder context action begins rename after projection arrives", async (
 test("pinned folders own their subtree without duplicating the main tree", async ({
   page,
 }) => {
-  await installTauriFixture(page, { pinnedFolder: true });
+  await installDesktopFixture(page, { pinnedFolder: true });
   await page.goto("/");
 
   const pinnedTree = page.getByRole("tree", {
@@ -205,7 +205,7 @@ test("pinned folders own their subtree without duplicating the main tree", async
 });
 
 test("stale Pins stay visible and can be explicitly removed", async ({ page }) => {
-  await installTauriFixture(page, { stalePin: "Gone.md" });
+  await installDesktopFixture(page, { stalePin: "Gone.md" });
   await page.goto("/");
 
   const pinnedTree = page.getByRole("tree", {

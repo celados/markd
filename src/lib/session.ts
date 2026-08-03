@@ -10,7 +10,7 @@ import { useVault } from "@/stores/vault";
 
 /**
  * Per-vault UI session (open tabs, active view, tag filters) persisted to
- * localStorage — the Tauri webview keeps it across restarts. Scoped by vault
+ * localStorage — the Electron renderer keeps it across restarts. Scoped by vault
  * root so switching vaults restores that vault's own layout.
  */
 interface Session {

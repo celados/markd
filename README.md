@@ -4,9 +4,7 @@
 
 > [!NOTE]
 > This is [Celados' Octane-based fork](https://github.com/celados/markd) of
-> [starc007/markd](https://github.com/starc007/markd). The default development shell and package pipeline are
-> Electron-native. The legacy Tauri tree remains temporarily for unmigrated runtime comparison; it is not a
-> second release path.
+> [starc007/markd](https://github.com/starc007/markd). Electron is the only desktop runtime and release path.
 
 Markd is a fast notes app for macOS, built for people who care about speed, privacy, and ownership.
 
@@ -50,7 +48,8 @@ Pick any folder on disk as your vault:
 └── .markd/         app data: todos, bookmarks, tags, pasted images
 ```
 
-Notes are addressed by path, never by ID. Deletes go to the OS trash. Edit notes externally with vim, VS Code, or another editor. Markd picks up changes on window focus.
+Notes are addressed by path, never by ID. Deletes go to the OS trash. Edit notes externally with vim, VS Code,
+or another editor. Markd picks up changes through its live Vault Index.
 
 ---
 
@@ -90,8 +89,8 @@ See [AGENTS.md](./AGENTS.md) for architecture details, or [CONTRIBUTING.md](./CO
 
 ## Status
 
-This fork is under active development. Its React-to-Octane migration has passed the app's type,
-logic, production-build, browser-journey, Rust, and native-host gates.
+This fork is under active development. Its Octane/Electron application passes type, logic,
+production-build, system-Chrome journey, Electron, and packaged native-payload gates.
 
 Sync, encryption, and publishing may be added later without compromising local-first performance.
 

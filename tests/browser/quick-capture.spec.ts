@@ -5,13 +5,22 @@ test("Quick Capture creates, appends, and reports Engine failures", async ({ pag
   await installMarkdFixture(page);
   await page.addInitScript(() => {
     const desktop = window.markd!;
+    const quickDesktop = { ...desktop };
+    delete quickDesktop.cloud;
+    delete quickDesktop.updates;
+    const quickVault = { ...desktop.vault };
+    delete quickVault.exportNote;
+    const quickBookmarks = { ...desktop.collections.bookmarks };
+    delete quickBookmarks.export;
     const openListeners = new Set<() => void>();
     const calls: Array<{ method: string; title?: string; rel?: string; content: string }> = [];
     let appendFails = false;
     const success = <T>(value: T) => ({ ok: true as const, value });
     window.markd = {
-      ...desktop,
+      ...quickDesktop,
       app: { ...desktop.app, windowKind: "quick-capture" },
+      vault: quickVault,
+      collections: { ...desktop.collections, bookmarks: quickBookmarks },
       capture: {
         open: async () => {
           for (const listener of openListeners) listener();
@@ -69,6 +78,17 @@ test("Quick Capture creates, appends, and reports Engine failures", async ({ pag
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Quick capture" })).toBeVisible();
+  expect(await page.evaluate(() => ({
+    cloud: typeof window.markd?.cloud,
+    updates: typeof window.markd?.updates,
+    noteExport: typeof window.markd?.vault.exportNote,
+    bookmarkExport: typeof window.markd?.collections.bookmarks.export,
+  }))).toEqual({
+    cloud: "undefined",
+    updates: "undefined",
+    noteExport: "undefined",
+    bookmarkExport: "undefined",
+  });
   await page.getByPlaceholder("Title").fill("Inbox");
   await page.getByPlaceholder("Write something worth keeping…").fill("first thought");
   await page.getByRole("button", { name: "Create captured note" }).click();

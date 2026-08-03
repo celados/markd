@@ -24,9 +24,9 @@ import type {
   PublishPageDraft,
 } from "../src/lib/types";
 
-// These routes and envelopes migrate the existing Rust desktop client and the
-// in-repo Cloudflare service contract; they are not a new Electron protocol.
-// Sources: src-tauri/src/cloud*.rs and services/cloud-api/src/{index,auth,otp,billing,publishing}.ts.
+// These routes preserve the pre-Electron product contract; they are not a new
+// publishing protocol. Sources: docs/electron-native-architecture.md and
+// services/cloud-api/src/{index,auth,otp,billing,publishing}.ts.
 
 type Fetch = typeof globalThis.fetch;
 
@@ -131,6 +131,22 @@ export class CloudEngine {
     const account = await this.#json(response, accountResponseSchema).then((value) => value.user);
     await this.#saveSession({ ...session, account });
     return { account };
+  }
+
+  async remapEntry(from: string, to: string): Promise<void> {
+    const metadata = await this.#readMetadata();
+    let changed = false;
+    const entries: CloudMetadata["entries"] = {};
+    for (const [rel, entry] of Object.entries(metadata.entries)) {
+      const next = rel === from
+        ? to
+        : rel.startsWith(`${from}/`)
+          ? `${to}${rel.slice(from.length)}`
+          : rel;
+      changed ||= next !== rel;
+      entries[next] = entry;
+    }
+    if (changed) await this.#writeMetadata({ entries });
   }
 
   async requestOtp(email: string): Promise<OtpChallenge> {

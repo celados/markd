@@ -41,6 +41,51 @@ export function findBacklinkMentions(
   return mentions;
 }
 
+export function rewriteMovedLinks(markdown: string, from: string, to: string): string {
+  const { frontmatter, body } = splitFrontmatter(markdown);
+  const tree = parser.parse(body);
+  const replacements: Array<{ from: number; to: number; value: string }> = [];
+  const excluded: Range[] = [];
+
+  tree.iterate({
+    enter(node) {
+      if (isExcludedNode(node.name)) {
+        excluded.push({ from: node.from, to: node.to });
+        return false;
+      }
+      if (node.name !== "Link" && node.name !== "LinkReference") return;
+      const url = node.node.getChild("URL");
+      if (!url) return;
+      const raw = body.slice(url.from, url.to);
+      const value = remapDestination(raw, from, to);
+      if (value !== raw) replacements.push({ from: url.from, to: url.to, value });
+      return false;
+    },
+  });
+
+  for (const match of body.matchAll(WIKI_LINK)) {
+    const destination = match[1];
+    if (!destination || excluded.some((range) => overlaps(match.index, match.index + match[0].length, range))) {
+      continue;
+    }
+    const remapped = remapVaultRel(destination, from, to, false);
+    if (remapped === destination) continue;
+    const destinationOffset = match[0].indexOf(destination);
+    replacements.push({
+      from: match.index + destinationOffset,
+      to: match.index + destinationOffset + destination.length,
+      value: remapped.replace(/\.md$/i, destination.toLowerCase().endsWith(".md") ? ".md" : ""),
+    });
+  }
+
+  if (replacements.length === 0) return markdown;
+  let rewritten = body;
+  for (const replacement of replacements.sort((left, right) => right.from - left.from)) {
+    rewritten = `${rewritten.slice(0, replacement.from)}${replacement.value}${rewritten.slice(replacement.to)}`;
+  }
+  return `${frontmatter}${rewritten}`;
+}
+
 function parseLinks(markdown: string): ParsedLink[] {
   const { frontmatter, body } = splitFrontmatter(markdown);
   const offset = frontmatter.length;
@@ -139,6 +184,32 @@ function normalizeDestination(raw: string): string | null {
   path = path.replace(/^\/+/, "");
   if (!path || path.split("/").includes("..")) return null;
   return /\.md$/i.test(path) ? path : `${path}.md`;
+}
+
+function remapDestination(raw: string, from: string, to: string): string {
+  const angle = raw.startsWith("<") && raw.endsWith(">");
+  const unwrapped = angle ? raw.slice(1, -1) : raw;
+  const suffixAt = unwrapped.search(/[?#]/);
+  const path = suffixAt === -1 ? unwrapped : unwrapped.slice(0, suffixAt);
+  const suffix = suffixAt === -1 ? "" : unwrapped.slice(suffixAt);
+  const decoded = percentDecode(path).replaceAll("\\", "/");
+  const remapped = remapVaultRel(decoded, from, to, true);
+  if (remapped === decoded) return raw;
+  const encoded = remapped.split("/").map(encodeURIComponent).join("/");
+  const value = `${encoded}${suffix}`;
+  return angle ? `<${value}>` : value;
+}
+
+function remapVaultRel(value: string, from: string, to: string, preserveExtension: boolean): string {
+  const hadExtension = /\.md$/i.test(value);
+  const normalized = hadExtension ? value : `${value}.md`;
+  const lower = normalized.toLowerCase();
+  const fromLower = from.toLowerCase();
+  let next = normalized;
+  if (lower === fromLower) next = to;
+  else if (lower.startsWith(`${fromLower}/`)) next = `${to}${normalized.slice(from.length)}`;
+  if (next === normalized) return value;
+  return preserveExtension || hadExtension ? next : next.replace(/\.md$/i, "");
 }
 
 function percentDecode(value: string): string {

@@ -14,6 +14,7 @@ import type {
   SearchHit,
   Todo,
   TodoChange,
+  Theme,
   VaultSnapshot,
 } from "./types";
 
@@ -66,6 +67,8 @@ export type MarkdDesktop = {
   app: {
     windowKind: "main" | "quick-capture";
     onEngineLifecycle: (listener: (event: EngineLifecycle) => void) => () => void;
+    openWebUrl: (url: string) => Promise<DesktopResult<null>>;
+    revealVaultEntry: (rel: string) => Promise<DesktopResult<null>>;
   };
   capture: {
     open: () => Promise<DesktopResult<null>>;
@@ -91,6 +94,10 @@ export type MarkdDesktop = {
       title: string,
       content?: string,
     ) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
+    openDailyNote: (date: string) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
+    createFolder: (dir: string, name: string) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
+    renameEntry: (rel: string, name: string) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
+    moveEntry: (rel: string, dir: string) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
     readNote: (rel: string) => Promise<DesktopResult<string>>;
     writeNote: (
       rel: string,
@@ -99,6 +106,8 @@ export type MarkdDesktop = {
     ) => Promise<DesktopResult<string>>;
     moveToTrash: (rel: string) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
     resolveNotePath: (rel: string) => Promise<DesktopResult<string>>;
+    getTheme: () => Promise<DesktopResult<Theme>>;
+    setTheme: (theme: Theme) => Promise<DesktopResult<null>>;
     search: (query: string, limit?: number) => Promise<DesktopResult<SearchHit[]>>;
     recordSearchAccess: (rel: string) => Promise<DesktopResult<null>>;
     backlinks: (rel: string) => Promise<DesktopResult<BacklinkMention[]>>;
@@ -132,6 +141,7 @@ export type MarkdDesktop = {
         url: string,
         tags?: string[],
       ) => Promise<DesktopResult<{ snapshot: CollectionsSnapshot; item: Bookmark }>>;
+      fetchMetadata: (id: string) => Promise<DesktopResult<{ snapshot: CollectionsSnapshot; item: Bookmark }>>;
       change: (
         id: string,
         change: BookmarkChange,
@@ -179,7 +189,7 @@ export type MarkdDesktop = {
     revokePublishedNote: (rel: string) => Promise<DesktopResult<null>>;
     openExternal: (url: string) => Promise<DesktopResult<null>>;
   };
-  updates: {
+  updates?: {
     check: () => Promise<DesktopResult<DesktopUpdate | null>>;
     install: (id: string) => Promise<DesktopResult<null>>;
     relaunch: () => Promise<DesktopResult<null>>;
@@ -212,10 +222,26 @@ export function getWindowKind(): "main" | "quick-capture" {
   return window.markd?.app.windowKind ?? "main";
 }
 
-export async function onNotesChanged(listener: () => void): Promise<() => void> {
-  if (window.markd) return () => {};
-  const { listen } = await import("@tauri-apps/api/event");
-  return listen("markd:notes-changed", listener);
+export function openWebUrl(url: string): Promise<void> {
+  const operation = window.markd?.app.openWebUrl(url);
+  if (!operation) {
+    return Promise.reject(new DesktopError({
+      kind: "DESKTOP_UNAVAILABLE",
+      message: "Markd Desktop cannot open this URL.",
+    }));
+  }
+  return unwrapDesktopResult(operation).then(() => undefined);
+}
+
+export function revealVaultEntry(rel: string): Promise<void> {
+  const operation = window.markd?.app.revealVaultEntry(rel);
+  if (!operation) {
+    return Promise.reject(new DesktopError({
+      kind: "DESKTOP_UNAVAILABLE",
+      message: "Markd Desktop cannot reveal this Vault entry.",
+    }));
+  }
+  return unwrapDesktopResult(operation).then(() => undefined);
 }
 
 export async function unwrapDesktopResult<T>(resultPromise: Promise<DesktopResult<T>>): Promise<T> {

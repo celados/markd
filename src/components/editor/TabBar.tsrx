@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/ContextMenu";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { SPRING_LAYOUT } from "@/lib/ease";
-import { ipc } from "@/lib/ipc";
+import { vaultDesktop } from "@/lib/desktop-services";
 import { cx, noteTitle } from "@/lib/utils";
 import { usePins } from "@/stores/pins";
 import { nextAfterClose, useTabs } from "@/stores/tabs";
@@ -118,7 +118,7 @@ function tabMenuItems(rel: string, pinned: boolean): MenuItem[] {
       label: "Copy path",
       icon: Copy,
       onSelect: () => {
-        void ipc.notePath(rel).then(
+        void vaultDesktop.notes.resolvePath(rel).then(
           (path) => copyText(path, "Path copied"),
           () => toast.error("Path could not be resolved"),
         );

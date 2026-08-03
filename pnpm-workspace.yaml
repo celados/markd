@@ -21,7 +21,6 @@ minimumReleaseAgeExclude:
   - '@octanejs/radix@0.1.21'
   - '@octanejs/sonner@0.1.17'
   - '@octanejs/tanstack-query@0.1.21'
-  - '@octanejs/tauri@0.0.5'
   - '@octanejs/tiptap@0.0.16'
   - '@octanejs/vite-plugin@0.1.22'
   - '@octanejs/zustand@0.1.21'

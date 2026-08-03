@@ -4,28 +4,30 @@ Thanks for considering a contribution. Markd stays small on purpose — please o
 
 ## Setup
 
-Requirements: [pnpm](https://pnpm.io), [Rust](https://rustup.rs), Xcode Command Line Tools.
+Requirements: [pnpm](https://pnpm.io), Node.js 24, and Xcode Command Line Tools.
 
 ```bash
 pnpm install
-pnpm tauri dev
+pnpm run dev
 ```
 
 ## Before opening a PR
 
 ```bash
 pnpm run typecheck         # typecheck
-cd src-tauri && cargo test # Rust unit tests
+pnpm test                  # domain and process-contract tests
+pnpm run test:browser      # system Chrome journeys
+MARKD_E2E_BACKGROUND=1 pnpm run test:electron
 ```
 
-Both must pass clean. There's no separate lint step — `tsc` and `cargo test` are the gate.
+All gates must pass clean. Electron tests run in background mode so they do not activate the desktop app.
 
 ## Code conventions
 
 See [AGENTS.md](./AGENTS.md) for the full architecture guide. The short version:
 
-- **Rust owns the filesystem.** The frontend is UI + state only — all IO goes through typed Tauri commands in `src/lib/ipc.ts`.
-- **One Rust module per concern**, each under ~300 lines, with its own unit tests. Don't collapse everything into `lib.rs`.
+- **The Vault Engine owns filesystem and collection work.** Renderer code consumes domain-shaped services over the typed `window.markd` preload bridge; it never imports Node or Electron.
+- **Main owns OS authority.** Dialogs, Trash, external navigation, Finder reveal, updater, and window lifecycle stay in Electron main; recursive scans and Markdown parsing stay in the utility process.
 - **Strict monochrome UI.** Only the semantic tokens in `src/styles.css` (`bg`, `panel`, `ink`, `muted`, `faint`, `line`, `hover`, `invert`…). Never hardcode a color — `danger` is the one exception, for destructive actions only.
 - Keep motion subtle: 100–160ms ease-out, nothing bouncier.
 

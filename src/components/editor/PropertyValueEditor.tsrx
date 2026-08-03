@@ -1,4 +1,3 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   LuCheck as Check,
   LuExternalLink as ExternalLink,
@@ -8,6 +7,7 @@ import { useRef, useState } from "octane";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { PropertyType } from "@/lib/frontmatter";
 import { cx } from "@/lib/utils";
+import { openWebUrl } from "@/lib/desktop";
 
 function isWebUrl(value: string) {
   try {
@@ -80,7 +80,7 @@ export function PropertyValueEditor(props: PropertyValueEditorProps) @{
           <button
             ref={ref}
             type="button"
-            onClick={() => void openUrl(value)}
+            onClick={() => void openWebUrl(value)}
             className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md bg-transparent px-2 text-left text-[12.5px] text-ink outline-none transition-[color,box-shadow] duration-100 hover:text-muted focus-visible:ring-1 focus-visible:ring-line"
           >
             <span className="truncate underline decoration-line underline-offset-2">

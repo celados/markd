@@ -1,6 +1,6 @@
 import type { Editor } from "@octanejs/tiptap";
 import { toast } from "@octanejs/sonner";
-import { ipc } from "@/lib/ipc";
+import { vaultDesktop } from "@/lib/desktop-services";
 
 /** Save a pasted/dropped image into the vault and insert it at `range`. */
 export async function insertImageFile({
@@ -17,7 +17,7 @@ export async function insertImageFile({
   try {
     const data = await fileToDataUrl(file);
     const extension = file.type.split("/")[1]?.split("+")[0] || "png";
-    const savedPath = await ipc.saveImageAsset(data, extension);
+    const savedPath = await vaultDesktop.assets.save(data, extension);
     const rel = savedPath.startsWith(".markd/assets/")
       ? savedPath
       : savedPath.startsWith(vaultRoot)

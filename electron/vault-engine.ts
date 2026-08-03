@@ -19,7 +19,7 @@ import {
   type TodoChange,
 } from "./collections-domain";
 import type { PinSnapshot, Theme, VaultSnapshot } from "../src/lib/types";
-import { findBacklinkMentions } from "./backlink-links";
+import { findBacklinkMentions, rewriteMovedLinks } from "./backlink-links";
 import {
   atomicWriteText,
   NativeContentError,
@@ -27,6 +27,7 @@ import {
 } from "./native-content";
 import { isAcceptedVaultRel } from "./vault-path-policy";
 import { VaultIndex, type VaultIndexEvent } from "./vault-index";
+import { fetchLinkMetadata } from "./link-metadata";
 
 export type ExportPreparation = {
   suggestedName: string;
@@ -329,6 +330,25 @@ export class VaultEngine {
     return this.#collections.removeBookmark(id);
   }
 
+  async fetchBookmarkMetadata(id: string) {
+    this.#assertOperational();
+    const bookmark = (await this.#collections.snapshot()).bookmarks.find((item) => item.id === id);
+    if (!bookmark) throw domainError("NOT_FOUND", `Bookmark does not exist: ${id}`);
+    try {
+      const metadata = await fetchLinkMetadata(bookmark.url);
+      return this.#collections.changeBookmark(id, {
+        type: "metadata",
+        title: metadata.title,
+        image: metadata.image ?? null,
+        favicon: metadata.favicon ?? null,
+        fetched: true,
+      });
+    } catch {
+      // Persist failure state so startup does not hammer a broken or offline URL.
+      return this.#collections.changeBookmark(id, { type: "metadata", fetched: true });
+    }
+  }
+
   createCollectionTag(collection: CollectionKind, name: string) {
     this.#assertOperational();
     return this.#collections.createTag(collection, name);
@@ -369,6 +389,55 @@ export class VaultEngine {
       throw error;
     }
     return { rel, snapshot: await this.snapshot() };
+  }
+
+  async openDailyNote(date: string): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    const rel = `${date}.md`;
+    try {
+      await this.#existingPath(rel, "note");
+      return { rel, snapshot: await this.snapshot() };
+    } catch (error) {
+      if (!(error instanceof VaultEngineError) || error.kind !== "NOT_FOUND") throw error;
+      return this.createNote("", date, `# ${date}\n`);
+    }
+  }
+
+  async createFolder(dir: string, name: string): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    const root = this.#requireRoot();
+    const targetDir = await this.#existingPath(dir, "folder");
+    const target = await availablePath(targetDir, sanitizeName(name));
+    const rel = toVaultRel(root, target);
+    const index = this.#requireIndex();
+    if (!index.acceptsPath(rel)) {
+      throw domainError("IGNORED_PATH", `The Vault ignore policy excludes ${rel}.`);
+    }
+    await mkdir(target);
+    await index.rescan();
+    return { rel, snapshot: await this.snapshot() };
+  }
+
+  async renameEntry(rel: string, name: string): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    const path = await this.#existingPath(rel, "entry");
+    const metadata = await stat(path);
+    const target = await availablePath(
+      dirname(path),
+      sanitizeName(name),
+      metadata.isFile() ? ".md" : "",
+    );
+    return this.#moveEntry(path, rel, target);
+  }
+
+  async moveEntry(rel: string, dir: string): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    const path = await this.#existingPath(rel, "entry");
+    const targetDir = await this.#existingPath(dir, "folder");
+    if ((await stat(path)).isDirectory() && isWithin(path, targetDir)) {
+      throw domainError("INVALID_INPUT", "A folder cannot be moved into itself.");
+    }
+    if (dirname(path) === targetDir) return { rel, snapshot: await this.snapshot() };
+    const extension = path.endsWith(".md") ? ".md" : "";
+    const stem = extension ? basename(path, extension) : basename(path);
+    const target = await availablePath(targetDir, stem, extension);
+    return this.#moveEntry(path, rel, target);
   }
 
   async captureCreate(
@@ -536,6 +605,18 @@ export class VaultEngine {
     return this.#existingPath(rel, "note");
   }
 
+  getTheme(): Theme {
+    this.#assertOperational();
+    return this.#theme;
+  }
+
+  async setTheme(theme: Theme): Promise<void> {
+    this.#assertOperational();
+    this.#theme = theme;
+    const config = await this.#readConfig();
+    await this.#writeConfig({ vaultPath: this.#root ?? config.vaultPath, theme });
+  }
+
   async listPins(): Promise<PinSnapshot> {
     const stored = dedupe(await this.#readPins());
     const active: Array<{ rel: string; folder: boolean }> = [];
@@ -642,6 +723,38 @@ export class VaultEngine {
     const pins = await this.#readPins();
     const next = pins.filter((pin) => pin !== rel && !pin.startsWith(`${rel}/`));
     if (next.length !== pins.length) await this.#writePins(next);
+  }
+
+  async #moveEntry(
+    path: string,
+    from: string,
+    target: string,
+  ): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    const root = this.#requireRoot();
+    const to = toVaultRel(root, target);
+    const index = this.#requireIndex();
+    if (!index.acceptsPath(to)) {
+      throw domainError("IGNORED_PATH", `The Vault ignore policy excludes ${to}.`);
+    }
+    await rename(path, target);
+    this.#invalidateCaptureAppendsUnder(path);
+    await this.#remapPins(from, to);
+    await index.rescan();
+    for (const noteRel of index.noteRels()) {
+      const notePath = await this.#existingPath(noteRel, "note");
+      const content = await readFile(notePath, "utf8");
+      const rewritten = rewriteMovedLinks(content, from, to);
+      if (rewritten !== content) await writeFile(notePath, rewritten);
+    }
+    return { rel: to, snapshot: await this.snapshot() };
+  }
+
+  async #remapPins(from: string, to: string): Promise<void> {
+    const pins = await this.#readPins();
+    const next = pins.map((pin) =>
+      pin === from ? to : pin.startsWith(`${from}/`) ? `${to}${pin.slice(from.length)}` : pin
+    );
+    if (next.some((pin, index) => pin !== pins[index])) await this.#writePins(next);
   }
 
   #invalidateCaptureAppendsUnder(path: string): void {
@@ -767,6 +880,19 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function availablePath(dir: string, stem: string, extension = ""): Promise<string> {
+  let candidate = join(dir, `${stem}${extension}`);
+  for (let suffix = 2; await exists(candidate); suffix += 1) {
+    candidate = join(dir, `${stem} ${suffix}${extension}`);
+  }
+  return candidate;
+}
+
+function isWithin(parent: string, candidate: string): boolean {
+  const offset = relative(parent, candidate);
+  return offset === "" || (!offset.startsWith(`..${sep}`) && offset !== ".." && !isAbsolute(offset));
 }
 
 function domainError(kind: string, message: string, details?: unknown): VaultEngineError {

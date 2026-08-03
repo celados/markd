@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { openCloudPlans, openTrustedCloudUrl } from "@/lib/cloud";
-import { IpcError, ipc } from "@/lib/ipc";
+import { cloudDesktop } from "@/lib/desktop-services";
+import { DesktopError } from "@/lib/desktop";
 import { collectPublishBundle, type PublishBundle } from "@/lib/publishBundle";
 import { publishedEmbedCode } from "@/lib/publishedEmbed";
 import { publishStatusQueryKey, queryClient } from "@/lib/queryClient";
@@ -81,7 +82,7 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
         queryKey: statusQueryKey,
         queryFn: async () => {
           const nextBundle = await collectPublishBundle(rel, markdown, tree);
-          const status = await ipc.publishedNoteStatus(
+          const status = await cloudDesktop.status(
             rel,
             noteTitle(rel),
             nextBundle.markdown,
@@ -97,7 +98,7 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
       .catch((cause) => {
         if (disposed) return;
         setError({
-          kind: cause instanceof IpcError ? cause.kind : "other",
+          kind: cause instanceof DesktopError ? cause.kind : "other",
           message: cause instanceof Error ? cause.message : String(cause),
         });
       })
@@ -114,7 +115,7 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
     setError(null);
     try {
       if (action === "revoke") {
-        await ipc.revokePublishedNote(rel);
+        await cloudDesktop.revoke(rel);
         if (bundle) {
           queryClient.setQueryData<PublishStatusResult>(statusQueryKey, {
             bundle,
@@ -131,8 +132,8 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
       setBundle(nextBundle);
       const next =
         action === "publish"
-          ? await ipc.publishNote(rel, title.trim(), nextBundle.markdown, nextBundle.pages)
-          : await ipc.updatePublishedNote(rel, title.trim(), nextBundle.markdown, nextBundle.pages);
+          ? await cloudDesktop.publish(rel, title.trim(), nextBundle.markdown, nextBundle.pages)
+          : await cloudDesktop.update(rel, title.trim(), nextBundle.markdown, nextBundle.pages);
       setShare(next);
       queryClient.setQueryData<PublishStatusResult>(statusQueryKey, {
         bundle: nextBundle,
@@ -144,7 +145,7 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
       toast(action === "publish" ? "Note published" : "Published note updated");
     } catch (cause) {
       setError({
-        kind: cause instanceof IpcError ? cause.kind : "other",
+        kind: cause instanceof DesktopError ? cause.kind : "other",
         message: cause instanceof Error ? cause.message : String(cause),
       });
     } finally {

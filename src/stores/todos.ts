@@ -1,6 +1,6 @@
 import { create } from "@octanejs/zustand";
 import { toast } from "@octanejs/sonner";
-import { ipc } from "@/lib/ipc";
+import { collectionsDesktop } from "@/lib/desktop-services";
 import type { Todo } from "@/lib/types";
 
 interface TodosState {
@@ -34,7 +34,7 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   load: async () => {
     try {
-      const snapshot = await ipc.collectionsSnapshot();
+      const snapshot = await collectionsDesktop.snapshot();
       set({ todos: snapshot.todos, tagRegistry: snapshot.todoTags, loaded: true });
     } catch (err) {
       oops(err);
@@ -43,10 +43,7 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   add: async (text, tags) => {
     try {
-      let todo = await ipc.todoAdd(text);
-      if (tags && tags.length) {
-        todo = await ipc.todoSetTags(todo.id, tags);
-      }
+      const { item: todo } = await collectionsDesktop.todos.create(text, tags);
       set({ todos: [todo, ...get().todos] });
     } catch (err) {
       oops(err);
@@ -59,7 +56,7 @@ export const useTodos = create<TodosState>((set, get) => ({
       todos: get().todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
     });
     try {
-      const updated = await ipc.todoToggle(id);
+      const { item: updated } = await collectionsDesktop.todos.change(id, { type: "toggle" });
       set({ todos: get().todos.map((t) => (t.id === id ? updated : t)) });
     } catch (err) {
       oops(err);
@@ -69,7 +66,7 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   updateText: async (id, text) => {
     try {
-      const updated = await ipc.todoUpdate(id, text);
+      const { item: updated } = await collectionsDesktop.todos.change(id, { type: "text", text });
       set({ todos: get().todos.map((t) => (t.id === id ? updated : t)) });
     } catch (err) {
       oops(err);
@@ -78,7 +75,7 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   setTags: async (id, tags) => {
     try {
-      const updated = await ipc.todoSetTags(id, tags);
+      const { item: updated } = await collectionsDesktop.todos.change(id, { type: "tags", tags });
       const registry = new Set(get().tagRegistry);
       updated.tags.forEach((t) => registry.add(t));
       set({
@@ -92,7 +89,7 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   createTag: async (name) => {
     try {
-      set({ tagRegistry: await ipc.todoTagCreate(name) });
+      set({ tagRegistry: (await collectionsDesktop.tags.create("todos", name)).todoTags });
     } catch (err) {
       oops(err);
     }
@@ -100,7 +97,7 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   deleteTag: async (name) => {
     try {
-      const tagRegistry = await ipc.todoTagDelete(name);
+      const tagRegistry = (await collectionsDesktop.tags.remove("todos", name)).todoTags;
       set({
         tagRegistry,
         tagFilter: get().tagFilter === name ? null : get().tagFilter,
@@ -117,7 +114,7 @@ export const useTodos = create<TodosState>((set, get) => ({
   remove: async (id) => {
     set({ todos: get().todos.filter((t) => t.id !== id) });
     try {
-      await ipc.todoDelete(id);
+      await collectionsDesktop.todos.remove(id);
     } catch (err) {
       oops(err);
       get().load();
@@ -126,7 +123,7 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   clearCompleted: async () => {
     try {
-      set({ todos: await ipc.todosClearCompleted() });
+      set({ todos: (await collectionsDesktop.todos.clearCompleted()).todos });
     } catch (err) {
       oops(err);
     }

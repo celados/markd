@@ -14,7 +14,7 @@ import {
 } from "electron";
 import { realpath } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 import electronUpdater from "electron-updater";
@@ -626,7 +626,7 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
   }
   if (method === "capture.open") showQuickCapture();
   if (method === "capture.close") closeQuickCapture();
-  if (method === "external.open") {
+  if (method === "external.openCloud") {
     if (kind !== "main") {
       return v.parse(controlResponseSchema, {
         type: "response",
@@ -657,6 +657,44 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
     }
     await shell.openExternal(request.output.params.url);
   }
+  if (method === "external.openWeb") {
+    const url = new URL(request.output.params.url);
+    if (kind !== "main" || !["http:", "https:"].includes(url.protocol)) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: {
+          kind: kind === "main" ? "UNTRUSTED_EXTERNAL_URL" : "INVALID_WINDOW",
+          message: "Markd Desktop rejected this external URL.",
+        },
+      });
+    }
+    await shell.openExternal(url.toString());
+  }
+  if (method === "external.revealVaultEntry") {
+    if (kind !== "main") {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "INVALID_WINDOW", message: "Only the main window can reveal Vault entries." },
+      });
+    }
+    try {
+      await shell.showItemInFolder(await revealPath(request.output.params.rel));
+    } catch (error) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: {
+          kind: "INVALID_PATH",
+          message: error instanceof Error ? error.message : "The Vault entry could not be revealed.",
+        },
+      });
+    }
+  }
   return v.parse(controlResponseSchema, {
     type: "response",
     id,
@@ -664,6 +702,27 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
     value: null,
   });
 });
+
+async function revealPath(rel: string): Promise<string> {
+  if (!activeAssetRoot) throw new Error("No Vault is open.");
+  const root = dirname(dirname(activeAssetRoot));
+  const segments = rel === "" ? [] : rel.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw new Error("Invalid Vault path.");
+  }
+  const candidate = resolve(root, ...segments);
+  const canonical = await realpath(candidate);
+  const offset = relative(root, canonical);
+  if (
+    normalize(candidate) !== normalize(canonical) ||
+    offset === ".." ||
+    offset.startsWith(`..${sep}`) ||
+    isAbsolute(offset)
+  ) {
+    throw new Error("Invalid Vault path.");
+  }
+  return canonical;
+}
 
 function updaterError(error: unknown): DesktopErrorData {
   if (error instanceof UpdaterServiceError) {

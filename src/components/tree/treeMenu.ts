@@ -7,13 +7,13 @@ import {
   LuPinOff as PinOff,
   LuTrash2 as Trash2,
 } from "@/icons/icons.tsrx";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { toast } from "@octanejs/sonner";
 import type { TreeNode } from "@/lib/types";
 import type { MenuItem } from "@/components/ui/ContextMenu";
 import { usePins } from "@/stores/pins";
 import { useVault } from "@/stores/vault";
 import { isMac } from "@/lib/utils";
+import { revealVaultEntry } from "@/lib/desktop";
 
 type PinMode = "toggle" | "unpin" | "none";
 
@@ -73,8 +73,7 @@ export function entryMenuItems(
       label: isMac() ? "Reveal in Finder" : "Reveal in File Manager",
       icon: FolderOpen,
       onSelect: () => {
-        if (!vault.root) return;
-        void revealItemInDir(`${vault.root}/${node.rel}`).catch((error) =>
+        void revealVaultEntry(node.rel).catch((error) =>
           toast.error("Could not reveal item", {
             description: error instanceof Error ? error.message : String(error),
           }),

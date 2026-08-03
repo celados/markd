@@ -1,6 +1,6 @@
 import { create } from "@octanejs/zustand";
 import { toast } from "@octanejs/sonner";
-import { ipc } from "@/lib/ipc";
+import { vaultDesktop } from "@/lib/desktop-services";
 import {
   notifyBacklinksChanged,
   notifyNotesRewritten,
@@ -167,7 +167,7 @@ export const useVault = create<VaultState>((set, get) => ({
   startup: async () => {
     watchSystemTheme(get);
     try {
-      const snapshot = await ipc.startup();
+      const snapshot = await vaultDesktop.startup();
       if (!snapshot) {
         applyTheme("system");
         set({ status: "welcome" });
@@ -191,7 +191,7 @@ export const useVault = create<VaultState>((set, get) => ({
   chooseVault: async () => {
     try {
       await flushNoteWrites();
-      openVaultSnapshot(set, await ipc.chooseVault());
+      openVaultSnapshot(set, await vaultDesktop.choose());
     } catch (err) {
       oops(err);
     }
@@ -200,7 +200,7 @@ export const useVault = create<VaultState>((set, get) => ({
   createVault: async () => {
     try {
       await flushNoteWrites();
-      openVaultSnapshot(set, await ipc.createVault());
+      openVaultSnapshot(set, await vaultDesktop.create());
     } catch (err) {
       oops(err);
     }
@@ -209,7 +209,7 @@ export const useVault = create<VaultState>((set, get) => ({
   refreshTree: async () => {
     if (get().status !== "ready") return;
     try {
-      set({ tree: await ipc.loadTree() });
+      set({ tree: (await vaultDesktop.snapshot()).tree });
       await usePins.getState().load();
     } catch {
       // transient (e.g. vault briefly unavailable) — next refresh wins
@@ -273,7 +273,7 @@ export const useVault = create<VaultState>((set, get) => ({
 
   createNote: async (dir) => {
     try {
-      const rel = await ipc.createNote(dir, "Untitled");
+      const { rel } = await vaultDesktop.notes.create(dir, "Untitled");
       await get().refreshTree();
       get().expandTo(rel);
       // Route through setView so the tab opens (blank pane otherwise).
@@ -293,7 +293,7 @@ export const useVault = create<VaultState>((set, get) => ({
         String(now.getMonth() + 1).padStart(2, "0"),
         String(now.getDate()).padStart(2, "0"),
       ].join("-");
-      const rel = await ipc.openDailyNote(date);
+      const { rel } = await vaultDesktop.notes.openDaily(date);
       await get().refreshTree();
       get().expandTo(rel);
       get().setView({ type: "note", rel });
@@ -305,7 +305,7 @@ export const useVault = create<VaultState>((set, get) => ({
 
   createFolder: async (dir, name) => {
     try {
-      const rel = await ipc.createFolder(dir, name);
+      const { rel } = await vaultDesktop.entries.createFolder(dir, name);
       await get().refreshTree();
       get().expandTo(`${rel}/x`);
       return rel;
@@ -317,7 +317,7 @@ export const useVault = create<VaultState>((set, get) => ({
 
   renameEntry: async (rel, name) => {
     try {
-      const next = await ipc.renameEntry(rel, name);
+      const { rel: next } = await vaultDesktop.entries.rename(rel, name);
       const { view } = get();
       await get().refreshTree();
       remapRecents(set, get, rel, next);
@@ -339,7 +339,7 @@ export const useVault = create<VaultState>((set, get) => ({
 
   moveEntry: async (rel, dir) => {
     try {
-      const next = await ipc.moveEntry(rel, dir);
+      const { rel: next } = await vaultDesktop.entries.move(rel, dir);
       const { view } = get();
       await get().refreshTree();
       get().expandTo(next);
@@ -362,7 +362,7 @@ export const useVault = create<VaultState>((set, get) => ({
 
   deleteEntry: async (rel) => {
     try {
-      await ipc.deleteEntry(rel);
+      await vaultDesktop.entries.moveToTrash(rel);
       const { view } = get();
       await get().refreshTree();
       const gone = (r: string) => r === rel || r.startsWith(`${rel}/`);
@@ -392,7 +392,7 @@ export const useVault = create<VaultState>((set, get) => ({
     applyTheme(theme);
     set({ theme });
     try {
-      await ipc.setTheme(theme);
+      await vaultDesktop.theme.set(theme);
     } catch (err) {
       oops(err);
     }

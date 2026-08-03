@@ -1,4 +1,4 @@
-import { ipc } from "@/lib/ipc";
+import { vaultDesktop } from "@/lib/desktop-services";
 import { noteTitle } from "@/lib/utils";
 import type { TreeNode } from "@/lib/types";
 
@@ -38,7 +38,7 @@ export async function collectPublishBundle(
       if (publicPaths.size >= MAX_PUBLISHED_PAGES) break;
       const title = noteTitle(target);
       publicPaths.set(target, uniquePath(slugify(title), usedPaths));
-      contents.set(target, await ipc.readNote(target));
+      contents.set(target, await vaultDesktop.notes.read(target));
       queued.push(target);
     }
   }

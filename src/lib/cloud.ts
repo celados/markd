@@ -1,20 +1,13 @@
-import { ipc } from "@/lib/ipc";
-import { unwrapDesktopResult } from "@/lib/desktop";
+import { cloudDesktop } from "@/lib/desktop-services";
 
 export async function openTrustedCloudUrl(url: string): Promise<void> {
-  const cloud = window.markd?.cloud;
-  if (cloud) {
-    await unwrapDesktopResult(cloud.openExternal(url));
-    return;
-  }
-  const { openUrl } = await import("@tauri-apps/plugin-opener");
-  await openUrl(url);
+  await cloudDesktop.openExternal(url);
 }
 
 export async function openCloudPlans(): Promise<void> {
-  await openTrustedCloudUrl(await ipc.cloudPlansUrl());
+  await openTrustedCloudUrl(await cloudDesktop.plansUrl());
 }
 
 export async function openCloudBillingPortal(): Promise<void> {
-  await openTrustedCloudUrl(await ipc.cloudBillingPortalUrl());
+  await openTrustedCloudUrl(await cloudDesktop.billingPortalUrl());
 }

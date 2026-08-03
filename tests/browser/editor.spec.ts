@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installTauriFixture } from "./tauri-fixture";
+import { installDesktopFixture } from "./desktop-fixture";
 
 test.beforeEach(async ({ page }) => {
-  await installTauriFixture(page);
+  await installDesktopFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "README.md" }).click();
   await expect(page.locator('[data-note-editor="active"] .ProseMirror')).toBeVisible();
@@ -310,10 +310,10 @@ async function clearCommands(page: Page) {
   await page.evaluate(() => {
     const fixture = (
       window as unknown as {
-        __MARKD_TEST__: { commands: unknown[] };
+        __MARKD_TEST__: { operations: unknown[] };
       }
     ).__MARKD_TEST__;
-    fixture.commands.length = 0;
+    fixture.operations.length = 0;
   });
 }
 
@@ -333,17 +333,17 @@ async function latestWrite(page: Page, rel: string) {
     const fixture = (
       window as unknown as {
         __MARKD_TEST__: {
-          commands: Array<{
-            command: string;
-            args: Record<string, unknown>;
+          operations: Array<{
+            method: string;
+            params: Record<string, unknown>;
           }>;
         };
       }
     ).__MARKD_TEST__;
-    const writes = fixture.commands.filter(
+    const writes = fixture.operations.filter(
       (entry) =>
-        entry.command === "write_note" && String(entry.args.rel) === targetRel,
+        entry.method === "vault.notes.write" && String(entry.params.rel) === targetRel,
     );
-    return String(writes.at(-1)?.args.content ?? "");
+    return String(writes.at(-1)?.params.content ?? "");
   }, rel);
 }

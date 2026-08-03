@@ -17,7 +17,6 @@ import {
   LuTrash2 as Trash2,
   LuX as X,
 } from "@/icons/icons.tsrx";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { AnimatePresence, motion } from "@octanejs/motion";
 import { type OctaneNode, useEffect, useRef, useState } from "octane";
 import { toast } from "@octanejs/sonner";
@@ -31,7 +30,7 @@ import { TabBar } from "@/components/editor/TabBar.tsrx";
 import { BookmarksPage } from "@/components/bookmarks/BookmarksPage.tsrx";
 import { TodosPage } from "@/components/todos/TodosPage.tsrx";
 import { EASE_OUT, SPRING_LAYOUT, SPRING_PANEL } from "@/lib/ease";
-import { ipc } from "@/lib/ipc";
+import { cloudDesktop, vaultDesktop } from "@/lib/desktop-services";
 import { cx, isMac } from "@/lib/utils";
 import {
   ActionSwapIcon,
@@ -47,6 +46,7 @@ import { useTodos } from "@/stores/todos";
 import { usePins } from "@/stores/pins";
 import { useUi } from "@/stores/ui";
 import { useVault } from "@/stores/vault";
+import { revealVaultEntry } from "@/lib/desktop";
 
 /** Absolute on-disk path for the current view — handy to hand to an agent. */
 function viewPath(
@@ -92,7 +92,7 @@ export function AppShell() @{
   useEffect(() => {
     if (!noteRel) return;
     let disposed = false;
-    void Promise.all([ipc.isNotePublished(noteRel), ipc.cloudAccountStatus()]).then(
+    void Promise.all([cloudDesktop.isPublished(noteRel), cloudDesktop.accountStatus()]).then(
       ([published, status]) => {
         if (disposed) return;
         setPublishedByRel((current) => ({ ...current, [noteRel]: published }));
@@ -395,7 +395,7 @@ function NoteMenuContent(props: {
       label="Copy path"
       onClick={() => {
         onClose();
-        void ipc.notePath(rel).then(
+        void vaultDesktop.notes.resolvePath(rel).then(
           (path) =>
             navigator.clipboard.writeText(path).then(
               () => toast("Path copied"),
@@ -410,15 +410,10 @@ function NoteMenuContent(props: {
       label={isMac() ? "Reveal in Finder" : "Reveal in File Manager"}
       onClick={() => {
         onClose();
-        void ipc.notePath(rel).then(
-          (path) =>
-            revealItemInDir(path).catch((error) =>
-              toast.error("Could not reveal note", {
-                description:
-                  error instanceof Error ? error.message : String(error),
-              }),
-            ),
-          () => toast.error("Path could not be resolved"),
+        void revealVaultEntry(rel).catch((error) =>
+          toast.error("Could not reveal note", {
+            description: error instanceof Error ? error.message : String(error),
+          }),
         );
       }}
     />

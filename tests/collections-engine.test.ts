@@ -66,7 +66,7 @@ describe("Collections Engine", () => {
     expect((await restarted.snapshot()).todos[0]?.text).toBe("First Vault");
   });
 
-  test("loads pre-tag Collection files using the existing Rust defaults", async () => {
+  test("loads pre-tag Collection files using the legacy storage defaults", async () => {
     const root = await createVault();
     await writeFile(
       join(root, ".markd", "todos.json"),

@@ -1,5 +1,4 @@
 import { EditorContent, useEditor } from "@octanejs/tiptap";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "octane";
 import { toast } from "@octanejs/sonner";
 import {
@@ -10,7 +9,8 @@ import {
   VAULT_NOTE_CHANGED,
   type VaultNoteChangedDetail,
 } from "@/lib/vault-note-events";
-import { ipc } from "@/lib/ipc";
+import { vaultDesktop } from "@/lib/desktop-services";
+import { openWebUrl } from "@/lib/desktop";
 import { invalidatePublishStatus } from "@/lib/queryClient";
 import {
   joinFrontmatter,
@@ -143,7 +143,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         const { desired, committed } = await writer.save(
           fullText,
           (content, expectedContent) =>
-            ipc.writeNote(targetRel, content, expectedContent),
+            vaultDesktop.notes.write(targetRel, content, expectedContent),
         );
         invalidatePublishStatus();
         notifyBacklinksChanged();
@@ -526,8 +526,8 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     setPreserveMissingDraft(false);
     setSlashMenu(null);
 
-    ipc
-      .readNote(rel)
+    vaultDesktop.notes
+      .read(rel)
       .then((text) => {
         if (cancelled) return;
         lastSaved.current = text;
@@ -611,7 +611,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     if (!editor) return;
     const cur = relRef.current;
     try {
-      const disk = await ipc.readNote(cur);
+      const disk = await vaultDesktop.notes.read(cur);
       if (cur !== relRef.current) return;
       const decision = decideExternalNoteChange({
         disk,
@@ -702,7 +702,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       event.preventDefault();
       event.stopPropagation();
       if (/^https?:\/\//i.test(href)) {
-        openUrl(href);
+        void openWebUrl(href);
         return;
       }
       const target = hrefToRel(href);
@@ -806,7 +806,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
           await navigator.clipboard.writeText(markdown);
           toast("Markdown copied");
         } else if (action === "export") {
-          const path = await ipc.exportNote(relRef.current, markdown);
+          const path = await vaultDesktop.notes.export(relRef.current, markdown);
           if (path) toast("Note exported", { description: path });
         } else if (action === "publish") {
           debouncedPersist.cancel();

@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { installTauriFixture } from "./tauri-fixture";
+import { installDesktopFixture } from "./desktop-fixture";
 
 test.beforeEach(async ({ page }) => {
-  await installTauriFixture(page);
+  await installDesktopFixture(page);
 });
 
 test("note actions preserve keyboard focus and dismissal", async ({ page }) => {

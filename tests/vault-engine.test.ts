@@ -95,6 +95,50 @@ describe("Vault Engine path policy", () => {
 
 });
 
+describe("Vault Engine desktop mutations", () => {
+  test("owns daily notes, folders, entry moves, Pins, and link rewrites", async () => {
+    const { engine, root } = await setupEngine([], async (vaultRoot) => {
+      await mkdir(join(vaultRoot, "Projects"));
+      await mkdir(join(vaultRoot, "Archive"));
+      await writeFile(join(vaultRoot, "Projects", "Plan.md"), "# Plan");
+      await writeFile(
+        join(vaultRoot, "Source.md"),
+        "[plan](Projects/Plan.md) and [[Projects/Plan]]",
+      );
+    });
+
+    expect((await engine.openDailyNote("2026-08-04")).rel).toBe("2026-08-04.md");
+    expect(await readFile(join(root, "2026-08-04.md"), "utf8"))
+      .toBe("# 2026-08-04\n");
+    expect((await engine.createFolder("Projects", "Research")).rel)
+      .toBe("Projects/Research");
+
+    await engine.pin("Projects/Plan.md");
+    const renamed = await engine.renameEntry("Projects/Plan.md", "Roadmap");
+    expect(renamed.rel).toBe("Projects/Roadmap.md");
+    expect(await engine.listPins()).toEqual({ pins: ["Projects/Roadmap.md"], stale: [] });
+    expect(await readFile(join(root, "Source.md"), "utf8"))
+      .toBe("[plan](Projects/Roadmap.md) and [[Projects/Roadmap]]");
+
+    const moved = await engine.moveEntry("Projects/Roadmap.md", "Archive");
+    expect(moved.rel).toBe("Archive/Roadmap.md");
+    expect(await engine.listPins()).toEqual({ pins: ["Archive/Roadmap.md"], stale: [] });
+    expect(await readFile(join(root, "Source.md"), "utf8"))
+      .toBe("[plan](Archive/Roadmap.md) and [[Archive/Roadmap]]");
+  });
+
+  test("persists the Electron-owned theme in the app config", async () => {
+    const { engine, scratch } = await setupEngine();
+
+    expect(engine.getTheme()).toBe("system");
+    await engine.setTheme("dark");
+
+    expect(engine.getTheme()).toBe("dark");
+    expect(JSON.parse(await readFile(join(scratch, "config", "config.json"), "utf8")))
+      .toEqual(expect.objectContaining({ theme: "dark" }));
+  });
+});
+
 describe("Vault Engine search and backlinks", () => {
   test("ranks path hits first and validates backlink candidates as Markdown", async () => {
     const { engine } = await setupEngine([], async (root) => {

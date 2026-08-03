@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { installTauriFixture } from "./tauri-fixture";
+import { installDesktopFixture } from "./desktop-fixture";
 
 test.beforeEach(async ({ page }) => {
-  await installTauriFixture(page);
+  await installDesktopFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "README.md" }).click();
 });
@@ -84,13 +84,13 @@ test("command palette preserves result order and keyboard activation", async ({
   ).toBeVisible();
   await expect.poll(() => page.evaluate(() => {
     const state = window as typeof window & {
-      __MARKD_TEST__?: { commands: Array<{ command: string; args: Record<string, unknown> }> };
+      __MARKD_TEST__?: { operations: Array<{ method: string; params: Record<string, unknown> }> };
     };
-    return state.__MARKD_TEST__?.commands.filter(
-      (call) => call.command === "record_search_access",
+    return state.__MARKD_TEST__?.operations.filter(
+      (call) => call.method === "vault.search.recordAccess",
     ) ?? [];
   })).toEqual([
-    { command: "record_search_access", args: { rel: "Projects/Alpha.md" } },
+    { method: "vault.search.recordAccess", params: { rel: "Projects/Alpha.md" } },
   ]);
 });
 
