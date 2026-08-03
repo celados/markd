@@ -123,13 +123,13 @@ jobs:
       - name: Run packaged utility smoke in background
         run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
 
-      - name: Keep Electron test artifacts
+      # CI already consumes and verifies installable binaries on the runner; durable full binaries belong to the signed release workflow.
+      - name: Keep Electron updater metadata
         uses: actions/upload-artifact@v7
         with:
-          name: markd-electron-macos-arm64
+          name: markd-electron-updater-metadata-macos-arm64
           path: |
-            release/electron/${{ env.ELECTRON_DMG }}
-            release/electron/${{ env.ELECTRON_ZIP }}
             release/electron/${{ env.ELECTRON_ZIP_BLOCKMAP }}
             release/electron/${{ env.ELECTRON_MANIFEST }}
           if-no-files-found: error
+          compression-level: 0
