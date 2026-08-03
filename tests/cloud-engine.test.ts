@@ -1,6 +1,8 @@
 import { mkdtemp, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer, type RequestListener, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { describe, expect, test } from "vitest";
 import { CloudEngine, CloudEngineError } from "../electron/cloud-engine";
 import { resolveCloudConfig } from "../electron/cloud-config";
@@ -202,6 +204,42 @@ describe("Cloud Engine", () => {
     }));
   });
 
+  test("does not redirect a control API request carrying authorization", async () => {
+    let redirectedRequests = 0;
+    const target = await listen((request, response) => {
+      redirectedRequests += 1;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ user: { email: "stolen@example.com", plan: "cloud" } }));
+    });
+    let sourceAuthorization: string | undefined;
+    const source = await listen((request, response) => {
+      sourceAuthorization = request.headers.authorization;
+      response.writeHead(307, { location: `${target.origin}/stolen` });
+      response.end();
+    });
+    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-control-redirect-"));
+    await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
+      accessToken: "token_123",
+      expiresAt: Date.now() + 60_000,
+      account: { email: "reader@example.com", plan: "cloud" },
+    }));
+    const config = resolveCloudConfig({
+      MARKD_CLOUD_TEST_MODE: "1",
+      MARKD_CLOUD_API_BASE: source.origin,
+      MARKD_CLOUD_SITE_ORIGIN: source.origin,
+    });
+
+    try {
+      await expect(
+        new CloudEngine(scratch, () => scratch, config).accountStatus(),
+      ).rejects.toMatchObject({ kind: "network" });
+      expect(sourceAuthorization).toBe("Bearer token_123");
+      expect(redirectedRequests).toBe(0);
+    } finally {
+      await Promise.all([closeServer(source.server), closeServer(target.server)]);
+    }
+  });
+
   test("rejects the complete upload plan before sending any object bytes", async () => {
     const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-upload-trust-"));
     const vault = join(scratch, "vault");
@@ -243,6 +281,72 @@ describe("Cloud Engine", () => {
       pages: [],
     })).rejects.toMatchObject({ kind: "CLOUD_UNTRUSTED_UPLOAD_URL" });
     expect(objectWrites).toBe(0);
+  });
+
+  test("does not redirect an object PUT carrying Note bytes", async () => {
+    let redirectedPuts = 0;
+    const target = await listen((request, response) => {
+      if (request.method === "PUT") redirectedPuts += 1;
+      response.writeHead(200).end();
+    });
+    let initialPuts = 0;
+    const upload = await listen((request, response) => {
+      if (request.method === "PUT") initialPuts += 1;
+      response.writeHead(307, { location: `${target.origin}/stolen-object` });
+      response.end();
+    });
+    let api: Awaited<ReturnType<typeof listen>> | undefined;
+    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-upload-redirect-"));
+    const vault = join(scratch, "vault");
+    await mkdir(join(vault, ".markd", "assets"), { recursive: true });
+    await writeFile(join(vault, "Home.md"), "# Home");
+    await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
+      accessToken: "token_123",
+      expiresAt: Date.now() + 60_000,
+      account: { email: "reader@example.com", plan: "cloud" },
+    }));
+
+    try {
+      api = await listen(async (request, response) => {
+        if (request.url !== "/v1/publish-sessions") {
+          response.writeHead(500).end();
+          return;
+        }
+        const input = JSON.parse(await requestBody(request)) as {
+          manifest: { objects: Array<{ hash: string }> };
+        };
+        respondJson(response, {
+          sessionId: "publish_1",
+          uploads: [{
+            hash: input.manifest.objects[0]!.hash,
+            url: `${upload.origin}/object`,
+            headers: {},
+          }],
+        }, 201);
+      });
+      const config = resolveCloudConfig({
+        MARKD_CLOUD_TEST_MODE: "1",
+        MARKD_CLOUD_API_BASE: api.origin,
+        MARKD_CLOUD_SITE_ORIGIN: api.origin,
+      });
+      const canonicalVault = await realpath(vault);
+      await expect(
+        new CloudEngine(scratch, () => canonicalVault, config).publish({
+          rel: "Home.md",
+          title: "Home",
+          content: "# Private Note",
+          pages: [],
+        }),
+      ).rejects.toMatchObject({ kind: "network" });
+      expect(initialPuts).toBe(1);
+      expect(redirectedPuts).toBe(0);
+    } finally {
+      await Promise.all([
+        ...(api ? [closeServer(api.server)] : []),
+        closeServer(upload.server),
+        closeServer(target.server),
+      ]);
+    }
   });
 
   test("rejects publish assets that the save and protocol contract reject", async () => {
@@ -301,3 +405,38 @@ describe("Cloud Engine", () => {
     await expect(engine.accountStatus()).resolves.toEqual({ account: null });
   });
 });
+
+async function listen(
+  handler: RequestListener,
+): Promise<{ server: Server; origin: string }> {
+  const server = createServer(handler);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  return { server, origin: `http://127.0.0.1:${address.port}` };
+}
+
+function respondJson(
+  response: import("node:http").ServerResponse,
+  value: unknown,
+  status = 200,
+): void {
+  response.writeHead(status, { "content-type": "application/json" });
+  response.end(JSON.stringify(value));
+}
+
+async function requestBody(request: import("node:http").IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => { body += chunk; });
+    request.on("end", () => resolve(body));
+    request.on("error", reject);
+  });
+}
+
+async function closeServer(server: Server): Promise<void> {
+  server.closeAllConnections();
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => error ? reject(error) : resolve()),
+  );
+}

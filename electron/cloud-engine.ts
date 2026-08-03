@@ -290,6 +290,8 @@ export class CloudEngine {
         method: "PUT",
         headers: upload.headers,
         body: Buffer.from(object),
+        // A 307/308 would otherwise replay private Note bytes to Location.
+        redirect: "error",
         signal: AbortSignal.timeout(5 * 60 * 1000),
       }).catch(networkFailure);
       if (!uploadResponse.ok) {
@@ -383,6 +385,9 @@ export class CloudEngine {
       method: options.method ?? "GET",
       headers,
       body: options.json === undefined ? undefined : JSON.stringify(options.json),
+      // Redirect following would move Bearer credentials or request JSON beyond
+      // the source-level trusted API origin validated by CloudConfig.
+      redirect: "error",
       signal: AbortSignal.timeout(20_000),
     }).catch(networkFailure);
   }
