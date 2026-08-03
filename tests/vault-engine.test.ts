@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from "vitest";
 import {
+  appendFile,
   mkdtemp,
   mkdir,
   readFile,
   realpath,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -176,6 +178,15 @@ describe("Vault Engine Quick Capture", () => {
     );
   });
 
+  test("rejects blank append content at the Engine boundary", async () => {
+    const { engine } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+
+    await expect(engine.captureAppend("Inbox.md", " \n ")).rejects.toEqual(
+      expect.objectContaining({ kind: "INVALID_CAPTURE" }),
+    );
+  });
+
   test("merges a semantic append into an editor write based on the prior content", async () => {
     const { engine, root } = await setupEngine();
     await engine.captureCreate("Inbox", "base");
@@ -186,6 +197,130 @@ describe("Vault Engine Quick Capture", () => {
     ).resolves.toBe("edited\ncaptured");
     expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
       "edited\ncaptured",
+    );
+  });
+
+  test("merges consecutive capture appends with their exact newline boundaries", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base\n");
+    await engine.captureAppend("Inbox.md", "first capture");
+    await engine.captureAppend("Inbox.md", "second capture");
+
+    await expect(
+      engine.writeNote("Inbox.md", "edited\n", "base\n"),
+    ).resolves.toBe("edited\nfirst capture\nsecond capture");
+    expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
+      "edited\nfirst capture\nsecond capture",
+    );
+  });
+
+  test("replays only captures after an editor-observed checkpoint", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await engine.captureAppend("Inbox.md", "first capture");
+    await engine.captureAppend("Inbox.md", "second capture");
+
+    await expect(
+      engine.writeNote(
+        "Inbox.md",
+        "edited\nfirst capture",
+        "base\nfirst capture",
+      ),
+    ).resolves.toBe("edited\nfirst capture\nsecond capture");
+    expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
+      "edited\nfirst capture\nsecond capture",
+    );
+  });
+
+  test("merges a proven capture from an empty Note", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "");
+    await engine.captureAppend("Inbox.md", "captured");
+
+    await expect(engine.writeNote("Inbox.md", "edited", "")).resolves.toBe(
+      "edited\ncaptured",
+    );
+    expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
+      "edited\ncaptured",
+    );
+  });
+
+  test("rejects ordinary prefix appends, including from an empty expected value", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await appendFile(join(root, "Inbox.md"), "\nexternal append");
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base"),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+
+    await engine.captureCreate("Empty", "");
+    await writeFile(join(root, "Empty.md"), "external content");
+    await expect(
+      engine.writeNote("Empty.md", "edited", ""),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+  });
+
+  test("rejects a capture merge after a later external edit", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await engine.captureAppend("Inbox.md", "captured");
+    await appendFile(join(root, "Inbox.md"), "\nexternal edit");
+
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base"),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+    expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
+      "base\ncaptured\nexternal edit",
+    );
+  });
+
+  test("rejects provenance after the captured Note is renamed and replaced", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await engine.captureAppend("Inbox.md", "captured");
+    await rename(join(root, "Inbox.md"), join(root, "Archived.md"));
+    await writeFile(join(root, "Inbox.md"), "base\ncaptured");
+
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base"),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+  });
+
+  test("invalidates capture provenance after a non-capture write", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await engine.captureAppend("Inbox.md", "captured");
+    await engine.writeNote("Inbox.md", "replacement", "base\ncaptured");
+
+    // Recreating the old bytes must not resurrect the proof consumed above.
+    await writeFile(join(root, "Inbox.md"), "base\ncaptured");
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base"),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+  });
+
+  test("invalidates capture provenance after Trash and Vault switches", async () => {
+    const { engine, root, scratch } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await engine.captureAppend("Inbox.md", "captured");
+    await engine.moveToTrash("Inbox.md");
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base"),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+
+    // A matching relative path and byte sequence in another Vault is a
+    // different Note and cannot inherit append provenance from the first.
+    await engine.captureAppend("Inbox.md", "new capture");
+    const otherRoot = join(scratch, "other-vault");
+    await mkdir(otherRoot);
+    await writeFile(join(otherRoot, "Inbox.md"), "base\ncaptured\nnew capture");
+    await engine.open(otherRoot, false);
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base\ncaptured"),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+
+    expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
+      "base\ncaptured\nnew capture",
     );
   });
 

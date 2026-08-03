@@ -12,6 +12,17 @@ type AppConfig = {
   theme?: Theme;
 };
 
+type CaptureAppendProvenance = {
+  events: Array<{
+    beforeContent: string;
+    content: string;
+    afterContent: string;
+  }>;
+  currentContent: string;
+  device: number;
+  inode: number;
+};
+
 export class VaultEngineError extends Error {
   readonly kind: string;
   readonly details?: unknown;
@@ -28,6 +39,7 @@ export class VaultEngine {
   readonly #configFile: string;
   readonly #trash: NativeTrash;
   readonly #collections = new CollectionsEngine();
+  readonly #captureAppends = new Map<string, CaptureAppendProvenance>();
   #root: string | null = null;
   #theme: Theme = "system";
 
@@ -59,6 +71,9 @@ export class VaultEngine {
     await this.#collections.validate(canonical);
     await this.#writeConfig({ vaultPath: canonical, theme: this.#theme });
     await this.#collections.activate(canonical);
+    // Provenance is scoped to one activated Vault. Relative paths may name a
+    // different file after a root switch, even when their text happens to match.
+    this.#captureAppends.clear();
     this.#root = canonical;
     return snapshot;
   }
@@ -135,9 +150,28 @@ export class VaultEngine {
     rel: string,
     content: string,
   ): Promise<{ rel: string; snapshot: VaultSnapshot }> {
+    if (content.trim().length === 0) {
+      throw domainError("INVALID_CAPTURE", "Captured content cannot be empty.");
+    }
     const path = await this.#existingPath(rel, "note");
     const current = await readFile(path, "utf8");
-    await appendFile(path, `${current.length > 0 && !current.endsWith("\n") ? "\n" : ""}${content}`);
+    const next = appendCapture(current, content);
+    await appendFile(path, next.slice(current.length));
+    const metadata = await stat(path);
+    const previous = this.#captureAppends.get(path);
+    const continuesPrevious =
+      previous?.currentContent === current &&
+      previous.device === metadata.dev &&
+      previous.inode === metadata.ino;
+    this.#captureAppends.set(path, {
+      events: [
+        ...(continuesPrevious ? previous.events : []),
+        { beforeContent: current, content, afterContent: next },
+      ],
+      currentContent: next,
+      device: metadata.dev,
+      inode: metadata.ino,
+    });
     return { rel: toVaultRel(this.#requireRoot(), path), snapshot: await this.snapshot() };
   }
 
@@ -153,16 +187,31 @@ export class VaultEngine {
   ): Promise<string> {
     const path = await this.#existingPath(rel, "note");
     const current = await readFile(path, "utf8");
+    const provenance = this.#captureAppends.get(path);
+    this.#captureAppends.delete(path);
     let committed = content;
     if (current !== expectedContent) {
-      if (!current.startsWith(expectedContent)) {
+      const metadata = await stat(path);
+      const merged = provenance
+        ? replayProvenCaptureAppends(
+            provenance,
+            expectedContent,
+            content,
+            current,
+          )
+        : null;
+      if (
+        !provenance ||
+        merged === null ||
+        provenance.device !== metadata.dev ||
+        provenance.inode !== metadata.ino
+      ) {
         throw domainError(
           "STALE_NOTE_WRITE",
           "The Note changed before this edit could be saved.",
         );
       }
-      const appended = current.slice(expectedContent.length);
-      committed = content.endsWith(appended) ? content : `${content}${appended}`;
+      committed = merged;
     }
     await writeFile(path, committed);
     return committed;
@@ -171,6 +220,7 @@ export class VaultEngine {
   async moveToTrash(rel: string): Promise<{ snapshot: VaultSnapshot }> {
     const path = await this.#existingPath(rel, "entry");
     await this.#trash(this.#requireRoot(), path);
+    this.#invalidateCaptureAppendsUnder(path);
     try {
       await this.#removePinsUnder(rel);
     } catch (error) {
@@ -291,6 +341,14 @@ export class VaultEngine {
     const pins = await this.#readPins();
     const next = pins.filter((pin) => pin !== rel && !pin.startsWith(`${rel}/`));
     if (next.length !== pins.length) await this.#writePins(next);
+  }
+
+  #invalidateCaptureAppendsUnder(path: string): void {
+    for (const candidate of this.#captureAppends.keys()) {
+      if (candidate === path || candidate.startsWith(`${path}${sep}`)) {
+        this.#captureAppends.delete(candidate);
+      }
+    }
   }
 
   #requireRoot(): string {
@@ -421,6 +479,36 @@ async function exists(path: string): Promise<boolean> {
 
 function domainError(kind: string, message: string): VaultEngineError {
   return new VaultEngineError({ kind, message });
+}
+
+function appendCapture(current: string, content: string): string {
+  const boundary = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
+  return `${current}${boundary}${content}`;
+}
+
+function replayProvenCaptureAppends(
+  provenance: CaptureAppendProvenance,
+  expectedContent: string,
+  draft: string,
+  diskContent: string,
+): string | null {
+  const firstUnseen = provenance.events.findIndex(
+    (event) => event.beforeContent === expectedContent,
+  );
+  if (firstUnseen < 0) return null;
+
+  let recorded = expectedContent;
+  let committed = draft;
+  for (const event of provenance.events.slice(firstUnseen)) {
+    if (event.beforeContent !== recorded) return null;
+    const after = appendCapture(recorded, event.content);
+    if (event.afterContent !== after) return null;
+    recorded = after;
+    committed = appendCapture(committed, event.content);
+  }
+  return recorded === diskContent && provenance.currentContent === diskContent
+    ? committed
+    : null;
 }
 
 function dedupe(values: string[]): string[] {

@@ -5,6 +5,7 @@ const epochSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 const relSchema = v.string();
 const entryRelSchema = v.pipe(v.string(), v.minLength(1));
 const idSchema = v.pipe(v.string(), v.minLength(1));
+const nonBlankSchema = v.pipe(v.string(), v.regex(/\S/));
 const tagsSchema = v.array(v.string());
 
 export const todoChangeSchema = v.variant("type", [
@@ -219,7 +220,7 @@ export const engineRequestSchema = v.variant("method", [
     type: v.literal("request"),
     id: operationIdSchema,
     method: v.literal("capture.append"),
-    params: v.object({ rel: entryRelSchema, content: v.string() }),
+    params: v.object({ rel: entryRelSchema, content: nonBlankSchema }),
   }),
 ]);
 

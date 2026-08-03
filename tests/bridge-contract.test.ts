@@ -23,6 +23,14 @@ describe("Electron bridge contract", () => {
     expect(
       v.safeParse(engineRequestSchema, {
         type: "request",
+        id: "capture-empty",
+        method: "capture.append",
+        params: { rel: "inbox.md", content: "  \n" },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
         id: "capture-append",
         method: "capture.append",
         params: { rel: "inbox.md", content: "A captured thought" },
