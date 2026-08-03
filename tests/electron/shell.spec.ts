@@ -24,7 +24,9 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
     page.on("pageerror", (error) => pageErrors.push(String(error)));
 
     const backgroundState = await application.evaluate(({ app, BrowserWindow }) => ({
-      active: app.isActive(),
+      // Electron only exposes isActive on macOS. Window focus/visibility are the
+      // portable contract; activation additionally guards the user's macOS session.
+      active: process.platform === "darwin" ? app.isActive() : null,
       focused: BrowserWindow.getFocusedWindow() !== null,
       visible: BrowserWindow.getAllWindows()[0]?.isVisible() ?? true,
     }));
