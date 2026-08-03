@@ -20,9 +20,10 @@ status: active
   #13 落地 `electron-builder` 前没有 packaged app artifact，因此 #11 的 packaged asset/export/rejection
   smoke 不能执行。#13 必须复用同一组 semantic bridge journeys 对安装产物运行，不能把 dev Electron
   smoke 当作 packaged evidence。
-- updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。应用仍沿用上游
-  `usemarkd.app` 品牌域名和 Markd Cloud API；在启用 cloud publishing 或部署 fork site 前，必须裁决
-  产品域名与 cloud ownership，不能让 fork binary 静默写入上游服务。
+- updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。Cloud Engine 已迁移
+  现有协议，但 production ownership gate 在源码层保持关闭；只有 tests 可用 loopback origins 启用。
+  在启用 production publishing 或部署 fork site 前，必须裁决产品域名与 Cloud API ownership，并把
+  canonical origins 作为新的源码级 trusted configuration；不能仅靠继承上游环境变量打开 gate。
 - Vaultwarden 服务版本尚未兼容 Bitwarden CLI `2026.7.0`，会在解密 item 时抛出
   `invalid type: JsValue(...), expected a string`。本次发布 setup 受控固定官方 CLI `2026.6.0`；后续应升级
   Vaultwarden 到支持 2026.7.0+ client 的版本，再删除这个临时版本 pin。

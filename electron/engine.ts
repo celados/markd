@@ -15,6 +15,8 @@ import {
 import { VaultEngine, VaultEngineError } from "./vault-engine";
 import { CollectionsEngineError } from "./collections-engine";
 import { RequestActor } from "./request-actor";
+import { CloudEngine, CloudEngineError } from "./cloud-engine";
+import { resolveCloudConfig } from "./cloud-config";
 
 const parentPort = process.parentPort;
 if (!parentPort) {
@@ -39,6 +41,7 @@ const nativeCalls = new Map<
 let activeEpoch = 0;
 let activeConfigDir = "";
 let vault: VaultEngine | null = null;
+let cloud: CloudEngine | null = null;
 let initialization: Promise<void> | null = null;
 const requests = new RequestActor();
 
@@ -79,12 +82,14 @@ parentPort.on("message", (event) => {
       rollbackAssetRoot: (stageId) => requestAssetRootRollback(epoch, stageId),
       saveExport: (preparation) => requestExportSave(epoch, "main", preparation),
     });
+    cloud = new CloudEngine(configDir, () => vault!.activeRoot(), resolveCloudConfig(process.env));
     initialization = vault.startup().then(() => undefined);
   } else if (epoch !== activeEpoch || configDir !== activeConfigDir) {
     port.close();
     throw new Error("Markd Engine rejected a renderer from another generation");
   }
   const activeVault = vault;
+  const activeCloud = cloud!;
 
   const becomeReady = () => {
     port.on("message", (messageEvent) => {
@@ -96,7 +101,9 @@ parentPort.on("message", (event) => {
       }
       // Every renderer gets its own MessagePort, so the utility process is the
       // only place that can impose one mutation order across editor + capture.
-      void requests.enqueue(() => handleRequest(activeVault, parsed.output, windowKind))
+      void requests.enqueue(() =>
+        handleRequest(activeVault, activeCloud, parsed.output, windowKind),
+      )
         .then((value) =>
           respond(port, {
             type: "response",
@@ -134,6 +141,7 @@ parentPort.on("message", (event) => {
 
 async function handleRequest(
   vault: VaultEngine,
+  cloud: CloudEngine,
   request: EngineRequest,
   windowKind: "main" | "quick-capture",
 ): Promise<unknown> {
@@ -202,6 +210,30 @@ async function handleRequest(
     case "collections.bookmarks.export":
       assertMainWindow(windowKind);
       return vault.exportBookmarks();
+    case "cloud.account.status":
+      return cloud.accountStatus();
+    case "cloud.auth.requestOtp":
+      return cloud.requestOtp(request.params.email);
+    case "cloud.auth.verifyOtp":
+      return cloud.verifyOtp(request.params.challengeId, request.params.code);
+    case "cloud.auth.signOut":
+      await cloud.signOut();
+      return null;
+    case "cloud.billing.plansUrl":
+      return cloud.plansUrl();
+    case "cloud.billing.portalUrl":
+      return cloud.portalUrl();
+    case "cloud.publish.status":
+      return cloud.status(request.params);
+    case "cloud.publish.isPublished":
+      return cloud.isPublished(request.params.rel);
+    case "cloud.publish.create":
+      return cloud.publish(request.params);
+    case "cloud.publish.update":
+      return cloud.update(request.params);
+    case "cloud.publish.revoke":
+      await cloud.revoke(request.params.rel);
+      return null;
   }
 }
 
@@ -332,7 +364,11 @@ function respond(port: Electron.MessagePortMain, response: EngineResponse): void
 }
 
 function errorData(error: unknown): DesktopErrorData {
-  if (error instanceof VaultEngineError || error instanceof CollectionsEngineError) {
+  if (
+    error instanceof VaultEngineError ||
+    error instanceof CollectionsEngineError ||
+    error instanceof CloudEngineError
+  ) {
     return { kind: error.kind, message: error.message, details: error.details };
   }
   const message = error instanceof Error ? error.message : String(error);

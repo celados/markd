@@ -1,10 +1,15 @@
 import type {
   Bookmark,
   BookmarkChange,
+  CloudAccount,
   CloudAccountStatus,
   CollectionKind,
   CollectionsSnapshot,
   PinSnapshot,
+  OtpChallenge,
+  PublishedNoteStatus,
+  PublishedShare,
+  PublishPageDraft,
   Todo,
   TodoChange,
   VaultSnapshot,
@@ -118,8 +123,32 @@ export type MarkdDesktop = {
   };
   cloud?: {
     accountStatus: () => Promise<DesktopResult<CloudAccountStatus>>;
+    requestOtp: (email: string) => Promise<DesktopResult<OtpChallenge>>;
+    verifyOtp: (challengeId: string, code: string) => Promise<DesktopResult<CloudAccount>>;
+    signOut: () => Promise<DesktopResult<null>>;
     plansUrl: () => Promise<DesktopResult<string>>;
     billingPortalUrl: () => Promise<DesktopResult<string>>;
+    publishedNoteStatus: (
+      rel: string,
+      title: string,
+      content: string,
+      pages: PublishPageDraft[],
+    ) => Promise<DesktopResult<PublishedNoteStatus>>;
+    isNotePublished: (rel: string) => Promise<DesktopResult<boolean>>;
+    publishNote: (
+      rel: string,
+      title: string,
+      content: string,
+      pages: PublishPageDraft[],
+    ) => Promise<DesktopResult<PublishedShare>>;
+    updatePublishedNote: (
+      rel: string,
+      title: string,
+      content: string,
+      pages: PublishPageDraft[],
+    ) => Promise<DesktopResult<PublishedShare>>;
+    revokePublishedNote: (rel: string) => Promise<DesktopResult<null>>;
+    openExternal: (url: string) => Promise<DesktopResult<null>>;
   };
   updates: {
     check: () => Promise<DesktopResult<DesktopUpdate | null>>;

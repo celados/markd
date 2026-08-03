@@ -21,14 +21,17 @@ import { unwrapDesktopResult } from "./desktop";
 interface ErrorPayload {
   kind: string;
   message: string;
+  details?: unknown;
 }
 
 export class IpcError extends Error {
   kind: string;
+  details?: unknown;
 
   constructor(payload: ErrorPayload) {
     super(payload.message);
     this.kind = payload.kind;
+    this.details = payload.details;
   }
 }
 
@@ -111,10 +114,18 @@ export const ipc = {
     window.markd?.cloud
       ? unwrapDesktopResult(window.markd.cloud.accountStatus())
       : call<CloudAccountStatus>("cloud_account_status"),
-  cloudRequestOtp: (email: string) => call<OtpChallenge>("cloud_request_otp", { email }),
+  cloudRequestOtp: (email: string) =>
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.requestOtp(email))
+      : call<OtpChallenge>("cloud_request_otp", { email }),
   cloudVerifyOtp: (challengeId: string, code: string) =>
-    call<CloudAccount>("cloud_verify_otp", { challengeId, code }),
-  cloudSignOut: () => call<void>("cloud_sign_out"),
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.verifyOtp(challengeId, code))
+      : call<CloudAccount>("cloud_verify_otp", { challengeId, code }),
+  cloudSignOut: () =>
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.signOut()).then(() => undefined)
+      : call<void>("cloud_sign_out"),
   cloudPlansUrl: () =>
     window.markd?.cloud
       ? unwrapDesktopResult(window.markd.cloud.plansUrl())
@@ -124,13 +135,25 @@ export const ipc = {
       ? unwrapDesktopResult(window.markd.cloud.billingPortalUrl())
       : call<string>("cloud_billing_portal_url"),
   publishedNoteStatus: (rel: string, title: string, content: string, pages: PublishPageDraft[]) =>
-    call<PublishedNoteStatus>("published_note_status", { rel, title, content, pages }),
-  isNotePublished: (rel: string) => call<boolean>("is_note_published", { rel }),
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.publishedNoteStatus(rel, title, content, pages))
+      : call<PublishedNoteStatus>("published_note_status", { rel, title, content, pages }),
+  isNotePublished: (rel: string) =>
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.isNotePublished(rel))
+      : call<boolean>("is_note_published", { rel }),
   publishNote: (rel: string, title: string, content: string, pages: PublishPageDraft[]) =>
-    call<PublishedShare>("publish_note", { rel, title, content, pages }),
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.publishNote(rel, title, content, pages))
+      : call<PublishedShare>("publish_note", { rel, title, content, pages }),
   updatePublishedNote: (rel: string, title: string, content: string, pages: PublishPageDraft[]) =>
-    call<PublishedShare>("update_published_note", { rel, title, content, pages }),
-  revokePublishedNote: (rel: string) => call<void>("revoke_published_note", { rel }),
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.updatePublishedNote(rel, title, content, pages))
+      : call<PublishedShare>("update_published_note", { rel, title, content, pages }),
+  revokePublishedNote: (rel: string) =>
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.revokePublishedNote(rel)).then(() => undefined)
+      : call<void>("revoke_published_note", { rel }),
   pinsList: () =>
     window.markd
       ? unwrapDesktopResult(window.markd.vault.pins.list())

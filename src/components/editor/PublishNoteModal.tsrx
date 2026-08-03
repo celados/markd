@@ -1,4 +1,3 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   LuCode2 as Code2,
   LuCopy as Copy,
@@ -15,7 +14,7 @@ import { CopyButton } from "@/components/ui/CopyButton";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { openCloudPlans } from "@/lib/cloud";
+import { openCloudPlans, openTrustedCloudUrl } from "@/lib/cloud";
 import { IpcError, ipc } from "@/lib/ipc";
 import { collectPublishBundle, type PublishBundle } from "@/lib/publishBundle";
 import { publishedEmbedCode } from "@/lib/publishedEmbed";
@@ -304,7 +303,7 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
                       variant="outline"
                       size="sm"
                       className="bg-bg"
-                      onClick={() => openUrl(share.url)}
+                      onClick={() => openTrustedCloudUrl(share.url)}
                     >
                       <ExternalLink size={12.5} strokeWidth={1.9} />
                       Open

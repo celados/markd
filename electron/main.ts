@@ -33,6 +33,7 @@ import {
 } from "./bridge-contract";
 import { createEngineGenerationTerminal } from "./engine-generation";
 import { loadAssetResponse, NativeContentError, writeExportFile } from "./native-content";
+import { isTrustedCloudUrl, resolveCloudConfig } from "./cloud-config";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const development =
@@ -558,6 +559,37 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
   }
   if (method === "capture.open") showQuickCapture();
   if (method === "capture.close") closeQuickCapture();
+  if (method === "external.open") {
+    if (kind !== "main") {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "INVALID_WINDOW", message: "Only the main window can open Cloud URLs." },
+      });
+    }
+    const config = resolveCloudConfig(process.env);
+    if (!config.ok) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "CLOUD_OWNERSHIP_UNVERIFIED", message: config.message },
+      });
+    }
+    if (!isTrustedCloudUrl(request.output.params.url, config.value)) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: {
+          kind: "UNTRUSTED_EXTERNAL_URL",
+          message: "Markd Desktop rejected an untrusted external URL.",
+        },
+      });
+    }
+    await shell.openExternal(request.output.params.url);
+  }
   return v.parse(controlResponseSchema, {
     type: "response",
     id,

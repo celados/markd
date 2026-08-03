@@ -385,7 +385,7 @@ async function requestControl<T>(requestInput: unknown): Promise<DesktopResult<T
 
 function controlRequestInput(
   method: ControlRequest["method"],
-  params: null | { id: string },
+  params: null | { id: string } | { url: string },
 ): unknown {
   return {
     type: "request",
@@ -496,6 +496,39 @@ contextBridge.exposeInMainWorld("markd", {
         requestEngine("collections.tags.delete", { collection, name }),
     },
   },
+  ...(windowKind === "main"
+    ? {
+        cloud: {
+          accountStatus: () => requestEngine("cloud.account.status", null),
+          requestOtp: (email: string) => requestEngine("cloud.auth.requestOtp", { email }),
+          verifyOtp: (challengeId: string, code: string) =>
+            requestEngine("cloud.auth.verifyOtp", { challengeId, code }),
+          signOut: () => requestEngine("cloud.auth.signOut", null),
+          plansUrl: () => requestEngine("cloud.billing.plansUrl", null),
+          billingPortalUrl: () => requestEngine("cloud.billing.portalUrl", null),
+          publishedNoteStatus: (
+            rel: string,
+            title: string,
+            content: string,
+            pages: unknown[],
+          ) => requestEngine("cloud.publish.status", { rel, title, content, pages }),
+          isNotePublished: (rel: string) =>
+            requestEngine("cloud.publish.isPublished", { rel }),
+          publishNote: (rel: string, title: string, content: string, pages: unknown[]) =>
+            requestEngine("cloud.publish.create", { rel, title, content, pages }),
+          updatePublishedNote: (
+            rel: string,
+            title: string,
+            content: string,
+            pages: unknown[],
+          ) => requestEngine("cloud.publish.update", { rel, title, content, pages }),
+          revokePublishedNote: (rel: string) =>
+            requestEngine("cloud.publish.revoke", { rel }),
+          openExternal: (url: string) =>
+            requestControl(controlRequestInput("external.open", { url })),
+        },
+      }
+    : {}),
   updates: {
     check: () => requestControl(controlRequestInput("updates.check", null)),
     install: (id: string) => requestControl(controlRequestInput("updates.install", { id })),

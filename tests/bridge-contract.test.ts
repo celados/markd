@@ -243,6 +243,37 @@ describe("Electron bridge contract", () => {
     ).toBe(true);
   });
 
+  test("accepts Cloud Engine lifecycle operations and rejects malformed drafts", () => {
+    const requests = [
+      { method: "cloud.account.status", params: null },
+      { method: "cloud.auth.requestOtp", params: { email: "reader@example.com" } },
+      { method: "cloud.auth.verifyOtp", params: { challengeId: "challenge_1", code: "123456" } },
+      { method: "cloud.auth.signOut", params: null },
+      { method: "cloud.publish.status", params: { rel: "Home.md", title: "Home", content: "# Home", pages: [] } },
+      { method: "cloud.publish.create", params: { rel: "Home.md", title: "Home", content: "# Home", pages: [] } },
+      { method: "cloud.publish.update", params: { rel: "Home.md", title: "Home", content: "# Home", pages: [] } },
+      { method: "cloud.publish.revoke", params: { rel: "Home.md" } },
+    ];
+    for (const [index, request] of requests.entries()) {
+      expect(v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: `cloud-${index}`,
+        ...request,
+      }).success).toBe(true);
+    }
+    expect(v.safeParse(engineRequestSchema, {
+      type: "request",
+      id: "cloud-invalid",
+      method: "cloud.publish.create",
+      params: {
+        rel: "Home.md",
+        title: "Home",
+        content: "# Home",
+        pages: [{ rel: "Linked.md", path: "linked", title: "Linked" }],
+      },
+    }).success).toBe(false);
+  });
+
   test("rejects malformed engine messages and response values", () => {
     expect(
       v.safeParse(engineMessageSchema, {

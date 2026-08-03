@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 type TauriFixtureOptions = {
+  cloudLifecycle?: boolean;
   pinnedFolder?: boolean;
   stalePin?: string;
   taggedTodos?: boolean;
@@ -65,6 +66,20 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
     let pins = fixtureOptions.pinnedFolder ? ["Projects"] : [];
     let stalePins = fixtureOptions.stalePin ? [fixtureOptions.stalePin] : [];
     const clipboard: string[] = [];
+    let cloudAccount = null as { email: string; plan: "free" | "cloud" } | null;
+    let publishedShare = null as null | {
+      id: string;
+      entryId: string;
+      slug: string;
+      url: string;
+      title: string;
+      contentHash: string;
+      publishedAt: number;
+      updatedAt: number;
+      pageCount: number;
+      assetCount: number;
+    };
+    const openedExternalUrls: string[] = [];
     const notes = new Map([
       ["README.md", "---\nfixture: preserved\n---\n# README\n\nOctane + pnpm verification."],
       ["Projects/Alpha.md", "# Alpha\n\nSecond live editor."],
@@ -240,9 +255,53 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
         },
       },
       cloud: {
-        accountStatus: async () => success({ account: null }),
+        accountStatus: async () => success({ account: cloudAccount }),
+        requestOtp: async (email) => success({ challengeId: "challenge", email, expiresIn: 600, resendAfter: 30 }),
+        verifyOtp: async () => {
+          cloudAccount = { email: "reader@example.test", plan: "cloud" as const };
+          return success(cloudAccount);
+        },
+        signOut: async () => {
+          cloudAccount = null;
+          return success(null);
+        },
         plansUrl: async () => success("https://example.test/plans"),
         billingPortalUrl: async () => success("https://example.test/billing"),
+        publishedNoteStatus: async () => success({ account: cloudAccount, share: publishedShare, isOutdated: false }),
+        isNotePublished: async () => success(Boolean(publishedShare)),
+        publishNote: async (_rel, title) => {
+          if (!fixtureOptions.cloudLifecycle) {
+            return { ok: false as const, error: { kind: "not_available", message: "Not available in this fixture." } };
+          }
+          publishedShare = {
+            id: "site_123",
+            entryId: "entry_123",
+            slug: "published-note",
+            url: "https://example.test/s/published-note",
+            title,
+            contentHash: "hash-1",
+            publishedAt: 1,
+            updatedAt: 1,
+            pageCount: 1,
+            assetCount: 0,
+          };
+          return success(publishedShare);
+        },
+        updatePublishedNote: async (_rel, title) => {
+          if (!publishedShare) {
+            return { ok: false as const, error: { kind: "not_found", message: "Published Share not found." } };
+          }
+          publishedShare = { ...publishedShare, title, contentHash: "hash-2", updatedAt: 2 };
+          return success(publishedShare);
+        },
+        revokePublishedNote: async () => {
+          publishedShare = null;
+          return success(null);
+        },
+        openExternal: async (url) => {
+          openedExternalUrls.push(url);
+          return success(null);
+        },
       },
       updates: {
         check: async () => success(null),
@@ -369,6 +428,8 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
         },
       },
     });
-    Object.assign(window, { __MARKD_TEST__: { clipboard, commands, notes } });
+    Object.assign(window, {
+      __MARKD_TEST__: { clipboard, commands, notes, openedExternalUrls },
+    });
   }, options);
 }

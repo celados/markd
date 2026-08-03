@@ -31,6 +31,47 @@ export const bookmarkChangeSchema = v.variant("type", [
   }),
 ]);
 
+export const cloudAccountSchema = v.object({
+  email: v.pipe(v.string(), v.email()),
+  plan: v.picklist(["free", "cloud"]),
+});
+export const cloudAccountStatusSchema = v.object({ account: v.nullable(cloudAccountSchema) });
+export const otpChallengeSchema = v.object({
+  challengeId: v.pipe(v.string(), v.minLength(1)),
+  email: v.pipe(v.string(), v.email()),
+  expiresIn: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  resendAfter: v.pipe(v.number(), v.integer(), v.minValue(0)),
+});
+export const publishPageDraftSchema = v.object({
+  rel: entryRelSchema,
+  path: v.string(),
+  title: v.pipe(v.string(), v.minLength(1)),
+  markdown: v.string(),
+});
+const publishDraftSchema = v.object({
+  rel: entryRelSchema,
+  title: v.pipe(v.string(), v.minLength(1)),
+  content: v.string(),
+  pages: v.array(publishPageDraftSchema),
+});
+export const publishedShareSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1)),
+  entryId: v.pipe(v.string(), v.minLength(1)),
+  slug: v.pipe(v.string(), v.minLength(1)),
+  url: v.pipe(v.string(), v.url()),
+  title: v.pipe(v.string(), v.minLength(1)),
+  contentHash: v.pipe(v.string(), v.minLength(1)),
+  publishedAt: v.number(),
+  updatedAt: v.number(),
+  pageCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  assetCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+});
+export const publishedNoteStatusSchema = v.object({
+  account: v.nullable(cloudAccountSchema),
+  share: v.nullable(publishedShareSchema),
+  isOutdated: v.boolean(),
+});
+
 export const treeNodeSchema: v.GenericSchema = v.object({
   name: v.string(),
   rel: relSchema,
@@ -248,6 +289,17 @@ export const engineRequestSchema = v.variant("method", [
     method: v.literal("collections.bookmarks.export"),
     params: v.null(),
   }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.account.status"), params: v.null() }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.auth.requestOtp"), params: v.object({ email: v.pipe(v.string(), v.email()) }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.auth.verifyOtp"), params: v.object({ challengeId: entryRelSchema, code: v.pipe(v.string(), v.minLength(1)) }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.auth.signOut"), params: v.null() }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.billing.plansUrl"), params: v.null() }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.billing.portalUrl"), params: v.null() }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.publish.status"), params: publishDraftSchema }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.publish.isPublished"), params: v.object({ rel: entryRelSchema }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.publish.create"), params: publishDraftSchema }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.publish.update"), params: publishDraftSchema }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("cloud.publish.revoke"), params: v.object({ rel: entryRelSchema }) }),
 ]);
 
 export const controlRequestSchema = v.variant("method", [
@@ -292,6 +344,12 @@ export const controlRequestSchema = v.variant("method", [
     id: operationIdSchema,
     method: v.literal("capture.close"),
     params: v.null(),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("external.open"),
+    params: v.object({ url: v.pipe(v.string(), v.url()) }),
   }),
 ]);
 
@@ -485,6 +543,25 @@ export function validateResponseValue(
     case "capture.create":
     case "capture.append":
       return v.safeParse(v.object({ rel: relSchema, snapshot: vaultSnapshotSchema }), value).success;
+    case "cloud.account.status":
+      return v.safeParse(cloudAccountStatusSchema, value).success;
+    case "cloud.auth.requestOtp":
+      return v.safeParse(otpChallengeSchema, value).success;
+    case "cloud.auth.verifyOtp":
+      return v.safeParse(cloudAccountSchema, value).success;
+    case "cloud.auth.signOut":
+    case "cloud.publish.revoke":
+      return v.safeParse(v.null(), value).success;
+    case "cloud.billing.plansUrl":
+    case "cloud.billing.portalUrl":
+      return v.safeParse(v.pipe(v.string(), v.url()), value).success;
+    case "cloud.publish.status":
+      return v.safeParse(publishedNoteStatusSchema, value).success;
+    case "cloud.publish.isPublished":
+      return v.safeParse(v.boolean(), value).success;
+    case "cloud.publish.create":
+    case "cloud.publish.update":
+      return v.safeParse(publishedShareSchema, value).success;
     case "dialog.chooseVault":
     case "dialog.createVault":
       return v.safeParse(v.nullable(v.string()), value).success;
@@ -493,6 +570,7 @@ export function validateResponseValue(
     case "app.relaunch":
     case "capture.open":
     case "capture.close":
+    case "external.open":
       return v.safeParse(v.null(), value).success;
   }
 }

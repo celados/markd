@@ -177,6 +177,10 @@ export class VaultEngine {
     return buildSnapshot(root, this.#theme);
   }
 
+  activeRoot(): string {
+    return this.#requireRoot();
+  }
+
   collectionsSnapshot() {
     this.#assertOperational();
     return this.#collections.snapshot();
