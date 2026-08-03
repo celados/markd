@@ -19,6 +19,9 @@ status: active
   Vaultwarden 到支持 2026.7.0+ client 的版本，再删除这个临时版本 pin。
 - production bundle 仍报告大 chunk，尤其 editor 与 AppShell；这是 code-splitting/performance
   follow-up，不是 build correctness failure。
+- Playwright browser journeys 仍绑定固定 preview port `4173`；并行 agent 同时运行 suite 时可能因端口
+  已占用而在用例开始前失败。单独复跑已通过 35/35，确认这不是产品 bug；后续应由测试编排分配隔离端口，
+  不能通过杀掉其他 agent 的进程来掩盖冲突。
 - Octane 2026-07-31 release train 为消费已审计的上游修复而加入了精确
   `minimumReleaseAgeExclude`。这些版本通过普通 install/build/browser 门禁后，待其自然满足 pnpm
   release-age policy 时删除该临时例外列表；不要把例外扩成 package-name wildcard。
