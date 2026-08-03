@@ -34,6 +34,19 @@ export type MarkdDesktop = {
   };
   vault: {
     startup: () => Promise<DesktopResult<VaultSnapshot | null>>;
+    choose: () => Promise<DesktopResult<VaultSnapshot | null>>;
+    create: () => Promise<DesktopResult<VaultSnapshot | null>>;
+    snapshot: () => Promise<DesktopResult<VaultSnapshot>>;
+    createNote: (
+      dir: string,
+      title: string,
+      content?: string,
+    ) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
+    readNote: (rel: string) => Promise<DesktopResult<string>>;
+    writeNote: (rel: string, content: string) => Promise<DesktopResult<null>>;
+    moveToTrash: (
+      rel: string,
+    ) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
   };
   cloud?: {
     accountStatus: () => Promise<DesktopResult<CloudAccountStatus>>;

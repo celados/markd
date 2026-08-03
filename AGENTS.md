@@ -34,8 +34,8 @@ root pnpm workspace.
 
 ## Commands
 
-- `pnpm run dev` — run the Electron + Vite desktop shell; Phase 1 currently reaches the Welcome surface and
-  validated utility lifecycle, while Vault operations remain a Phase 2 migration gate
+- `pnpm run dev` — run the Electron + Vite desktop shell; Phase 2 currently supports Vault choose/create/reopen,
+  coherent bootstrap snapshots, Note create/read/write and native Trash, while later domain slices remain on Tauri
 - `pnpm run dev:web` — renderer-only diagnostic surface in system browser; it is not the desktop product
 - `pnpm tauri dev` — legacy Tauri implementation for migration comparison only; do not extend its command surface
 - `pnpm run build` — strict app typecheck + Vite production build
@@ -46,18 +46,19 @@ root pnpm workspace.
 - `pnpm run test:browser` — rebuild, then run production-preview journeys in system Google Chrome;
   do not invoke Playwright directly against a potentially stale `dist/`
 - `pnpm run test:electron` — rebuild, then launch the installed Electron runtime for secure-shell and real
-  utility crash/restart smoke tests; it does not download a Playwright browser
+  utility/native smoke tests in background mode; it neither activates the app nor downloads a Playwright browser
 - `cd src-tauri && cargo test` — Rust unit tests
 - `pnpm run release`: full signed and notarized macOS release (scripts/release.sh)
 - `.github/workflows/release-linux.yml`: signed x86_64 AppImage and Debian release
 
 ## Architecture
 
-Rust owns the filesystem; the frontend is UI + state only. All IO goes through typed Tauri commands (`src/lib/ipc.ts` is the only file that touches `invoke`).
+The frontend is UI + state only. Migrated Electron filesystem work belongs to the utility-owned Vault Engine;
+legacy slices still use typed Tauri commands (`src/lib/ipc.ts` is the only file that touches `invoke`).
 
-The default development shell is now Electron, with main/preload/utility entries under `electron/`; only the
-Phase 1 startup/update handshake has crossed the new bridge. The remaining application data path still belongs
-to the legacy Tauri implementation until each vertical slice migrates. The Electron-native replacement
+The default development shell is now Electron, with main/preload/utility entries under `electron/`; the first
+complete Vault slice has crossed the new bridge. Remaining application capabilities still belong to the legacy
+Tauri implementation until each vertical slice migrates. The Electron-native replacement
 architecture and migration gates are frozen in
 [`docs/electron-native-architecture.md`](docs/electron-native-architecture.md); new migration work must follow that
 proposal instead of extending the Tauri command surface.

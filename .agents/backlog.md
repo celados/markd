@@ -7,10 +7,12 @@ status: active
 
 # Deferred work
 
-- Electron Phase 1 shell 已落地并成为 `pnpm run dev` 默认入口，但当前只承诺 Welcome、secure preload
-  bridge 和 utility crash/restart lifecycle。Vault choose/create/tree/CRUD 以及 renderer 中其余 Tauri
-  adapter/import 仍未迁移；在 Phase 2/4 完成前，不能把 Electron build 宣称为完整可用，也不能用临时
-  Node walker 绕开 accepted fff ignore contract。
+- Electron Phase 2 的首个 Vault slice 使用 utility 内的临时 bootstrap snapshot builder，只为
+  choose/create/reopen、Note CRUD 与 native Trash 提供 coherent tree。它没有 watcher、search 或完整
+  ignore precedence，只做 `.markd`/hidden、`node_modules` 与 reserved root 的最低限度排除，不能作为最终
+  ignore correctness 证据。#5 引入 fff
+  Vault Index 时必须删除这个 builder，让 Snapshot/Change/search 共用唯一 index。Pins、Collections、
+  Quick Capture、Cloud 与其余 Tauri adapter 仍待 Phase 4 迁移；在此之前不能宣称 Electron feature-complete。
 - updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。应用仍沿用上游
   `usemarkd.app` 品牌域名和 Markd Cloud API；在启用 cloud publishing 或部署 fork site 前，必须裁决
   产品域名与 cloud ownership，不能让 fork binary 静默写入上游服务。

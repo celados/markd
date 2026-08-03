@@ -11,7 +11,7 @@ import { DesktopError, unwrapDesktopResult } from "../src/lib/desktop";
 import { createEngineGenerationTerminal } from "../electron/engine-generation";
 
 describe("Electron bridge contract", () => {
-  test("accepts only the empty engine startup operation", () => {
+  test("accepts the frozen Vault Engine operations", () => {
     expect(
       v.safeParse(engineRequestSchema, {
         type: "request",
@@ -24,14 +24,22 @@ describe("Electron bridge contract", () => {
       v.safeParse(engineRequestSchema, {
         type: "request",
         id: "operation-2",
-        method: "vault.startup",
-        params: { path: "/tmp/vault" },
+        method: "vault.open",
+        params: { root: "/tmp/vault", create: false },
       }).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       v.safeParse(engineRequestSchema, {
         type: "request",
         id: "operation-3",
+        method: "vault.note.write",
+        params: { rel: "notes/idea.md", content: "hello" },
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: "operation-4",
         method: "raw.invoke",
         params: null,
       }).success,
@@ -55,6 +63,14 @@ describe("Electron bridge contract", () => {
         params: { id: "" },
       }).success,
     ).toBe(false);
+    expect(
+      v.safeParse(controlRequestSchema, {
+        type: "request",
+        id: "operation-3",
+        method: "dialog.chooseVault",
+        params: null,
+      }).success,
+    ).toBe(true);
   });
 
   test("rejects malformed engine messages and response values", () => {
@@ -68,7 +84,8 @@ describe("Electron bridge contract", () => {
       }).success,
     ).toBe(false);
     expect(validateResponseValue("vault.startup", null)).toBe(true);
-    expect(validateResponseValue("vault.startup", { root: "/tmp" })).toBe(false);
+    expect(validateResponseValue("vault.note.read", "# note")).toBe(true);
+    expect(validateResponseValue("vault.note.read", null)).toBe(false);
   });
 
   test("keeps expected failures as tagged data until the renderer boundary", async () => {

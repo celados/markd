@@ -286,7 +286,10 @@ function waitForPort(epoch: number): Promise<PortOutcome> {
   });
 }
 
-async function requestEngine(): Promise<DesktopResult<null>> {
+async function requestEngine<T>(
+  method: EngineRequest["method"],
+  params: unknown,
+): Promise<DesktopResult<T>> {
   const state = await readEngineState();
   if (!state.ok) return state;
   if (state.value.state === "unavailable") {
@@ -295,12 +298,19 @@ async function requestEngine(): Promise<DesktopResult<null>> {
 
   const outcome = await waitForPort(state.value.epoch);
   if (!outcome.ok) return outcome;
-  const request = v.parse(engineRequestSchema, {
+  const parsedRequest = v.safeParse(engineRequestSchema, {
     type: "request",
     id: crypto.randomUUID(),
-    method: "vault.startup",
-    params: null,
+    method,
+    params,
   });
+  if (!parsedRequest.success) {
+    return {
+      ok: false,
+      error: { kind: "INVALID_REQUEST", message: "Markd Desktop rejected an invalid request." },
+    };
+  }
+  const request = parsedRequest.output;
   return new Promise((resolve) => {
     pending.set(request.id, {
       epoch: outcome.value.epoch,
@@ -311,9 +321,9 @@ async function requestEngine(): Promise<DesktopResult<null>> {
   });
 }
 
-async function requestControl(
+async function requestControl<T>(
   requestInput: unknown,
-): Promise<DesktopResult<null>> {
+): Promise<DesktopResult<T>> {
   const parsedRequest = v.safeParse(controlRequestSchema, requestInput);
   if (!parsedRequest.success) {
     return {
@@ -325,7 +335,18 @@ async function requestControl(
     };
   }
   const request = parsedRequest.output;
-  const rawResponse: unknown = await ipcRenderer.invoke("markd:control", request);
+  let rawResponse: unknown;
+  try {
+    rawResponse = await ipcRenderer.invoke("markd:control", request);
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        kind: "NATIVE_OPERATION_FAILED",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
   const response = v.safeParse(controlResponseSchema, rawResponse);
   if (!response.success || response.output.id !== request.id) {
     return {
@@ -348,7 +369,7 @@ async function requestControl(
       },
     };
   }
-  return { ok: true, value: null };
+  return { ok: true, value: response.output.value as T };
 }
 
 function controlRequestInput(
@@ -363,6 +384,14 @@ function controlRequestInput(
   };
 }
 
+async function openFromDialog(create: boolean): Promise<DesktopResult<unknown>> {
+  const selection = await requestControl<string | null>(
+    controlRequestInput(create ? "dialog.createVault" : "dialog.chooseVault", null),
+  );
+  if (!selection.ok || selection.value === null) return selection;
+  return requestEngine("vault.open", { root: selection.value, create });
+}
+
 contextBridge.exposeInMainWorld("markd", {
   app: {
     windowKind: "main",
@@ -374,7 +403,16 @@ contextBridge.exposeInMainWorld("markd", {
     },
   },
   vault: {
-    startup: requestEngine,
+    startup: () => requestEngine("vault.startup", null),
+    choose: () => openFromDialog(false),
+    create: () => openFromDialog(true),
+    snapshot: () => requestEngine("vault.snapshot", null),
+    createNote: (dir: string, title: string, content = "") =>
+      requestEngine("vault.note.create", { dir, title, content }),
+    readNote: (rel: string) => requestEngine("vault.note.read", { rel }),
+    writeNote: (rel: string, content: string) =>
+      requestEngine("vault.note.write", { rel, content }),
+    moveToTrash: (rel: string) => requestEngine("vault.trash", { rel }),
   },
   updates: {
     check: () => requestControl(controlRequestInput("updates.check", null)),

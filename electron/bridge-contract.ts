@@ -2,6 +2,22 @@ import * as v from "valibot";
 
 const operationIdSchema = v.pipe(v.string(), v.minLength(1));
 const epochSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
+const relSchema = v.string();
+
+export const treeNodeSchema: v.GenericSchema = v.object({
+  name: v.string(),
+  rel: relSchema,
+  kind: v.picklist(["folder", "note"]),
+  children: v.optional(v.array(v.lazy(() => treeNodeSchema))),
+  modifiedMs: v.number(),
+});
+
+export const vaultSnapshotSchema = v.object({
+  root: v.pipe(v.string(), v.minLength(1)),
+  name: v.pipe(v.string(), v.minLength(1)),
+  tree: v.array(treeNodeSchema),
+  theme: v.picklist(["system", "light", "dark"]),
+});
 
 export const desktopErrorSchema = v.object({
   kind: v.pipe(v.string(), v.minLength(1)),
@@ -9,14 +25,29 @@ export const desktopErrorSchema = v.object({
   details: v.optional(v.unknown()),
 });
 
-export const engineRequestSchema = v.object({
-  type: v.literal("request"),
-  id: operationIdSchema,
-  method: v.literal("vault.startup"),
-  params: v.null(),
-});
+export const engineRequestSchema = v.variant("method", [
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.startup"), params: v.null() }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.open"), params: v.object({ root: v.pipe(v.string(), v.minLength(1)), create: v.boolean() }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.snapshot"), params: v.null() }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.note.create"), params: v.object({ dir: relSchema, title: v.string(), content: v.string() }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.note.read"), params: v.object({ rel: relSchema }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.note.write"), params: v.object({ rel: relSchema, content: v.string() }) }),
+  v.object({ type: v.literal("request"), id: operationIdSchema, method: v.literal("vault.trash"), params: v.object({ rel: relSchema }) }),
+]);
 
 export const controlRequestSchema = v.variant("method", [
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("dialog.chooseVault"),
+    params: v.null(),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("dialog.createVault"),
+    params: v.null(),
+  }),
   v.object({
     type: v.literal("request"),
     id: operationIdSchema,
@@ -83,6 +114,26 @@ export const enginePortMetadataSchema = v.object({ epoch: epochSchema });
 
 export const engineControlSchema = v.object({ epoch: epochSchema });
 
+export const engineConnectSchema = v.object({
+  type: v.literal("connect"),
+  epoch: epochSchema,
+  configDir: v.pipe(v.string(), v.minLength(1)),
+});
+
+export const nativeRequestSchema = v.object({
+  type: v.literal("native-request"),
+  id: operationIdSchema,
+  epoch: epochSchema,
+  method: v.literal("trash"),
+  root: v.pipe(v.string(), v.minLength(1)),
+  path: v.pipe(v.string(), v.minLength(1)),
+});
+
+export const nativeResponseSchema = v.variant("ok", [
+  v.object({ type: v.literal("native-response"), id: operationIdSchema, epoch: epochSchema, ok: v.literal(true) }),
+  v.object({ type: v.literal("native-response"), id: operationIdSchema, epoch: epochSchema, ok: v.literal(false), error: desktopErrorSchema }),
+]);
+
 export const engineChannelFailureSchema = v.object({
   reason: v.literal("invalid-channel"),
 });
@@ -117,11 +168,23 @@ export function validateResponseValue(
 ): boolean {
   switch (method) {
     case "vault.startup":
+    case "vault.open":
+    case "vault.snapshot":
+      return v.safeParse(v.nullable(vaultSnapshotSchema), value).success;
+    case "vault.note.create":
+      return v.safeParse(v.object({ rel: relSchema, snapshot: vaultSnapshotSchema }), value).success;
+    case "vault.note.read":
+      return v.safeParse(v.string(), value).success;
+    case "vault.note.write":
+      return v.safeParse(v.null(), value).success;
+    case "vault.trash":
+      return v.safeParse(v.object({ snapshot: vaultSnapshotSchema }), value).success;
+    case "dialog.chooseVault":
+    case "dialog.createVault":
+      return v.safeParse(v.nullable(v.string()), value).success;
     case "updates.check":
     case "updates.install":
     case "app.relaunch":
-      // Phase 1 only promises an empty engine and updater shell. Later slices
-      // replace these null handshakes with their frozen domain schemas.
       return v.safeParse(v.null(), value).success;
   }
 }

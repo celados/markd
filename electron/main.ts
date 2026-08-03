@@ -1,14 +1,17 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   MessageChannelMain,
   protocol,
+  shell,
   utilityProcess,
   type UtilityProcess,
   type WebContents,
 } from "electron";
-import { dirname, join } from "node:path";
+import { realpath } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 import {
@@ -17,6 +20,8 @@ import {
   engineChannelFailureSchema,
   engineControlSchema,
   engineStateSchema,
+  nativeRequestSchema,
+  nativeResponseSchema,
   type ControlResponse,
   type DesktopErrorData,
   type EngineState,
@@ -27,6 +32,13 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const development =
   Boolean(process.env.VITE_DEV_SERVER_URL) ||
   process.env.MARKD_ENABLE_DEVTOOLS === "1";
+const backgroundE2e = process.env.MARKD_E2E_BACKGROUND === "1";
+
+if (backgroundE2e && process.platform === "darwin") {
+  // Smoke tests need the real app process without activating a Dock app in the
+  // user's session. Foreground behavior remains the production default.
+  app.setActivationPolicy("prohibited");
+}
 let engine: UtilityProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let engineEpoch = 0;
@@ -71,6 +83,9 @@ function attachWindowDiagnostics(webContents: WebContents): void {
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
+    show: !backgroundE2e,
+    focusable: !backgroundE2e,
+    skipTaskbar: backgroundE2e,
     width: 1280,
     height: 820,
     minWidth: 840,
@@ -150,7 +165,11 @@ function connectEngine(window: BrowserWindow): UtilityProcess {
       return;
     }
     transferred = true;
-    child.postMessage({ type: "connect", epoch }, [port1]);
+    child.postMessage({
+      type: "connect",
+      epoch,
+      configDir: process.env.MARKD_TEST_CONFIG_DIR ?? app.getPath("userData"),
+    }, [port1]);
     window.webContents.postMessage("markd:engine-port", { epoch }, [port2]);
   };
   const transfer = () => {
@@ -187,9 +206,52 @@ function connectEngine(window: BrowserWindow): UtilityProcess {
     terminal.terminate("Markd Engine encountered a fatal error.");
     child.kill();
   });
+  child.on("message", (input: unknown) => {
+    const request = v.safeParse(nativeRequestSchema, input);
+    if (!request.success || request.output.epoch !== epoch) return;
+    void performNativeRequest(request.output)
+      .then(() => child.postMessage(v.parse(nativeResponseSchema, {
+        type: "native-response",
+        id: request.output.id,
+        epoch,
+        ok: true,
+      })))
+      .catch((error: unknown) => child.postMessage(v.parse(nativeResponseSchema, {
+        type: "native-response",
+        id: request.output.id,
+        epoch,
+        ok: false,
+        error: {
+          kind: "NATIVE_OPERATION_FAILED",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      })));
+  });
   child.stdout?.pipe(process.stdout);
   child.stderr?.pipe(process.stderr);
   return child;
+}
+
+async function performNativeRequest(
+  request: v.InferOutput<typeof nativeRequestSchema>,
+): Promise<void> {
+  if (process.env.MARKD_TEST_TRASH_FAILURE === "1") {
+    throw new Error("The operating system rejected the Trash operation.");
+  }
+  const [root, path] = await Promise.all([
+    realpath(request.root),
+    realpath(request.path),
+  ]);
+  const offset = relative(root, path);
+  if (
+    offset === "" ||
+    offset === ".." ||
+    offset.startsWith(`..${sep}`) ||
+    isAbsolute(offset)
+  ) {
+    throw new Error("Markd Desktop rejected a Trash target outside the Vault.");
+  }
+  await shell.trashItem(path);
 }
 
 function acceptEngineControl(
@@ -207,7 +269,7 @@ function acceptEngineControl(
   return control.output.epoch;
 }
 
-ipcMain.handle("markd:control", (event, input: unknown): ControlResponse => {
+ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlResponse> => {
   const request = v.safeParse(controlRequestSchema, input);
   if (!request.success || event.sender !== mainWindow?.webContents) {
     return v.parse(controlResponseSchema, {
@@ -222,6 +284,31 @@ ipcMain.handle("markd:control", (event, input: unknown): ControlResponse => {
   }
 
   const { id, method } = request.output;
+  if (method === "dialog.chooseVault") {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: "Choose Vault",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    return v.parse(controlResponseSchema, {
+      type: "response",
+      id,
+      ok: true,
+      value: result.canceled ? null : result.filePaths[0] ?? null,
+    });
+  }
+  if (method === "dialog.createVault") {
+    const result = await dialog.showSaveDialog(mainWindow!, {
+      title: "Create Vault",
+      defaultPath: "Markd Vault",
+      buttonLabel: "Create Vault",
+    });
+    return v.parse(controlResponseSchema, {
+      type: "response",
+      id,
+      ok: true,
+      value: result.canceled ? null : result.filePath ?? null,
+    });
+  }
   if (method === "updates.install") {
     return v.parse(controlResponseSchema, {
       type: "response",

@@ -46,17 +46,39 @@ export const ipc = {
     window.markd
       ? unwrapDesktopResult(window.markd.vault.startup())
       : call<VaultSnapshot | null>("startup"),
-  chooseVault: () => call<VaultSnapshot | null>("choose_vault"),
-  createVault: () => call<VaultSnapshot | null>("create_vault"),
-  loadTree: () => call<TreeNode[]>("load_tree"),
+  chooseVault: () =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.choose())
+      : call<VaultSnapshot | null>("choose_vault"),
+  createVault: () =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.create())
+      : call<VaultSnapshot | null>("create_vault"),
+  loadTree: async () =>
+    window.markd
+      ? (await unwrapDesktopResult(window.markd.vault.snapshot())).tree
+      : call<TreeNode[]>("load_tree"),
 
-  readNote: (rel: string) => call<string>("read_note", { rel }),
+  readNote: (rel: string) =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.readNote(rel))
+      : call<string>("read_note", { rel }),
   writeNote: (rel: string, content: string) =>
-    call<void>("write_note", { rel, content }),
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.writeNote(rel, content))
+      : call<void>("write_note", { rel, content }),
   createNote: (dir: string, title: string) =>
-    call<string>("create_note", { dir, title }),
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.createNote(dir, title)).then(
+          ({ rel }) => rel,
+        )
+      : call<string>("create_note", { dir, title }),
   createNoteWithContent: (dir: string, title: string, content: string) =>
-    call<string>("create_note_with_content", { dir, title, content }),
+    window.markd
+      ? unwrapDesktopResult(
+          window.markd.vault.createNote(dir, title, content),
+        ).then(({ rel }) => rel)
+      : call<string>("create_note_with_content", { dir, title, content }),
   openDailyNote: (date: string) => call<string>("open_daily_note", { date }),
   showQuickCapture: () => call<void>("show_quick_capture"),
   closeQuickCapture: () => call<void>("close_quick_capture"),
@@ -66,7 +88,12 @@ export const ipc = {
     call<string>("rename_entry", { rel, name }),
   moveEntry: (rel: string, dir: string) =>
     call<string>("move_entry", { rel, dir }),
-  deleteEntry: (rel: string) => call<void>("delete_entry", { rel }),
+  deleteEntry: (rel: string) =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.moveToTrash(rel)).then(
+          () => undefined,
+        )
+      : call<void>("delete_entry", { rel }),
   searchNotes: (query: string, limit?: number) =>
     call<SearchHit[]>("search_notes", { query, limit }),
   backlinksFor: (rel: string) =>
