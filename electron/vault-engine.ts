@@ -1,5 +1,14 @@
 import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  normalize,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import type { DesktopErrorData } from "./bridge-contract";
 import type { Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
 
@@ -106,6 +115,9 @@ export class VaultEngine {
     } catch {
       throw domainError("NOT_FOUND", `Vault entry does not exist: ${rel}`);
     }
+    if (normalize(candidate) !== normalize(canonical)) {
+      throw domainError("INVALID_PATH", `Invalid Vault path: ${rel}`);
+    }
     assertInside(root, canonical, rel);
     const metadata = await stat(canonical);
     const valid =
@@ -170,7 +182,14 @@ function resolveVaultRel(root: string, rel: string): string {
   if (rel === "") return root;
   const parts = rel.split(/[\\/]/);
   if (
-    parts.some((part) => !part || part === "." || part === ".." || part.startsWith(".")) ||
+    parts.some(
+      (part) =>
+        !part ||
+        part === "." ||
+        part === ".." ||
+        part === "node_modules" ||
+        part.startsWith("."),
+    ) ||
     (parts.length > 0 && ["AGENTS.md", "CLAUDE.md"].includes(parts[0]!))
   ) {
     throw domainError("INVALID_PATH", `Invalid Vault path: ${rel}`);

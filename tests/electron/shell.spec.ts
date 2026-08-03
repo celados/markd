@@ -134,6 +134,35 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
         ok: false,
         error: expect.objectContaining({ kind: "INVALID_PATH" }),
       });
+    await mkdir(join(chosenVault, "Real"));
+    await writeFile(join(chosenVault, "Real", "Inside.md"), "inside");
+    await symlink("Real/Inside.md", join(chosenVault, "Alias.md"));
+    await symlink("Real", join(chosenVault, "AliasFolder"));
+    await mkdir(join(chosenVault, "notes", "node_modules"), { recursive: true });
+    await writeFile(
+      join(chosenVault, "notes", "node_modules", "Invisible.md"),
+      "invisible",
+    );
+    for (const rel of [
+      "Alias.md",
+      "AliasFolder/Inside.md",
+      "notes/node_modules/Invisible.md",
+    ]) {
+      expect(await page.evaluate(
+        (path) => window.markd!.vault.readNote(path),
+        rel,
+      )).toEqual({
+        ok: false,
+        error: expect.objectContaining({ kind: "INVALID_PATH" }),
+      });
+    }
+    expect(await page.evaluate(() => window.markd!.vault.moveToTrash("Alias.md")))
+      .toEqual({
+        ok: false,
+        error: expect.objectContaining({ kind: "INVALID_PATH" }),
+      });
+    expect(await readFile(join(chosenVault, "Real", "Inside.md"), "utf8"))
+      .toBe("inside");
 
     await untitled.click({ button: "right" });
     const responsiveness = page.evaluate(() =>
@@ -146,7 +175,9 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
     expect(await page.evaluate(() => window.markd!.vault.snapshot())).toEqual({
       ok: true,
       value: expect.objectContaining({
-        tree: [expect.objectContaining({ rel: "Existing.md" })],
+        tree: expect.arrayContaining([
+          expect.objectContaining({ rel: "Existing.md" }),
+        ]),
       }),
     });
 
