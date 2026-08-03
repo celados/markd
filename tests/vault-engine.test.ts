@@ -123,8 +123,10 @@ describe("Vault Engine Pins", () => {
     scratchPaths.push(scratch);
     const root = join(scratch, "vault");
     await mkdir(root);
-    const engine = new VaultEngine(join(scratch, "config"), async (_root, path) => {
-      await rm(path, { recursive: true });
+    const engine = new VaultEngine(join(scratch, "config"), {
+      moveToTrash: async (_root, path) => rm(path, { recursive: true }),
+      activateAssetRoot: async () => undefined,
+      saveExport: async () => null,
     });
     await engine.open(root, false);
     await mkdir(join(root, "Projects"));
@@ -144,7 +146,11 @@ describe("Vault Engine Pins", () => {
     await mkdir(root);
     await writeFile(join(root, "Note.md"), "note");
     await symlink(root, alias);
-    const engine = new VaultEngine(join(scratch, "config"), async () => {});
+    const engine = new VaultEngine(join(scratch, "config"), {
+      moveToTrash: async () => undefined,
+      activateAssetRoot: async () => undefined,
+      saveExport: async () => null,
+    });
     await engine.open(alias, false);
 
     expect(await engine.resolveNotePath("Note.md")).toBe(
@@ -344,8 +350,12 @@ async function setupEngine(trashCalls: string[] = []) {
   const root = join(scratch, "vault");
   const config = join(scratch, "config");
   await mkdir(root);
-  const engine = new VaultEngine(config, async (_vaultRoot, path) => {
-    trashCalls.push(path);
+  const engine = new VaultEngine(config, {
+    moveToTrash: async (_vaultRoot, path) => {
+      trashCalls.push(path);
+    },
+    activateAssetRoot: async () => undefined,
+    saveExport: async () => null,
   });
   await engine.open(root, false);
   return { engine, root, scratch };

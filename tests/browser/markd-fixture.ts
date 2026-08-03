@@ -3,6 +3,10 @@ import type { Page } from "@playwright/test";
 export async function installMarkdFixture(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const success = <T>(value: T) => ({ ok: true as const, value });
+    const fixtureAssetUrl = (rel: string) =>
+      rel.startsWith(".markd/assets/") && !rel.slice(".markd/assets/".length).includes("/")
+        ? `markd-asset://vault/${rel.slice(".markd/assets/".length)}`
+        : null;
     let collectionsSnapshot = {
       todos: [] as import("@/lib/types").Todo[],
       todoTags: [] as string[],
@@ -47,6 +51,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
           };
           return success(collectionsSnapshot);
         },
+        export: async () => success("/tmp/bookmarks.md"),
         clearCompleted: async () => {
           collectionsSnapshot = {
             ...collectionsSnapshot,
@@ -202,6 +207,11 @@ export async function installMarkdFixture(page: Page): Promise<void> {
             },
           }),
         resolveNotePath: async (rel) => success(`/tmp/markd-fixture/${rel}`),
+        exportNote: async (rel) => success(`/tmp/${rel.split("/").at(-1)}`),
+        assets: {
+          save: async () => success(".markd/assets/fixture.png"),
+          url: fixtureAssetUrl,
+        },
         pins: {
           list: async () => success({ pins: [], stale: [] }),
           add: async (rel) => success({ pins: [rel], stale: [] }),
@@ -243,6 +253,10 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
       theme: "system" as const,
     });
     const success = <T>(value: T) => ({ ok: true as const, value });
+    const fixtureAssetUrl = (rel: string) =>
+      rel.startsWith(".markd/assets/") && !rel.slice(".markd/assets/".length).includes("/")
+        ? `markd-asset://vault/${rel.slice(".markd/assets/".length)}`
+        : null;
     const trashCalls: string[] = [];
     const collections = window.markd!.collections;
 
@@ -290,6 +304,11 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
           return success({ snapshot: snapshot() });
         },
         resolveNotePath: async (rel) => success(`${root}/${rel}`),
+        exportNote: async (rel) => success(`/tmp/${rel.split("/").at(-1)}`),
+        assets: {
+          save: async () => success(".markd/assets/fixture.png"),
+          url: fixtureAssetUrl,
+        },
         pins: {
           list: async () => success({ pins: [], stale: [] }),
           add: async (rel) => success({ pins: [rel], stale: [] }),
@@ -323,6 +342,6 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         return null;
       },
     };
-    Object.assign(window, { __MARKD_VAULT_TEST__: { trashCalls } });
+    Object.assign(window, { __MARKD_VAULT_TEST__: { trashCalls, notes } });
   });
 }

@@ -17,10 +17,12 @@ export async function insertImageFile({
   try {
     const data = await fileToDataUrl(file);
     const extension = file.type.split("/")[1]?.split("+")[0] || "png";
-    const absPath = await ipc.saveImageAsset(data, extension);
-    const rel = absPath.startsWith(vaultRoot)
-      ? absPath.slice(vaultRoot.length).replace(/^\//, "")
-      : absPath;
+    const savedPath = await ipc.saveImageAsset(data, extension);
+    const rel = savedPath.startsWith(".markd/assets/")
+      ? savedPath
+      : savedPath.startsWith(vaultRoot)
+        ? savedPath.slice(vaultRoot.length).replace(/^\//, "")
+        : savedPath;
     editor
       .chain()
       .focus()

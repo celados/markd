@@ -13,7 +13,7 @@ import {
   type WebContents,
 } from "electron";
 import { realpath } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 import {
@@ -28,8 +28,10 @@ import {
   type DesktopErrorData,
   type EngineState,
   windowKindSchema,
+  type NativeRequest,
 } from "./bridge-contract";
 import { createEngineGenerationTerminal } from "./engine-generation";
+import { loadAssetResponse, NativeContentError, writeExportFile } from "./native-content";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const development =
@@ -61,11 +63,17 @@ if (process.platform === "linux") {
   // X11 grabs. Electron requires this feature switch before app readiness.
   app.commandLine.appendSwitch("enable-features", "GlobalShortcutsPortal");
 }
+let activeAssetRoot: string | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "markd-asset",
-    privileges: { secure: true, standard: true, supportFetchAPI: true },
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
   },
 ]);
 
@@ -201,6 +209,9 @@ function connectEngine(): UtilityProcess {
   const epoch = ++engineEpoch;
   engineSpawned = false;
   attachedWebContents.clear();
+  // A replacement utility must explicitly re-authorize its Vault before the
+  // protocol can expose files from the previous generation.
+  activeAssetRoot = null;
   publishEngineState({ state: "starting", epoch });
   const child = utilityProcess.fork(join(moduleDir, "engine.js"), [], {
     serviceName: "Markd Engine",
@@ -248,11 +259,12 @@ function connectEngine(): UtilityProcess {
     const request = v.safeParse(nativeRequestSchema, input);
     if (!request.success || request.output.epoch !== epoch) return;
     void performNativeRequest(request.output)
-      .then(() => child.postMessage(v.parse(nativeResponseSchema, {
+      .then((value) => child.postMessage(v.parse(nativeResponseSchema, {
         type: "native-response",
         id: request.output.id,
         epoch,
         ok: true,
+        value,
       })))
       .catch((error: unknown) => child.postMessage(v.parse(nativeResponseSchema, {
         type: "native-response",
@@ -260,7 +272,10 @@ function connectEngine(): UtilityProcess {
         epoch,
         ok: false,
         error: {
-          kind: "NATIVE_OPERATION_FAILED",
+          kind:
+            error instanceof NativeContentError
+              ? error.kind
+              : "NATIVE_OPERATION_FAILED",
           message: error instanceof Error ? error.message : String(error),
         },
       })));
@@ -303,8 +318,24 @@ function attachRendererToEngine(window: BrowserWindow): void {
 }
 
 async function performNativeRequest(
-  request: v.InferOutput<typeof nativeRequestSchema>,
-): Promise<void> {
+  request: NativeRequest,
+): Promise<unknown> {
+  if (request.method === "asset-root.activate") {
+    activeAssetRoot = await validateAssetRoot(request.root, request.assetRoot);
+    return null;
+  }
+  if (request.method === "export.save") {
+    if (process.env.MARKD_TEST_EXPORT_FAILURE === "1") {
+      throw new Error("The operating system rejected the export operation.");
+    }
+    const result = await dialog.showSaveDialog(mainWindow!, {
+      title: "Export Markdown",
+      defaultPath: request.suggestedName,
+      buttonLabel: "Export",
+    });
+    if (result.canceled || !result.filePath) return null;
+    return writeExportFile(result.filePath, request.content);
+  }
   if (process.env.MARKD_TEST_TRASH_FAILURE === "1") {
     throw new Error("The operating system rejected the Trash operation.");
   }
@@ -322,6 +353,46 @@ async function performNativeRequest(
     throw new Error("Markd Desktop rejected a Trash target outside the Vault.");
   }
   await shell.trashItem(path);
+  return null;
+}
+
+async function validateAssetRoot(root: string, assetRoot: string): Promise<string> {
+  const [canonicalRoot, canonicalAssetRoot] = await Promise.all([
+    realpath(root),
+    realpath(assetRoot),
+  ]);
+  if (
+    normalize(root) !== normalize(canonicalRoot) ||
+    normalize(assetRoot) !== normalize(canonicalAssetRoot) ||
+    normalize(canonicalAssetRoot) !== normalize(join(canonicalRoot, ".markd", "assets"))
+  ) {
+    throw new NativeContentError(
+      "INVALID_PATH",
+      "Markd Desktop rejected an invalid Vault asset root.",
+    );
+  }
+  const offset = relative(canonicalRoot, canonicalAssetRoot);
+  if (!offset || offset === ".." || offset.startsWith(`..${sep}`) || isAbsolute(offset)) {
+    throw new NativeContentError(
+      "INVALID_PATH",
+      "Markd Desktop rejected an asset root outside the Vault.",
+    );
+  }
+  return canonicalAssetRoot;
+}
+
+async function handleAssetRequest(request: Request): Promise<Response> {
+  if (!activeAssetRoot) return new Response("Asset Vault unavailable", { status: 404 });
+  try {
+    return await loadAssetResponse(activeAssetRoot, request.url);
+  } catch (error) {
+    const status =
+      error instanceof NativeContentError && error.kind === "NOT_FOUND" ? 404 : 400;
+    return new Response("Asset request rejected", {
+      status,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
 }
 
 function acceptEngineControl(
@@ -497,6 +568,7 @@ ipcMain.on("markd:notes-changed", (event, input: unknown) => {
 
 app.whenReady().then(() => {
   console.log("[markd-main] app ready");
+  protocol.handle("markd-asset", handleAssetRequest);
   mainWindow = createMainWindow();
   mainWindow.webContents.once("did-finish-load", () => {
     if (!captureWindow || captureWindow.isDestroyed()) {

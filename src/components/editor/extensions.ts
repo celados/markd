@@ -22,7 +22,7 @@ function isRemoteSource(src: string) {
 
 /**
  * Image node that keeps a vault-relative path (".markd/assets/…") in the
- * markdown while rendering through Tauri's asset protocol.
+ * markdown while rendering through the active desktop shell's asset protocol.
  */
 const VaultImage = (vaultRoot: string) =>
   Image.extend({
@@ -44,7 +44,9 @@ const VaultImage = (vaultRoot: string) =>
       const vaultSrc = HTMLAttributes.vaultSrc ?? HTMLAttributes.src;
       const src =
         vaultRoot && vaultSrc && !isRemoteSource(vaultSrc)
-          ? convertFileSrc(`${vaultRoot.replace(/\/$/, "")}/${vaultSrc}`)
+          ? window.markd
+            ? window.markd.vault.assets.url(vaultSrc) ?? ""
+            : convertFileSrc(`${vaultRoot.replace(/\/$/, "")}/${vaultSrc}`)
           : HTMLAttributes.src;
       return ["img", { ...HTMLAttributes, src, "data-vault-src": vaultSrc }];
     },

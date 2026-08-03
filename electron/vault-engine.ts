@@ -1,11 +1,26 @@
 import { appendFile, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import type { DesktopErrorData } from "./bridge-contract";
 import { CollectionsEngine } from "./collections-engine";
-import type { BookmarkChange, CollectionKind, TodoChange } from "./collections-domain";
+import {
+  bookmarksToMarkdown,
+  type BookmarkChange,
+  type CollectionKind,
+  type TodoChange,
+} from "./collections-domain";
 import type { PinSnapshot, Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
 
-type NativeTrash = (root: string, path: string) => Promise<void>;
+export type ExportPreparation = {
+  suggestedName: string;
+  content: string;
+};
+
+export type NativeVaultOperations = {
+  moveToTrash: (root: string, path: string) => Promise<void>;
+  activateAssetRoot: (root: string, assetRoot: string) => Promise<void>;
+  saveExport: (preparation: ExportPreparation) => Promise<string | null>;
+};
 
 type AppConfig = {
   vaultPath?: string;
@@ -37,15 +52,16 @@ export class VaultEngineError extends Error {
 
 export class VaultEngine {
   readonly #configFile: string;
-  readonly #trash: NativeTrash;
+  readonly #native: NativeVaultOperations;
   readonly #collections = new CollectionsEngine();
   readonly #captureAppends = new Map<string, CaptureAppendProvenance>();
   #root: string | null = null;
+  #assetRoot: string | null = null;
   #theme: Theme = "system";
 
-  constructor(configDir: string, trash: NativeTrash) {
+  constructor(configDir: string, native: NativeVaultOperations) {
     this.#configFile = join(configDir, "config.json");
-    this.#trash = trash;
+    this.#native = native;
   }
 
   async startup(): Promise<VaultSnapshot | null> {
@@ -66,7 +82,7 @@ export class VaultEngine {
   async open(root: string, create: boolean): Promise<VaultSnapshot> {
     if (create) await mkdir(root, { recursive: true });
     const canonical = await canonicalDirectory(root);
-    await mkdir(join(canonical, ".markd", "assets"), { recursive: true });
+    const assetRoot = await canonicalAssetRoot(canonical);
     const snapshot = await buildSnapshot(canonical, this.#theme);
     await this.#collections.validate(canonical);
     await this.#writeConfig({ vaultPath: canonical, theme: this.#theme });
@@ -74,7 +90,9 @@ export class VaultEngine {
     // Provenance is scoped to one activated Vault. Relative paths may name a
     // different file after a root switch, even when their text happens to match.
     this.#captureAppends.clear();
+    await this.#native.activateAssetRoot(canonical, assetRoot);
     this.#root = canonical;
+    this.#assetRoot = assetRoot;
     return snapshot;
   }
 
@@ -217,9 +235,33 @@ export class VaultEngine {
     return committed;
   }
 
+  async saveAsset(data: string, extension: string): Promise<string> {
+    this.#requireRoot();
+    const assetRoot = this.#assetRoot;
+    if (!assetRoot) throw domainError("NO_ACTIVE_VAULT", "No Vault is open.");
+    const normalizedExtension = normalizeImageExtension(extension);
+    const bytes = decodeImageData(data);
+    const fileName = `${randomUUID()}.${normalizedExtension}`;
+    await writeFile(join(assetRoot, fileName), bytes, { flag: "wx" });
+    return `.markd/assets/${fileName}`;
+  }
+
+  async exportNote(rel: string, content: string): Promise<string | null> {
+    const path = await this.#existingPath(rel, "note");
+    return this.#native.saveExport({ suggestedName: basename(path), content });
+  }
+
+  async exportBookmarks(): Promise<string | null> {
+    const snapshot = await this.#collections.snapshot();
+    return this.#native.saveExport({
+      suggestedName: "bookmarks.md",
+      content: bookmarksToMarkdown(snapshot.bookmarks),
+    });
+  }
+
   async moveToTrash(rel: string): Promise<{ snapshot: VaultSnapshot }> {
     const path = await this.#existingPath(rel, "entry");
-    await this.#trash(this.#requireRoot(), path);
+    await this.#native.moveToTrash(this.#requireRoot(), path);
     this.#invalidateCaptureAppendsUnder(path);
     try {
       await this.#removePinsUnder(rel);
@@ -399,6 +441,55 @@ async function canonicalDirectory(path: string): Promise<string> {
     if (error instanceof VaultEngineError) throw error;
     throw domainError("VAULT_MISSING", `Vault folder does not exist: ${path}`);
   }
+}
+
+async function canonicalAssetRoot(root: string): Promise<string> {
+  const candidate = join(root, ".markd", "assets");
+  await mkdir(candidate, { recursive: true });
+  const canonical = await realpath(candidate);
+  if (normalize(candidate) !== normalize(canonical)) {
+    throw domainError("INVALID_PATH", "The Vault asset folder cannot contain symbolic links.");
+  }
+  assertInside(root, canonical, ".markd/assets");
+  return canonical;
+}
+
+function normalizeImageExtension(extension: string): string {
+  const normalized = extension.trim().replace(/^\./, "").toLowerCase();
+  const aliases: Record<string, string> = { jpeg: "jpg", "svg+xml": "svg" };
+  const value = aliases[normalized] ?? normalized;
+  if (!["png", "jpg", "gif", "webp", "svg"].includes(value)) {
+    throw domainError("INVALID_INPUT", `Unsupported image type: ${normalized}`);
+  }
+  return value;
+}
+
+function decodeImageData(input: string): Buffer {
+  const separator = input.indexOf(",");
+  const payload = input.startsWith("data:") ? input.slice(separator + 1) : input;
+  if ((input.startsWith("data:") && separator < 0) || !isCanonicalBase64(payload)) {
+    throw domainError("INVALID_INPUT", "Image data is not valid base64.");
+  }
+  const bytes = Buffer.from(payload.replace(/\s/g, ""), "base64");
+  // Asset data crosses two serialized process seams, so reject oversized
+  // payloads before they can become persistent memory pressure.
+  if (bytes.byteLength === 0 || bytes.byteLength > 25 * 1024 * 1024) {
+    throw domainError("INVALID_INPUT", "Image data must be between 1 byte and 25 MiB.");
+  }
+  return bytes;
+}
+
+function isCanonicalBase64(input: string): boolean {
+  const compact = input.replace(/\s/g, "");
+  // Buffer.from is deliberately permissive; validate first so malformed input
+  // cannot be silently decoded into a different asset.
+  return (
+    compact.length > 0 &&
+    compact.length % 4 === 0 &&
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      compact,
+    )
+  );
 }
 
 function resolveVaultRel(root: string, rel: string): string {

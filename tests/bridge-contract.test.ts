@@ -5,6 +5,8 @@ import {
   desktopErrorSchema,
   engineMessageSchema,
   engineRequestSchema,
+  nativeRequestSchema,
+  nativeResponseSchema,
   validateResponseValue,
 } from "../electron/bridge-contract";
 import { DesktopError, unwrapDesktopResult } from "../src/lib/desktop";
@@ -34,6 +36,22 @@ describe("Electron bridge contract", () => {
         id: "capture-append",
         method: "capture.append",
         params: { rel: "inbox.md", content: "A captured thought" },
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: "operation-asset",
+        method: "vault.asset.save",
+        params: { data: "aGVsbG8=", extension: "png" },
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: "operation-export",
+        method: "vault.note.export",
+        params: { rel: "notes/idea.md", content: "live body" },
       }).success,
     ).toBe(true);
     expect(
@@ -106,6 +124,48 @@ describe("Electron bridge contract", () => {
     ).toBe(false);
   });
 
+  test("validates the utility-to-main native content operations", () => {
+    expect(
+      v.safeParse(nativeRequestSchema, {
+        type: "native-request",
+        id: "native-asset-root",
+        epoch: 1,
+        method: "asset-root.activate",
+        root: "/vault",
+        assetRoot: "/vault/.markd/assets",
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(nativeRequestSchema, {
+        type: "native-request",
+        id: "native-export",
+        epoch: 1,
+        method: "export.save",
+        suggestedName: "Note.md",
+        content: "body",
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(nativeRequestSchema, {
+        type: "native-request",
+        id: "native-export-invalid",
+        epoch: 1,
+        method: "export.save",
+        suggestedName: "../Outside.md",
+        content: "body",
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(nativeResponseSchema, {
+        type: "native-response",
+        id: "native-export",
+        epoch: 1,
+        ok: true,
+        value: "/tmp/Note.md",
+      }).success,
+    ).toBe(true);
+  });
+
   test("validates native control parameters by semantic method", () => {
     expect(
       v.safeParse(controlRequestSchema, {
@@ -153,6 +213,9 @@ describe("Electron bridge contract", () => {
       }),
     ).toBe(true);
     expect(validateResponseValue("vault.note.path", "/tmp/vault/idea.md")).toBe(true);
+    expect(validateResponseValue("vault.asset.save", ".markd/assets/id.png")).toBe(true);
+    expect(validateResponseValue("vault.note.export", null)).toBe(true);
+    expect(validateResponseValue("vault.note.export", "/tmp/Note.md")).toBe(true);
     expect(
       validateResponseValue("collections.snapshot", {
         todos: [],

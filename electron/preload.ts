@@ -14,6 +14,7 @@ import {
   type EngineState,
   windowKindSchema,
 } from "./bridge-contract";
+import { assetUrl } from "./asset-url";
 
 type DesktopResult<T> = { ok: true; value: T } | { ok: false; error: DesktopErrorData };
 
@@ -451,6 +452,13 @@ contextBridge.exposeInMainWorld("markd", {
       requestEngine("vault.note.write", { rel, content, expectedContent }),
     moveToTrash: (rel: string) => requestEngine("vault.trash", { rel }),
     resolveNotePath: (rel: string) => requestEngine("vault.note.path", { rel }),
+    exportNote: (rel: string, content: string) =>
+      requestEngine("vault.note.export", { rel, content }),
+    assets: {
+      save: (data: string, extension: string) =>
+        requestEngine("vault.asset.save", { data, extension }),
+      url: (rel: string) => assetUrl(rel),
+    },
     pins: {
       list: () => requestEngine("vault.pins.list", null),
       add: (rel: string) => requestEngine("vault.pins.add", { rel }),
@@ -473,6 +481,7 @@ contextBridge.exposeInMainWorld("markd", {
       change: (id: string, change: unknown) =>
         requestEngine("collections.bookmarks.change", { id, change }),
       remove: (id: string) => requestEngine("collections.bookmarks.remove", { id }),
+      export: () => requestEngine("collections.bookmarks.export", null),
     },
     tags: {
       create: (collection: "todos" | "bookmarks", name: string) =>

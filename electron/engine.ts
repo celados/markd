@@ -10,6 +10,7 @@ import {
   type DesktopErrorData,
   type EngineRequest,
   type EngineResponse,
+  type NativeRequest,
 } from "./bridge-contract";
 import { VaultEngine, VaultEngineError } from "./vault-engine";
 import { CollectionsEngineError } from "./collections-engine";
@@ -29,7 +30,8 @@ const nativeCalls = new Map<
   string,
   {
     epoch: number;
-    resolve: () => void;
+    method: NativeRequest["method"];
+    resolve: (value: unknown) => void;
     reject: (error: VaultEngineError) => void;
   }
 >();
@@ -46,8 +48,18 @@ parentPort.on("message", (event) => {
     const call = nativeCalls.get(nativeResponse.output.id);
     if (!call || call.epoch !== nativeResponse.output.epoch) return;
     nativeCalls.delete(nativeResponse.output.id);
-    if (nativeResponse.output.ok) call.resolve();
-    else call.reject(new VaultEngineError(nativeResponse.output.error));
+    if (nativeResponse.output.ok) {
+      if (!validateNativeResponse(call.method, nativeResponse.output.value)) {
+        call.reject(
+          new VaultEngineError({
+            kind: "INVALID_RESPONSE",
+            message: "Markd Desktop returned an invalid native response.",
+          }),
+        );
+        return;
+      }
+      call.resolve(nativeResponse.output.value);
+    } else call.reject(new VaultEngineError(nativeResponse.output.error));
     return;
   }
 
@@ -60,7 +72,12 @@ parentPort.on("message", (event) => {
   if (!vault) {
     activeEpoch = epoch;
     activeConfigDir = configDir;
-    vault = new VaultEngine(configDir, (root, path) => requestTrash(epoch, root, path));
+    vault = new VaultEngine(configDir, {
+      moveToTrash: (root, path) => requestTrash(epoch, root, path),
+      activateAssetRoot: (root, assetRoot) =>
+        requestAssetRootActivation(epoch, root, assetRoot),
+      saveExport: (preparation) => requestExportSave(epoch, preparation),
+    });
     initialization = vault.startup().then(() => undefined);
   } else if (epoch !== activeEpoch || configDir !== activeConfigDir) {
     port.close();
@@ -148,6 +165,10 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
       return vault.pin(request.params.rel);
     case "vault.pins.remove":
       return vault.unpin(request.params.rel);
+    case "vault.asset.save":
+      return vault.saveAsset(request.params.data, request.params.extension);
+    case "vault.note.export":
+      return vault.exportNote(request.params.rel, request.params.content);
     case "collections.snapshot":
       return vault.collectionsSnapshot();
     case "collections.todos.create":
@@ -172,6 +193,8 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
       return vault.captureCreate(request.params.title, request.params.content);
     case "capture.append":
       return vault.captureAppend(request.params.rel, request.params.content);
+    case "collections.bookmarks.export":
+      return vault.exportBookmarks();
   }
 }
 
@@ -186,9 +209,68 @@ function requestTrash(epoch: number, root: string, path: string): Promise<void> 
     path,
   });
   return new Promise((resolve, reject) => {
-    nativeCalls.set(id, { epoch, resolve, reject });
+    nativeCalls.set(id, {
+      epoch,
+      method: request.method,
+      resolve: () => resolve(),
+      reject,
+    });
     parentPort.postMessage(request);
   });
+}
+
+function requestAssetRootActivation(
+  epoch: number,
+  root: string,
+  assetRoot: string,
+): Promise<void> {
+  const id = randomUUID();
+  const request = v.parse(nativeRequestSchema, {
+    type: "native-request",
+    id,
+    epoch,
+    method: "asset-root.activate",
+    root,
+    assetRoot,
+  });
+  return new Promise((resolve, reject) => {
+    nativeCalls.set(id, {
+      epoch,
+      method: request.method,
+      resolve: () => resolve(),
+      reject,
+    });
+    parentPort.postMessage(request);
+  });
+}
+
+function requestExportSave(
+  epoch: number,
+  preparation: { suggestedName: string; content: string },
+): Promise<string | null> {
+  const id = randomUUID();
+  const request = v.parse(nativeRequestSchema, {
+    type: "native-request",
+    id,
+    epoch,
+    method: "export.save",
+    ...preparation,
+  });
+  return new Promise((resolve, reject) => {
+    nativeCalls.set(id, {
+      epoch,
+      method: request.method,
+      resolve: (value) => resolve(value as string | null),
+      reject,
+    });
+    parentPort.postMessage(request);
+  });
+}
+
+function validateNativeResponse(method: NativeRequest["method"], value: unknown): boolean {
+  return method === "export.save"
+    ? v.safeParse(v.nullable(v.pipe(v.string(), v.minLength(1))), value).success
+    : value === null;
 }
 
 function respond(port: Electron.MessagePortMain, response: EngineResponse): void {

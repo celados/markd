@@ -234,12 +234,19 @@ export const ipc = {
       ? unwrapDesktopResult(window.markd.collections.bookmarks.remove(id)).then(() => undefined)
       : call<void>("bookmark_delete", { id }),
   bookmarkFetchMeta: (id: string) => call<Bookmark>("bookmark_fetch_meta", { id }),
-  exportBookmarks: () => call<string | null>("export_bookmarks"),
+  exportBookmarks: () =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.collections.bookmarks.export())
+      : call<string | null>("export_bookmarks"),
   exportNote: (rel: string, content: string) =>
-    call<string | null>("export_note", { rel, content }),
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.exportNote(rel, content))
+      : call<string | null>("export_note", { rel, content }),
 
   saveImageAsset: (data: string, extension: string) =>
-    call<string>("save_image_asset", { data, extension }),
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.assets.save(data, extension))
+      : call<string>("save_image_asset", { data, extension }),
   setTheme: (theme: Theme) => call<void>("set_theme", { theme }),
   getTheme: () => call<Theme>("get_theme"),
 };

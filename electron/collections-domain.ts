@@ -23,6 +23,18 @@ export function emptyCollections(): CollectionsSnapshot {
   return { todos: [], todoTags: [], bookmarks: [], bookmarkTags: [] };
 }
 
+export function bookmarksToMarkdown(bookmarks: Bookmark[]): string {
+  const lines = bookmarks.map((bookmark) => {
+    const title = bookmark.title.trim() || bookmark.url;
+    const tags =
+      bookmark.tags.length > 0
+        ? ` — ${bookmark.tags.map((tag) => `#${tag}`).join(" ")}`
+        : "";
+    return `- [${title}](${bookmark.url})${tags}`;
+  });
+  return `# Bookmarks\n\n${lines.length > 0 ? `${lines.join("\n")}\n` : ""}`;
+}
+
 export function addTodo(
   snapshot: CollectionsSnapshot,
   text: string,

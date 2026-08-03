@@ -14,8 +14,12 @@ status: active
   Vault Index 时必须删除这个 builder，让 Snapshot/Change/search 共用唯一 index。Cloud 与其余 Tauri
   adapter 仍待 Phase 4 迁移；在此之前不能宣称 Electron feature-complete。
 - Todos 与 Bookmarks CRUD 已由 utility-owned Collections interface 接管；Bookmark 的远程 metadata
-  enrichment 与 markdown export 仍是 legacy Tauri capability，不属于 #9 的 CRUD seam。迁移这些 effect
+  enrichment 仍是 legacy Tauri capability，不属于 #9 的 CRUD seam。迁移这个 effect
   时应继续通过 semantic bridge 进入 utility/native owner，不能恢复 renderer-side fetch 或 raw invoke。
+- pasted assets、Note/Bookmark export 与 `markd-asset` protocol 已覆盖真实 hidden Electron smoke；但仓库在
+  #13 落地 `electron-builder` 前没有 packaged app artifact，因此 #11 的 packaged asset/export/rejection
+  smoke 不能执行。#13 必须复用同一组 semantic bridge journeys 对安装产物运行，不能把 dev Electron
+  smoke 当作 packaged evidence。
 - updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。应用仍沿用上游
   `usemarkd.app` 品牌域名和 Markd Cloud API；在启用 cloud publishing 或部署 fork site 前，必须裁决
   产品域名与 cloud ownership，不能让 fork binary 静默写入上游服务。

@@ -27,3 +27,26 @@ test("empty Untitled Note moves to Trash without stale tree or tabs", async ({
     )
     .toEqual(["Untitled.md"]);
 });
+
+test("Electron asset URLs are supplied only by the semantic bridge", async ({ page }) => {
+  await installVaultSliceFixture(page);
+  await page.goto("/");
+  await page.evaluate(() => {
+    const fixture = (
+      window as Window & {
+        __MARKD_VAULT_TEST__: { notes: Map<string, string> };
+      }
+    ).__MARKD_VAULT_TEST__;
+    fixture.notes.set(
+      "Existing.md",
+      "![safe](.markd/assets/fixture.png)\n\n![escape](../outside.png)",
+    );
+  });
+  await page.getByRole("treeitem", { name: "Existing.md" }).click();
+
+  await expect(page.locator('img[data-vault-src=".markd/assets/fixture.png"]')).toHaveAttribute(
+    "src",
+    "markd-asset://vault/fixture.png",
+  );
+  await expect(page.locator('img[data-vault-src="../outside.png"]')).toHaveAttribute("src", "");
+});

@@ -7,6 +7,10 @@ const entryRelSchema = v.pipe(v.string(), v.minLength(1));
 const idSchema = v.pipe(v.string(), v.minLength(1));
 const nonBlankSchema = v.pipe(v.string(), v.regex(/\S/));
 const tagsSchema = v.array(v.string());
+const exportNameSchema = v.pipe(
+  v.string(),
+  v.regex(/^[^/\\]+\.md$/),
+);
 
 export const todoChangeSchema = v.variant("type", [
   v.object({ type: v.literal("toggle") }),
@@ -153,6 +157,21 @@ export const engineRequestSchema = v.variant("method", [
   v.object({
     type: v.literal("request"),
     id: operationIdSchema,
+    method: v.literal("vault.asset.save"),
+    params: v.object({
+      data: v.pipe(v.string(), v.minLength(1), v.maxLength(35_000_000)),
+      extension: v.pipe(v.string(), v.minLength(1), v.maxLength(16)),
+    }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.note.export"),
+    params: v.object({ rel: entryRelSchema, content: v.string() }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
     method: v.literal("collections.snapshot"),
     params: v.null(),
   }),
@@ -221,6 +240,12 @@ export const engineRequestSchema = v.variant("method", [
     id: operationIdSchema,
     method: v.literal("capture.append"),
     params: v.object({ rel: entryRelSchema, content: nonBlankSchema }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("collections.bookmarks.export"),
+    params: v.null(),
   }),
 ]);
 
@@ -320,14 +345,32 @@ export const engineConnectSchema = v.object({
 
 export const windowKindSchema = v.picklist(["main", "quick-capture"]);
 
-export const nativeRequestSchema = v.object({
-  type: v.literal("native-request"),
-  id: operationIdSchema,
-  epoch: epochSchema,
-  method: v.literal("trash"),
-  root: v.pipe(v.string(), v.minLength(1)),
-  path: v.pipe(v.string(), v.minLength(1)),
-});
+export const nativeRequestSchema = v.variant("method", [
+  v.object({
+    type: v.literal("native-request"),
+    id: operationIdSchema,
+    epoch: epochSchema,
+    method: v.literal("trash"),
+    root: v.pipe(v.string(), v.minLength(1)),
+    path: v.pipe(v.string(), v.minLength(1)),
+  }),
+  v.object({
+    type: v.literal("native-request"),
+    id: operationIdSchema,
+    epoch: epochSchema,
+    method: v.literal("asset-root.activate"),
+    root: v.pipe(v.string(), v.minLength(1)),
+    assetRoot: v.pipe(v.string(), v.minLength(1)),
+  }),
+  v.object({
+    type: v.literal("native-request"),
+    id: operationIdSchema,
+    epoch: epochSchema,
+    method: v.literal("export.save"),
+    suggestedName: exportNameSchema,
+    content: v.string(),
+  }),
+]);
 
 export const nativeResponseSchema = v.variant("ok", [
   v.object({
@@ -335,6 +378,7 @@ export const nativeResponseSchema = v.variant("ok", [
     id: operationIdSchema,
     epoch: epochSchema,
     ok: v.literal(true),
+    value: v.unknown(),
   }),
   v.object({
     type: v.literal("native-response"),
@@ -372,6 +416,7 @@ export type EngineMessage = v.InferOutput<typeof engineMessageSchema>;
 export type EngineResponse = v.InferOutput<typeof engineResponseSchema>;
 export type ControlResponse = v.InferOutput<typeof controlResponseSchema>;
 export type EngineState = v.InferOutput<typeof engineStateSchema>;
+export type NativeRequest = v.InferOutput<typeof nativeRequestSchema>;
 
 export function validateResponseValue(
   method: EngineRequest["method"] | ControlRequest["method"],
@@ -393,6 +438,11 @@ export function validateResponseValue(
       return v.safeParse(v.object({ snapshot: vaultSnapshotSchema }), value).success;
     case "vault.note.path":
       return v.safeParse(v.pipe(v.string(), v.minLength(1)), value).success;
+    case "vault.asset.save":
+      return v.safeParse(v.pipe(v.string(), v.regex(/^\.markd\/assets\/[^/]+$/)), value).success;
+    case "vault.note.export":
+    case "collections.bookmarks.export":
+      return v.safeParse(v.nullable(v.pipe(v.string(), v.minLength(1))), value).success;
     case "vault.pins.list":
     case "vault.pins.add":
     case "vault.pins.remove":
