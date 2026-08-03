@@ -32,6 +32,7 @@
     "release": "bash scripts/release.sh"
   },
   "dependencies": {
+    "@celados/fff-node": "0.10.2-nightly.8a9a970",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.4",

@@ -44,6 +44,7 @@ test-results
 *.p12
 .env
 .env.local
+.npmrc
 *.keystore
 
 # macOS code signing (private keys)

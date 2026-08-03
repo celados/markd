@@ -148,7 +148,6 @@ export async function installMarkdFixture(page: Page): Promise<void> {
     window.markd = {
       app: {
         windowKind: "main",
-        onNotesChanged: () => () => {},
         onEngineLifecycle: () => () => {},
       },
       capture: {
@@ -175,6 +174,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
         onOpen: () => () => {},
       },
       vault: {
+        onIndexEvent: () => () => {},
         startup: async () => success(null),
         choose: async () => success(null),
         create: async () => success(null),
@@ -267,12 +267,24 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         ? `markd-asset://vault/${rel.slice(".markd/assets/".length)}`
         : null;
     const trashCalls: string[] = [];
+    const operations: string[] = [];
+    const failWrites = { value: false };
+    const deferWrites = { value: false };
+    const deferredWrites: Array<{
+      content: string;
+      resolve: (result: { ok: true; value: string } | {
+        ok: false;
+        error: { kind: string; message: string };
+      }) => void;
+    }> = [];
+    const indexListeners = new Set<(
+      event: import("@/lib/desktop").VaultIndexEvent,
+    ) => void>();
     const collections = window.markd!.collections;
 
     window.markd = {
       app: {
         windowKind: "main",
-        onNotesChanged: () => () => {},
         onEngineLifecycle: () => () => {},
       },
       capture: {
@@ -290,8 +302,15 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         onOpen: () => () => {},
       },
       vault: {
+        onIndexEvent: (listener) => {
+          indexListeners.add(listener);
+          return () => indexListeners.delete(listener);
+        },
         startup: async () => success(snapshot()),
-        choose: async () => success(snapshot()),
+        choose: async () => {
+          operations.push("choose");
+          return success(snapshot());
+        },
         create: async () => success(snapshot()),
         snapshot: async () => success(snapshot()),
         createNote: async (_dir, title, content = "") => {
@@ -302,6 +321,16 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         },
         readNote: async (rel) => success(notes.get(rel) ?? ""),
         writeNote: async (rel, content) => {
+          operations.push(`write:${rel}`);
+          if (deferWrites.value) {
+            return new Promise((resolve) => deferredWrites.push({ content, resolve }));
+          }
+          if (failWrites.value) {
+            return {
+              ok: false as const,
+              error: { kind: "STALE_NOTE_WRITE", message: "fixture conflict" },
+            };
+          }
           notes.set(rel, content);
           return success(content);
         },
@@ -360,6 +389,25 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         return null;
       },
     };
-    Object.assign(window, { __MARKD_VAULT_TEST__: { trashCalls, notes } });
+    Object.assign(window, {
+      __MARKD_VAULT_TEST__: {
+        trashCalls,
+        notes,
+        operations,
+        failWrites,
+        deferWrites,
+        failNextDeferredWrite: () => deferredWrites.shift()?.resolve({
+          ok: false,
+          error: { kind: "STALE_NOTE_WRITE", message: "deferred fixture conflict" },
+        }),
+        succeedNextDeferredWrite: () => {
+          const write = deferredWrites.shift();
+          write?.resolve(success(write.content));
+        },
+        emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => {
+          for (const listener of indexListeners) listener(event);
+        },
+      },
+    });
   });
 }

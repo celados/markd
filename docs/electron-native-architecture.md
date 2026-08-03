@@ -245,10 +245,27 @@ per path.
 fff runs only inside the utility process. Native load failure, crash, overflow/rescan and shutdown are explicit
 lifecycle states. A failed index may be rebuilt; it is never the durable source of truth.
 
-The Node integration is `@ff-labs/fff-node`. It uses `ffi-rs` to load the fff C `cdylib`, distributed through
-platform-specific `@ff-labs/fff-bin-*` optional dependencies. It is not treated as an ordinary N-API `.node`
-addon. electron-builder configuration must unpack the dynamic library from ASAR, retain the platform package
-selected by pnpm, and include that library in macOS/Linux signing, notarization, and packaged smoke evidence.
+Initial and replacement snapshots use fff's atomic resident-entry enumeration: one native read lock and an O(N)
+copy, without search ranking, sorting, pagination, or a second filesystem scan. New Note creation asks the same
+retained matcher whether the not-yet-created relative path is accepted before the exclusive write. The hard path
+policy still validates the candidate and every existing ancestor first; ignore matching is not a symlink security
+boundary. With symlink following disabled, fff and Markd's watch ingestion reject symlink leaves and ancestors so
+initial, watch, and mutation paths share one fail-closed accepted set.
+
+The Node integration is pinned to `@celados/fff-node@0.10.2-nightly.8a9a970`, whose atomic resident-entry,
+preflight ignore, symlink, and initial/live folder contracts pass the Markd gates. It uses `ffi-rs` to load the
+fff C `cdylib`; platform binaries are
+exact optional dependencies with authoritative
+`os`/`cpu` metadata, so a clean consumer installs only the package matching its architecture. It is not treated as
+an ordinary N-API `.node` addon. electron-builder configuration must unpack the selected dynamic library from
+ASAR and include it in macOS signing, notarization, and packaged smoke evidence.
+
+Renderer consumers apply affected Note rels incrementally. Clean mounted editors reload an external modification;
+dirty editors retain the newest revision. External removal closes clean tabs and removes recents, while a dirty or
+in-flight editor remains mounted in an explicit missing state with its local draft visible. Before choose/create
+can send a Vault-open request, one renderer-owned barrier flushes every mounted editor and awaits all queued writes.
+Any failed write aborts the switch before the native dialog or utility root transition, preventing an old-Vault
+draft from being written under the new root.
 
 ## Search and backlinks
 
@@ -427,7 +444,7 @@ These are entry gates, not accepted silent workarounds:
 1. **fff ignore lifecycle** — managed `.ignore` writes must rebuild the matcher and produce an ignore-correct full
    rescan before fff owns production Vaults; tests cover hidden paths, `.git/info/exclude`, global/root/nested rules,
    negation, marker corruption, and hard-policy defense.
-2. **fff packaging** — the `@ff-labs/fff-node` `ffi-rs` loader and selected `@ff-labs/fff-bin-*` cdylib must survive
+2. **fff packaging** — the `@celados/fff-node` `ffi-rs` loader and selected `@celados/fff-bin-*` cdylib must survive
    pnpm install, ASAR unpacking, macOS/Linux packaging, signing, notarization, and runtime smoke.
 3. **Trees packaging** — Vanilla entry must not introduce React/ReactDOM; beta behavior must be pinned by journeys.
 4. **Cloud ownership** — fork domain/API ownership must be resolved before enabling production publishing.

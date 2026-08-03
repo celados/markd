@@ -3,7 +3,6 @@ import {
   appendFile,
   mkdir,
   readFile,
-  readdir,
   realpath,
   rename,
   rm,
@@ -19,12 +18,14 @@ import {
   type CollectionKind,
   type TodoChange,
 } from "./collections-domain";
-import type { PinSnapshot, Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
+import type { PinSnapshot, Theme, VaultSnapshot } from "../src/lib/types";
 import {
   atomicWriteText,
   NativeContentError,
   validateAssetContent,
 } from "./native-content";
+import { isAcceptedVaultRel } from "./vault-path-policy";
+import { VaultIndex, type VaultIndexEvent } from "./vault-index";
 
 export type ExportPreparation = {
   suggestedName: string;
@@ -75,23 +76,34 @@ export class VaultEngine {
   readonly #commitConfig: ConfigCommit;
   readonly #collections = new CollectionsEngine();
   readonly #captureAppends = new Map<string, CaptureAppendProvenance>();
+  readonly #onIndexEvent: (event: VaultIndexEvent) => void;
+  readonly #onFatal: (error: VaultEngineError) => void;
   #root: string | null = null;
   #assetRoot: string | null = null;
+  #index: VaultIndex | null = null;
+  #lastIndexEpoch = 0;
+  #pendingIndexEvents: VaultIndexEvent[] = [];
+  #indexEventsHeld = false;
   #theme: Theme = "system";
   #fatalError: VaultEngineError | null = null;
 
   constructor(
     configDir: string,
     native: NativeVaultOperations,
+    onIndexEvent: (event: VaultIndexEvent) => void = () => {},
     commitConfig: ConfigCommit = atomicWriteText,
+    onFatal: (error: VaultEngineError) => void = () => {},
   ) {
     this.#configFile = join(configDir, "config.json");
     this.#native = native;
     this.#commitConfig = commitConfig;
+    this.#onIndexEvent = onIndexEvent;
+    this.#onFatal = onFatal;
   }
 
   async startup(): Promise<VaultSnapshot | null> {
     this.#assertOperational();
+    this.holdIndexEvents();
     if (this.#root) return this.snapshot();
     const config = await this.#readConfig();
     this.#theme = config.theme ?? "system";
@@ -111,10 +123,29 @@ export class VaultEngine {
     if (create) await mkdir(root, { recursive: true });
     const canonical = await canonicalDirectory(root);
     const assetRoot = await canonicalAssetRoot(canonical);
-    const snapshot = await buildSnapshot(canonical, this.#theme);
     await this.#collections.validate(canonical);
+    const queuedEvents: VaultIndexEvent[] = [];
+    let activated = false;
+    let candidateFailure: Error | null = null;
+    const publish = (event: VaultIndexEvent) => {
+      if (!activated) queuedEvents.push(event);
+      else this.#publishIndexEvent(event);
+    };
+    const nextIndex = await VaultIndex.open(
+      canonical,
+      this.#theme,
+      {
+        listener: publish,
+        allocateEpoch: () => ++this.#lastIndexEpoch,
+        onFatal: (error) => {
+          if (!activated) candidateFailure = error;
+          else this.#failIndex(error);
+        },
+      },
+    );
     const previousRoot = this.#root;
     const previousAssetRoot = this.#assetRoot;
+    const previousIndex = this.#index;
     const previousConfig = await this.#readConfigText();
     let stageId: string;
     try {
@@ -122,6 +153,7 @@ export class VaultEngine {
       // the utility has committed its config and in-memory state.
       stageId = await this.#native.stageAssetRoot(canonical, assetRoot);
     } catch (error) {
+      nextIndex.destroy();
       throw nativeOperationError(error);
     }
 
@@ -131,13 +163,22 @@ export class VaultEngine {
       this.#root = canonical;
       this.#assetRoot = assetRoot;
       await this.#native.commitAssetRoot(stageId);
+      if (candidateFailure) throw candidateFailure;
+      this.#index = nextIndex;
+      activated = true;
+      previousIndex?.destroy();
+      // The candidate's replacement supersedes every old-root event that raced
+      // with staging. Releasing only after the open response prevents rollback.
+      this.#pendingIndexEvents = queuedEvents;
       // Provenance is scoped to one activated Vault. Clear only after every
       // participant commits so a failed switch preserves expectedContent state.
       this.#captureAppends.clear();
-      return snapshot;
+      return await nextIndex.snapshot();
     } catch (error) {
+      nextIndex.destroy();
       this.#root = previousRoot;
       this.#assetRoot = previousAssetRoot;
+      this.#index = previousIndex;
       const rollbackParticipants = [
         ["collections", this.#collections.activate(previousRoot)],
         ["config", this.#restoreConfig(previousConfig)],
@@ -173,8 +214,63 @@ export class VaultEngine {
   }
 
   async snapshot(): Promise<VaultSnapshot> {
-    const root = this.#requireRoot();
-    return buildSnapshot(root, this.#theme);
+    this.#requireRoot();
+    return this.#requireIndex().snapshot();
+  }
+
+  async rescanIndex(): Promise<void> {
+    await this.#requireIndex().rescan();
+  }
+
+  holdIndexEvents(): void {
+    this.#assertOperational();
+    this.#indexEventsHeld = true;
+  }
+
+  releaseIndexEvents(): void {
+    if (this.#fatalError) {
+      this.#pendingIndexEvents = [];
+      return;
+    }
+    const pending = this.#pendingIndexEvents.splice(0);
+    this.#indexEventsHeld = false;
+    for (const event of pending) {
+      try {
+        this.#onIndexEvent(event);
+      } catch (cause) {
+        this.#failIndex(cause instanceof Error ? cause : new Error(String(cause)));
+        return;
+      }
+    }
+  }
+
+  synchronizeIndex(): VaultIndexEvent | null {
+    this.#assertOperational();
+    return this.#index?.synchronize() ?? null;
+  }
+
+  destroy(): void {
+    this.#index?.destroy();
+    this.#index = null;
+  }
+
+  #failIndex(error: Error): void {
+    if (this.#fatalError) return;
+    const fatal = domainError(
+      "VAULT_INDEX_FAILED",
+      "The Vault Index failed and Markd must restart it before continuing.",
+      { cause: describeError(error) },
+    );
+    this.#fatalError = fatal;
+    this.#pendingIndexEvents = [];
+    this.#indexEventsHeld = true;
+    this.#onFatal(fatal);
+  }
+
+  #publishIndexEvent(event: VaultIndexEvent): void {
+    if (this.#fatalError) return;
+    if (this.#indexEventsHeld) this.#pendingIndexEvents.push(event);
+    else this.#onIndexEvent(event);
   }
 
   activeRoot(): string {
@@ -240,11 +336,27 @@ export class VaultEngine {
     const targetDir = await this.#existingPath(dir, "folder");
     const stem = sanitizeName(title);
     let target = join(targetDir, `${stem}.md`);
+    if (!isAcceptedVaultRel(toVaultRel(root, target))) {
+      throw domainError("INVALID_PATH", `Invalid Vault path: ${toVaultRel(root, target)}`);
+    }
     for (let suffix = 2; await exists(target); suffix += 1) {
       target = join(targetDir, `${stem} ${suffix}.md`);
     }
-    await writeFile(target, content, { flag: "wx" });
-    return { rel: toVaultRel(root, target), snapshot: await this.snapshot() };
+    const rel = toVaultRel(root, target);
+    const index = this.#requireIndex();
+    try {
+      if (!index.acceptsPath(rel)) {
+        throw domainError("IGNORED_PATH", `The Vault ignore policy excludes ${rel}.`);
+      }
+      await writeFile(target, content, { flag: "wx" });
+      // A rule can change after preflight. In that case the write still follows
+      // the operation's starting truth, while the replacement snapshot omits it.
+      await index.ensureCreated(rel);
+    } catch (error) {
+      this.#assertOperational();
+      throw error;
+    }
+    return { rel, snapshot: await this.snapshot() };
   }
 
   async captureCreate(
@@ -361,6 +473,12 @@ export class VaultEngine {
     const path = await this.#existingPath(rel, "entry");
     await this.#native.moveToTrash(this.#requireRoot(), path);
     this.#invalidateCaptureAppendsUnder(path);
+    try {
+      await this.#requireIndex().ensureRemoved(rel);
+    } catch (error) {
+      this.#assertOperational();
+      throw error;
+    }
     try {
       await this.#removePinsUnder(rel);
     } catch (error) {
@@ -497,6 +615,12 @@ export class VaultEngine {
     return this.#root;
   }
 
+  #requireIndex(): VaultIndex {
+    this.#assertOperational();
+    if (!this.#index) throw domainError("NO_ACTIVE_VAULT", "No Vault is open.");
+    return this.#index;
+  }
+
   #assertOperational(): void {
     if (this.#fatalError) throw this.#fatalError;
   }
@@ -541,15 +665,6 @@ export class VaultEngine {
   }
 }
 
-async function buildSnapshot(root: string, theme: Theme): Promise<VaultSnapshot> {
-  return {
-    root,
-    name: basename(root),
-    tree: await scanBootstrapTree(root),
-    theme,
-  };
-}
-
 async function canonicalDirectory(path: string): Promise<string> {
   try {
     const canonical = await realpath(path);
@@ -576,16 +691,10 @@ async function canonicalAssetRoot(root: string): Promise<string> {
 
 function resolveVaultRel(root: string, rel: string): string {
   if (rel === "") return root;
-  const parts = rel.split(/[\\/]/);
-  if (
-    parts.some(
-      (part) =>
-        !part || part === "." || part === ".." || part === "node_modules" || part.startsWith("."),
-    ) ||
-    (parts.length > 0 && ["AGENTS.md", "CLAUDE.md"].includes(parts[0]!))
-  ) {
+  if (!isAcceptedVaultRel(rel)) {
     throw domainError("INVALID_PATH", `Invalid Vault path: ${rel}`);
   }
+  const parts = rel.split(/[\\/]/);
   const candidate = resolve(root, ...parts);
   assertInside(root, candidate, rel);
   return candidate;
@@ -597,39 +706,6 @@ function assertInside(root: string, candidate: string, rel: string): void {
     return;
   }
   throw domainError("INVALID_PATH", `Invalid Vault path: ${rel}`);
-}
-
-async function scanBootstrapTree(root: string): Promise<TreeNode[]> {
-  // Phase 2 needs one coherent initial tree before fff lands. Keep this walker
-  // deliberately stateless so #5 can delete it instead of inheriting a rival index.
-  const walk = async (dir: string): Promise<TreeNode[]> => {
-    const entries = await readdir(dir, { withFileTypes: true });
-    const nodes: TreeNode[] = [];
-    for (const entry of entries) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-      if (dir === root && ["AGENTS.md", "CLAUDE.md"].includes(entry.name)) continue;
-      const path = join(dir, entry.name);
-      if (entry.isSymbolicLink()) continue;
-      const rel = toVaultRel(root, path);
-      const modifiedMs = (await stat(path)).mtimeMs;
-      if (entry.isDirectory()) {
-        nodes.push({
-          name: entry.name,
-          rel,
-          kind: "folder",
-          children: await walk(path),
-          modifiedMs,
-        });
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        nodes.push({ name: entry.name, rel, kind: "note", modifiedMs });
-      }
-    }
-    return nodes.sort((left, right) => {
-      if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
-      return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
-    });
-  };
-  return walk(root);
 }
 
 function toVaultRel(root: string, path: string): string {

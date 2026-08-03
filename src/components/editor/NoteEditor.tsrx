@@ -6,6 +6,10 @@ import {
   NOTES_REWRITTEN,
   notifyBacklinksChanged,
 } from "@/lib/backlinks";
+import {
+  VAULT_NOTE_CHANGED,
+  type VaultNoteChangedDetail,
+} from "@/lib/vault-note-events";
 import { ipc } from "@/lib/ipc";
 import { invalidatePublishStatus } from "@/lib/queryClient";
 import {
@@ -17,6 +21,7 @@ import {
   upsertFrontmatterProperty,
 } from "@/lib/frontmatter";
 import { decideExternalNoteChange } from "@/lib/editor-conflict";
+import { registerNoteWriteFlush } from "@/lib/note-write-barrier";
 import { hrefToRel, relToHref, wikiToMarkdown } from "@/lib/noteLinks";
 import {
   containsMdx,
@@ -75,6 +80,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
   const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
   const [words, setWords] = useState(0);
   const [missing, setMissing] = useState(false);
+  const [preserveMissingDraft, setPreserveMissingDraft] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertyAddRequest, setPropertyAddRequest] = useState(0);
   const [rawText, setRawText] = useState("");
@@ -97,7 +103,10 @@ function NoteEditorComponent(props: NoteEditorProps) @{
   const savedScroll = useRef(0);
   const lastSaved = useRef("");
   const pending = useRef<string | null>(null);
+  const pendingRevision = useRef<number | null>(null);
+  const latestDraft = useRef({ markdown: "", revision: 0 });
   const savesInFlight = useRef(0);
+  const activePersists = useRef(new Set<Promise<boolean>>());
   const writers = useRef(new Map<string, SerialNoteWrites>());
   const loadedRel = useRef<string | null | null>(null);
   // True only while we're programmatically replacing the document, so the
@@ -108,10 +117,18 @@ function NoteEditorComponent(props: NoteEditorProps) @{
   // the live editor instead of the initial null render.
   const editorRef = useRef<EditorInstance | null>(null);
 
-  const persist = useCallback(
-    async (markdown: string, targetRel: string) => {
+  const markPending = useCallback((markdown: string) => {
+    const revision = latestDraft.current.revision + 1;
+    latestDraft.current = { markdown, revision };
+    pending.current = markdown;
+    pendingRevision.current = revision;
+  }, []);
+
+  const performPersist = useCallback(
+    async (markdown: string, targetRel: string): Promise<boolean> => {
       if (relRef.current === targetRel && pending.current === markdown) {
         pending.current = null;
+        pendingRevision.current = null;
       }
       // Re-attach the note's frontmatter (captured now, before any await, so a
       // concurrent note switch can't swap it out mid-save).
@@ -148,18 +165,26 @@ function NoteEditorComponent(props: NoteEditorProps) @{
               currentEditor.commands.setContent(body, { contentType: "markdown" });
               swapping.current = false;
             }
-            if (pending.current !== null) pending.current = body;
+            if (pending.current !== null) markPending(body);
           }
           if (pending.current === null && savesInFlight.current === 1) {
             setSaveState("idle");
           }
         }
         toast.dismiss(`save-${targetRel}`);
+        return true;
       } catch (err) {
-        if (relRef.current === targetRel && pending.current === null) {
-          // A failed write remains dirty so an external event cannot replace
-          // the unsaved editor and close/unmount can retry the same body.
-          pending.current = markdown;
+        if (relRef.current === targetRel) {
+          // A failed older operation must never reclaim ownership from a newer
+          // draft whose queued write also depends on it.
+          const latest = latestDraft.current;
+          if (
+            pendingRevision.current === null ||
+            pendingRevision.current < latest.revision
+          ) {
+            pending.current = latest.markdown;
+            pendingRevision.current = latest.revision;
+          }
         }
         setSaveState("error");
         toast.error("Note could not be saved", {
@@ -167,16 +192,41 @@ function NoteEditorComponent(props: NoteEditorProps) @{
           description: err instanceof Error ? err.message : String(err),
           duration: Infinity,
         });
+        return false;
       } finally {
         savesInFlight.current -= 1;
       }
     },
-    [setSaveState],
+    [markPending, setSaveState],
   );
 
+  const persist = useCallback((markdown: string, targetRel: string) => {
+    const operation = performPersist(markdown, targetRel);
+    activePersists.current.add(operation);
+    void operation.finally(() => activePersists.current.delete(operation));
+    return operation;
+  }, [performPersist]);
+
   const debouncedPersist = useMemo(
-    () => debounce((markdown: string) => persist(markdown, relRef.current), 500),
+    () => debounce((markdown: string) => void persist(markdown, relRef.current), 500),
     [persist],
+  );
+
+  const flushForVaultSwitch = useCallback(async () => {
+    debouncedPersist.cancel();
+    while (pending.current !== null || activePersists.current.size > 0) {
+      const draft = pending.current;
+      if (draft !== null) void persist(draft, relRef.current);
+      const results = await Promise.all([...activePersists.current]);
+      if (results.some((saved) => !saved)) {
+        throw new Error(`Could not save ${relRef.current} before switching Vaults.`);
+      }
+    }
+  }, [debouncedPersist, persist]);
+
+  useEffect(
+    () => registerNoteWriteFlush(flushForVaultSwitch),
+    [flushForVaultSwitch],
   );
 
   const extensions = useMemo(
@@ -384,7 +434,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       onUpdate({ editor }) {
         if (swapping.current) return;
         const markdown = editor.getMarkdown();
-        pending.current = markdown;
+        markPending(markdown);
         setSaveState("saving");
         debouncedPersist(markdown);
         setWords(countWords(markdown));
@@ -395,7 +445,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         updateSlashMenu(editor);
       },
     },
-    [extensions],
+    [extensions, markPending],
   );
   editorRef.current = editor;
 
@@ -405,13 +455,13 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       const { frontmatter: fm, body } = splitFrontmatter(text);
       frontmatter.current = fm;
       setProperties(parseFrontmatter(fm));
-      pending.current = body;
+      markPending(body);
       setSaveState("saving");
       debouncedPersist(body);
       setWords(countWords(body));
       setContentVersion((value) => value + 1);
     },
-    [debouncedPersist, setSaveState],
+    [debouncedPersist, markPending, setSaveState],
   );
 
   const noteFind = useNoteFindReplace({
@@ -430,11 +480,11 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       frontmatter.current = nextFrontmatter;
       setProperties(parseFrontmatter(nextFrontmatter));
       const markdown = editor.getMarkdown();
-      pending.current = markdown;
+      markPending(markdown);
       setSaveState("saving");
       debouncedPersist(markdown);
     },
-    [debouncedPersist, editor, setSaveState],
+    [debouncedPersist, editor, markPending, setSaveState],
   );
 
   const upsertProperty = useCallback(
@@ -470,8 +520,10 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       persist(pending.current, prevRel);
     }
     pending.current = null;
+    pendingRevision.current = null;
     relRef.current = rel;
     setMissing(false);
+    setPreserveMissingDraft(false);
     setSlashMenu(null);
 
     ipc
@@ -487,6 +539,10 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         // links in the body as real page links. lastSaved keeps the raw disk
         // text; rewrites only reach the file if the user edits the note.
         const { frontmatter: fm, body } = splitFrontmatter(text);
+        latestDraft.current = {
+          markdown: body,
+          revision: latestDraft.current.revision + 1,
+        };
         frontmatter.current = fm;
         setRawText(text);
         setProperties(parseFrontmatter(fm));
@@ -563,9 +619,15 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         dirty: pending.current !== null || savesInFlight.current > 0,
       });
       if (decision === "reload") {
+        setMissing(false);
+        setPreserveMissingDraft(false);
         lastSaved.current = disk;
         setRawText(disk);
         const { frontmatter: fm, body } = splitFrontmatter(disk);
+        latestDraft.current = {
+          markdown: body,
+          revision: latestDraft.current.revision + 1,
+        };
         frontmatter.current = fm;
         setProperties(parseFrontmatter(fm));
         const notes = flattenNotes(useVault.getState().tree);
@@ -593,6 +655,29 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       window.removeEventListener("focus", onFocus);
       window.removeEventListener(NOTES_REWRITTEN, onNotesRewritten);
     };
+  }, [reloadIfChanged]);
+
+  useEffect(() => {
+    const onVaultNoteChanged = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<VaultNoteChangedDetail>;
+      if (event.detail.rel !== relRef.current) return;
+      if (event.detail.kind === "modified") {
+        void reloadIfChanged();
+        return;
+      }
+      if (pending.current !== null || savesInFlight.current > 0) {
+        // Keeping the mounted pane is the only lossless choice: unmounting
+        // would flush the draft into a path an external actor just removed.
+        setMissing(true);
+        setPreserveMissingDraft(true);
+        event.preventDefault();
+      } else {
+        setMissing(true);
+        setPreserveMissingDraft(false);
+      }
+    };
+    window.addEventListener(VAULT_NOTE_CHANGED, onVaultNoteChanged);
+    return () => window.removeEventListener(VAULT_NOTE_CHANGED, onVaultNoteChanged);
   }, [reloadIfChanged]);
 
   // On tab activation: restore the pane's scroll offset (display:none wiped
@@ -698,8 +783,10 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     const flush =
       pending.current !== null
         ? persist(pending.current, relRef.current)
-        : Promise.resolve();
-    flush.then(action);
+        : Promise.resolve(true);
+    flush.then((saved) => {
+      if (saved) action();
+    });
   };
 
   useEffect(() => {
@@ -724,13 +811,13 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         } else if (action === "publish") {
           debouncedPersist.cancel();
           if (pending.current !== null) {
-            await persist(pending.current, relRef.current);
+            if (!await persist(pending.current, relRef.current)) return;
           }
           setPublishSnapshot({ rel: relRef.current, markdown });
         } else if (action === "delete") {
           debouncedPersist.cancel();
           if (pending.current !== null) {
-            await persist(pending.current, relRef.current);
+            if (!await persist(pending.current, relRef.current)) return;
           }
           await useVault.getState().deleteEntry(relRef.current);
         }
@@ -803,6 +890,9 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         @if (missing) {
           <p className="pt-16 text-center text-[14px] text-faint">
             This note no longer exists.
+            @if (preserveMissingDraft) {
+              <span> Your local draft is preserved below.</span>
+            }
           </p>
         } @else {
           <TitleInput
@@ -815,7 +905,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
             onRename={(name) => flushThen(() => renameEntry(rel, name))}
           />
         }
-        <div className={cx(missing && "hidden")}>
+        <div className={cx(missing && !preserveMissingDraft && "hidden")}>
           <div className={cx(!markdownSource && "hidden")}>
             <MarkdownSourceEditor
               value={rawText}

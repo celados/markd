@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import * as v from "valibot";
+import type { MessagePortMain } from "electron";
 import {
   engineConnectSchema,
   engineReadySchema,
@@ -17,6 +18,7 @@ import { CollectionsEngineError } from "./collections-engine";
 import { RequestActor } from "./request-actor";
 import { CloudEngine, CloudEngineError } from "./cloud-engine";
 import { resolveCloudConfig } from "./cloud-config";
+import { completeRequest } from "./request-completion";
 
 const parentPort = process.parentPort;
 if (!parentPort) {
@@ -43,7 +45,9 @@ let activeConfigDir = "";
 let vault: VaultEngine | null = null;
 let cloud: CloudEngine | null = null;
 let initialization: Promise<void> | null = null;
+let initializationReleased = false;
 const requests = new RequestActor();
+const readyRendererPorts = new Set<MessagePortMain>();
 
 parentPort.on("message", (event) => {
   const nativeResponse = v.safeParse(nativeResponseSchema, event.data);
@@ -72,6 +76,9 @@ parentPort.on("message", (event) => {
     throw new Error("Markd Engine received an invalid renderer channel");
   }
   const { epoch, configDir, windowKind } = connection.output;
+  port.on("close", () => {
+    readyRendererPorts.delete(port);
+  });
   if (!vault) {
     activeEpoch = epoch;
     activeConfigDir = configDir;
@@ -81,6 +88,13 @@ parentPort.on("message", (event) => {
       commitAssetRoot: (stageId) => requestAssetRootCommit(epoch, stageId),
       rollbackAssetRoot: (stageId) => requestAssetRootRollback(epoch, stageId),
       saveExport: (preparation) => requestExportSave(epoch, "main", preparation),
+    }, (indexEvent) => {
+      for (const rendererPort of readyRendererPorts) {
+        rendererPort.postMessage({ type: "vault-index", epoch: activeEpoch, event: indexEvent });
+      }
+    }, undefined, (error) => {
+      console.error("[markd-engine] Vault Index became unavailable", error);
+      process.exit(1);
     });
     cloud = new CloudEngine(configDir, () => vault!.activeRoot(), resolveCloudConfig(process.env));
     initialization = vault.startup().then(() => undefined);
@@ -101,30 +115,46 @@ parentPort.on("message", (event) => {
       }
       // Every renderer gets its own MessagePort, so the utility process is the
       // only place that can impose one mutation order across editor + capture.
-      void requests.enqueue(() =>
-        handleRequest(activeVault, activeCloud, parsed.output, windowKind),
-      )
-        .then((value) =>
+      void requests.enqueue(() => completeRequest({
+        run: () => {
+          activeVault.holdIndexEvents();
+          return handleRequest(activeVault, activeCloud, parsed.output, windowKind);
+        },
+        onSuccess: (value) => {
           respond(port, {
             type: "response",
             id: parsed.output.id,
             epoch,
             ok: true,
             value,
-          }),
-        )
-        .catch((error: unknown) =>
+          });
+        },
+        onFailure: (error) => {
           respond(port, {
             type: "response",
             id: parsed.output.id,
             epoch,
             ok: false,
             error: errorData(error),
-          }),
-        );
+          });
+        },
+        onTransportFailure: (error) => {
+          console.error("[markd-engine] response port closed", error);
+        },
+        release: () => activeVault.releaseIndexEvents(),
+      }));
     });
     port.start();
     port.postMessage(v.parse(engineReadySchema, { type: "ready", epoch }));
+    readyRendererPorts.add(port);
+    const baseline = activeVault.synchronizeIndex();
+    if (baseline) {
+      port.postMessage({ type: "vault-index", epoch: activeEpoch, event: baseline });
+    }
+    if (!initializationReleased) {
+      initializationReleased = true;
+      activeVault.releaseIndexEvents();
+    }
     console.log(`[markd-engine] ready epoch=${epoch}`);
   };
   void initialization
@@ -158,6 +188,11 @@ async function handleRequest(
       return vault.open(request.params.root, request.params.create);
     case "vault.snapshot":
       return vault.snapshot();
+    case "vault.index.rescan":
+      await vault.rescanIndex();
+      return null;
+    case "vault.index.synchronize":
+      return vault.synchronizeIndex();
     case "vault.note.create":
       return vault.createNote(request.params.dir, request.params.title, request.params.content);
     case "vault.note.read":
