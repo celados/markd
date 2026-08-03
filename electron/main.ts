@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
+import electronUpdater from "electron-updater";
 import {
   controlRequestSchema,
   controlResponseSchema,
@@ -32,14 +33,24 @@ import {
   type NativeRequest,
 } from "./bridge-contract";
 import { createEngineGenerationTerminal } from "./engine-generation";
-import { loadAssetResponse, NativeContentError, writeExportFile } from "./native-content";
 import { isTrustedCloudUrl, resolveCloudConfig } from "./cloud-config";
+import { loadAssetResponse, NativeContentError, writeExportFile } from "./native-content";
+import { UpdaterService, UpdaterServiceError } from "./updater-service";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const development =
   Boolean(process.env.VITE_DEV_SERVER_URL) ||
   process.env.MARKD_ENABLE_DEVTOOLS === "1";
 const backgroundE2e = process.env.MARKD_E2E_BACKGROUND === "1";
+const { autoUpdater } = electronUpdater;
+const updater = new UpdaterService(autoUpdater, app.getVersion(), app.isPackaged);
+
+autoUpdater.logger = {
+  info: (message) => console.log(`[markd-updater] ${String(message)}`),
+  warn: (message) => console.warn(`[markd-updater] ${String(message)}`),
+  error: (message) => console.error(`[markd-updater] ${String(message)}`),
+  debug: (message) => console.debug(`[markd-updater] ${String(message)}`),
+};
 
 if (backgroundE2e && process.platform === "darwin") {
   // Smoke tests need the real app process without activating a Dock app in the
@@ -541,20 +552,76 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
     });
   }
   if (method === "updates.install") {
+    if (kind !== "main") {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "INVALID_REQUEST", message: "Only the main window can install updates." },
+      });
+    }
+    try {
+      await updater.download(request.output.params.id);
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: true,
+        value: null,
+      });
+    } catch (error) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: updaterError(error),
+      });
+    }
+  }
+  if (method === "updates.check") {
+    if (kind !== "main") {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "INVALID_REQUEST", message: "Only the main window can check for updates." },
+      });
+    }
+    try {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: true,
+        value: await updater.check(),
+      });
+    } catch (error) {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: updaterError(error),
+      });
+    }
+  }
+  if (method === "app.relaunch") {
+    if (kind !== "main") {
+      return v.parse(controlResponseSchema, {
+        type: "response",
+        id,
+        ok: false,
+        error: { kind: "INVALID_REQUEST", message: "Only the main window can relaunch Markd." },
+      });
+    }
+    setImmediate(() => {
+      updater.installOrRelaunch(() => {
+        app.relaunch();
+        app.exit(0);
+      });
+    });
     return v.parse(controlResponseSchema, {
       type: "response",
       id,
-      ok: false,
-      error: {
-        kind: "NOT_AVAILABLE",
-        message: "No update is ready to install.",
-      },
-    });
-  }
-  if (method === "app.relaunch") {
-    setImmediate(() => {
-      app.relaunch();
-      app.exit(0);
+      ok: true,
+      value: null,
     });
   }
   if (method === "capture.open") showQuickCapture();
@@ -597,6 +664,16 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
     value: null,
   });
 });
+
+function updaterError(error: unknown): DesktopErrorData {
+  if (error instanceof UpdaterServiceError) {
+    return { kind: error.kind, message: error.message };
+  }
+  return {
+    kind: "UPDATE_FAILED",
+    message: error instanceof Error ? error.message : "The update operation failed.",
+  };
+}
 
 ipcMain.handle("markd:engine-state", (event): EngineState => {
   if (!windowKinds.has(event.sender.id) || !engineState) {

@@ -1,4 +1,5 @@
 allowBuilds:
+  electron-winstaller: false
   esbuild: true
 minimumReleaseAgeExclude:
   - '@octanejs/app-core@0.0.18'

@@ -159,6 +159,14 @@ export const desktopErrorSchema = v.object({
   details: v.optional(v.unknown()),
 });
 
+export const desktopUpdateSchema = v.object({
+  id: idSchema,
+  currentVersion: idSchema,
+  version: idSchema,
+  body: v.optional(v.string()),
+  rawJson: v.optional(v.record(v.string(), v.unknown())),
+});
+
 export const engineRequestSchema = v.variant("method", [
   v.object({
     type: v.literal("request"),
@@ -621,6 +629,7 @@ export function validateResponseValue(
     case "dialog.createVault":
       return v.safeParse(v.nullable(v.string()), value).success;
     case "updates.check":
+      return v.safeParse(v.nullable(desktopUpdateSchema), value).success;
     case "updates.install":
     case "app.relaunch":
     case "capture.open":
