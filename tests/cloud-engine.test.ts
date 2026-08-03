@@ -198,4 +198,67 @@ describe("Cloud Engine", () => {
       kind: "CLOUD_UNTRUSTED_URL",
     }));
   });
+
+  test("rejects the complete upload plan before sending any object bytes", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-upload-trust-"));
+    const vault = join(scratch, "vault");
+    await mkdir(join(vault, ".markd", "assets"), { recursive: true });
+    await writeFile(join(vault, "Home.md"), "# Home");
+    await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
+      accessToken: "token_123",
+      expiresAt: Date.now() + 60_000,
+      account: { email: "reader@example.com", plan: "cloud" },
+    }));
+    let objectWrites = 0;
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/v1/publish-sessions")) {
+        const body = JSON.parse(String(init?.body)) as {
+          manifest: { objects: Array<{ hash: string }> };
+        };
+        const hash = body.manifest.objects[0]!.hash;
+        return Response.json({
+          sessionId: "publish_1",
+          uploads: [
+            { hash, url: "https://objects.example.test/first", headers: {} },
+            { hash, url: "http://evil.invalid/second", headers: {} },
+          ],
+        }, { status: 201 });
+      }
+      if (init?.method === "PUT") {
+        objectWrites += 1;
+        return new Response(null, { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    };
+    const canonicalVault = await realpath(vault);
+    const engine = new CloudEngine(scratch, () => canonicalVault, verified, fetch);
+    await expect(engine.publish({
+      rel: "Home.md",
+      title: "Home",
+      content: "# Home",
+      pages: [],
+    })).rejects.toMatchObject({ kind: "CLOUD_UNTRUSTED_UPLOAD_URL" });
+    expect(objectWrites).toBe(0);
+  });
+
+  test("remote sign-out failure still removes the authoritative local session", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-signout-"));
+    await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
+      accessToken: "token_123",
+      expiresAt: Date.now() + 60_000,
+      account: { email: "reader@example.com", plan: "cloud" },
+    }));
+    const fetch: typeof globalThis.fetch = async () => Response.json({
+      error: { code: "remote_unavailable", message: "Remote sign-out failed." },
+    }, { status: 503 });
+    const engine = new CloudEngine(scratch, () => scratch, verified, fetch);
+
+    await expect(engine.signOut()).rejects.toMatchObject({
+      kind: "cloud",
+      message: "Remote sign-out failed.",
+      details: expect.objectContaining({ localSignedOut: true }),
+    });
+    await expect(engine.accountStatus()).resolves.toEqual({ account: null });
+  });
 });

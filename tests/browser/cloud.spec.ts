@@ -32,3 +32,23 @@ test("account and Published Share lifecycle use the semantic Cloud bridge", asyn
   await publishing.getByRole("button", { name: "Unpublish" }).click();
   await expect(publishing.getByRole("button", { name: "Publish site" })).toBeVisible();
 });
+
+test("remote sign-out failure does not leave the renderer signed in", async ({ page }) => {
+  await installTauriFixture(page, {
+    cloudLifecycle: true,
+    cloudSignOutFailure: true,
+  });
+  await page.goto("/");
+  await page.keyboard.press("ControlOrMeta+,");
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("button", { name: "Markd Cloud" }).click();
+  await settings.getByRole("button", { name: "Sign in" }).click();
+  await settings.getByLabel("Email address").fill("reader@example.test");
+  await settings.getByRole("button", { name: "Send code" }).click();
+  await settings.getByLabel("Six-digit verification code").fill("123456");
+  await settings.getByRole("button", { name: "Verify", exact: true }).click();
+
+  await settings.getByRole("button", { name: "Sign out" }).click();
+  await expect(settings.getByText("Not signed in", { exact: true })).toBeVisible();
+  await expect(settings.getByRole("alert")).toContainText("Remote sign-out failed.");
+});

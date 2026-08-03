@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
+import { readFile, realpath, rm, stat } from "node:fs/promises";
+import { isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import * as v from "valibot";
 import {
   cloudAccountSchema,
@@ -8,7 +8,12 @@ import {
   publishedShareSchema,
   type DesktopErrorData,
 } from "./bridge-contract";
-import { isTrustedCloudUrl, type CloudConfigResult } from "./cloud-config";
+import {
+  isTrustedCloudUrl,
+  isTrustedUploadUrl,
+  type CloudConfigResult,
+} from "./cloud-config";
+import { writeFileAtomically } from "./atomic-write";
 import type {
   CloudAccount,
   CloudAccountStatus,
@@ -156,13 +161,30 @@ export class CloudEngine {
   async signOut(): Promise<void> {
     this.#requireConfig();
     const session = await this.#loadSession();
+    // The local credential store is authoritative: sign-out must take effect
+    // even when remote revocation is unavailable. The tagged failure tells the
+    // renderer to show the remote problem without rendering a stale login.
     await this.#clearSession();
     if (!session) return;
-    const response = await this.#request("/v1/session", {
-      method: "DELETE",
-      token: session.accessToken,
-    });
-    await this.#expectSuccess(response);
+    try {
+      const response = await this.#request("/v1/session", {
+        method: "DELETE",
+        token: session.accessToken,
+      });
+      await this.#expectSuccess(response);
+    } catch (error) {
+      if (error instanceof CloudEngineError) {
+        throw new CloudEngineError({
+          kind: error.kind,
+          message: error.message,
+          details: {
+            ...(isRecord(error.details) ? error.details : {}),
+            localSignedOut: true,
+          },
+        });
+      }
+      throw error;
+    }
   }
 
   async plansUrl(): Promise<string> {
@@ -249,9 +271,20 @@ export class CloudEngine {
     });
     await this.#expectSuccess(response);
     const session = await this.#json(response, beginPublishSchema);
-    for (const upload of session.uploads) {
+    const uploads = session.uploads.map((upload) => {
       const object = prepared.objects.get(upload.hash);
       if (!object) throw cloudError("CLOUD_INVALID_RESPONSE", "The publishing service requested an unknown object.");
+      if (!this.#config.ok || !isTrustedUploadUrl(upload.url, this.#config.value)) {
+        throw cloudError(
+          "CLOUD_UNTRUSTED_UPLOAD_URL",
+          "The publishing service returned an untrusted object upload URL.",
+        );
+      }
+      return { upload, object };
+    });
+    // Validate the complete upload plan before sending any Note or asset bytes;
+    // otherwise a later malicious URL could fail after an earlier disclosure.
+    for (const { upload, object } of uploads) {
       const uploadResponse = await this.#fetch(upload.url, {
         method: "PUT",
         headers: upload.headers,
@@ -421,11 +454,11 @@ export class CloudEngine {
   }
 
   async #saveSession(session: StoredSession): Promise<void> {
-    await mkdir(dirname(this.#sessionFile), { recursive: true });
-    const temporary = `${this.#sessionFile}.tmp-${randomUUID()}`;
-    await writeFile(temporary, `${JSON.stringify(session, null, 2)}\n`, { mode: 0o600 });
-    await chmod(temporary, 0o600);
-    await rename(temporary, this.#sessionFile);
+    await writeFileAtomically(
+      this.#sessionFile,
+      `${JSON.stringify(session, null, 2)}\n`,
+      0o600,
+    );
   }
 
   async #clearSession(): Promise<void> {
@@ -460,10 +493,7 @@ export class CloudEngine {
 
   async #writeMetadata(metadata: CloudMetadata): Promise<void> {
     const path = this.#metadataFile();
-    await mkdir(dirname(path), { recursive: true });
-    const temporary = `${path}.tmp-${randomUUID()}`;
-    await writeFile(temporary, `${JSON.stringify(metadata, null, 2)}\n`);
-    await rename(temporary, path);
+    await writeFileAtomically(path, `${JSON.stringify(metadata, null, 2)}\n`);
   }
 
   #metadataFile(): string {
@@ -516,6 +546,9 @@ async function rewriteAssets(
   objects: Map<string, Uint8Array>,
   descriptors: Map<string, PublishObject>,
 ): Promise<string> {
+  // Issue #11 is introducing the shared asset/path/content seam. Keep this
+  // migration-local implementation only until that branch is integrated, then
+  // consume the shared utility instead of preserving two filesystem policies.
   const image = /!\[[^\]]*\]\(\s*(?<href><[^>]+>|[^)\s]+)/g;
   const replacements: Array<{ start: number; end: number; value: string }> = [];
   for (const match of markdown.matchAll(image)) {
@@ -610,4 +643,8 @@ function networkFailure(error: unknown): never {
 
 function cloudError(kind: string, message: string, details?: unknown): CloudEngineError {
   return new CloudEngineError({ kind, message, details });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

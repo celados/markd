@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Spinner } from "@/components/ui/Spinner";
 import { IpcError, ipc } from "@/lib/ipc";
+import { DesktopError } from "@/lib/desktop";
 import { invalidatePublishStatus } from "@/lib/queryClient";
 import type { CloudAccount, OtpChallenge } from "@/lib/types";
 
@@ -122,6 +123,10 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
       updateAccount(null);
       setEmail("");
     } catch (cause) {
+      if (locallySignedOut(cause)) {
+        updateAccount(null);
+        setEmail("");
+      }
       setError(message(cause));
     } finally {
       setBusy(null);
@@ -328,4 +333,14 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
         }
       </div>
   </div>
+}
+
+function locallySignedOut(cause: unknown): boolean {
+  if (!(cause instanceof IpcError || cause instanceof DesktopError)) return false;
+  return Boolean(
+    cause.details &&
+    typeof cause.details === "object" &&
+    "localSignedOut" in cause.details &&
+    cause.details.localSignedOut === true,
+  );
 }

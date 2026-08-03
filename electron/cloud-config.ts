@@ -2,6 +2,7 @@ export type CloudConfig = {
   enabled: true;
   apiBase: string;
   siteOrigin: string;
+  allowLoopbackHttp: boolean;
 };
 
 export type CloudConfigResult =
@@ -27,7 +28,10 @@ export function resolveCloudConfig(env: NodeJS.ProcessEnv): CloudConfigResult {
       message: "Cloud publishing is unavailable because its trusted origins are invalid.",
     };
   }
-  return { ok: true, value: { enabled: true, apiBase, siteOrigin } };
+  return {
+    ok: true,
+    value: { enabled: true, apiBase, siteOrigin, allowLoopbackHttp: true },
+  };
 }
 
 function isLoopback(origin: string): boolean {
@@ -38,6 +42,21 @@ export function isTrustedCloudUrl(url: string, config: CloudConfig): boolean {
   try {
     const parsed = new URL(url);
     return parsed.origin === config.siteOrigin && trustedProtocol(parsed);
+  } catch {
+    return false;
+  }
+}
+
+export function isTrustedUploadUrl(url: string, config: CloudConfig): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.username || parsed.password) return false;
+    if (parsed.protocol === "https:") return true;
+    return (
+      parsed.protocol === "http:" &&
+      config.allowLoopbackHttp &&
+      ["127.0.0.1", "localhost", "::1"].includes(parsed.hostname)
+    );
   } catch {
     return false;
   }

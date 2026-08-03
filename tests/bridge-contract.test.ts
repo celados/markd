@@ -323,6 +323,7 @@ describe("Electron bridge contract", () => {
     const data = v.parse(desktopErrorSchema, {
       kind: "ENGINE_UNAVAILABLE",
       message: "Markd Engine is unavailable.",
+      details: { localSignedOut: true },
     });
 
     await expect(unwrapDesktopResult(Promise.resolve({ ok: false, error: data }))).rejects.toEqual(
@@ -330,6 +331,7 @@ describe("Electron bridge contract", () => {
         name: "DesktopError",
         kind: "ENGINE_UNAVAILABLE",
         message: "Markd Engine is unavailable.",
+        details: { localSignedOut: true },
       }),
     );
     await unwrapDesktopResult(Promise.resolve({ ok: false, error: data })).catch((error: unknown) =>

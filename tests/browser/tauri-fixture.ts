@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 type TauriFixtureOptions = {
   cloudLifecycle?: boolean;
+  cloudSignOutFailure?: boolean;
   pinnedFolder?: boolean;
   stalePin?: string;
   taggedTodos?: boolean;
@@ -263,6 +264,16 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
         },
         signOut: async () => {
           cloudAccount = null;
+          if (fixtureOptions.cloudSignOutFailure) {
+            return {
+              ok: false as const,
+              error: {
+                kind: "cloud",
+                message: "Remote sign-out failed.",
+                details: { localSignedOut: true },
+              },
+            };
+          }
           return success(null);
         },
         plansUrl: async () => success("https://example.test/plans"),

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { isTrustedCloudUrl, resolveCloudConfig } from "../electron/cloud-config";
+import {
+  isTrustedCloudUrl,
+  isTrustedUploadUrl,
+  resolveCloudConfig,
+} from "../electron/cloud-config";
 
 describe("Cloud ownership gate", () => {
   test("keeps the fork unavailable until ownership and origins are explicit", () => {
@@ -38,5 +42,14 @@ describe("Cloud ownership gate", () => {
     expect(isTrustedCloudUrl("http://127.0.0.1:3002/pricing?token=secret", result.value)).toBe(true);
     expect(isTrustedCloudUrl("http://127.0.0.1.evil.invalid/pricing", result.value)).toBe(false);
     expect(isTrustedCloudUrl("file:///etc/passwd", result.value)).toBe(false);
+    expect(isTrustedUploadUrl("https://objects.example.test/upload", result.value)).toBe(true);
+    expect(isTrustedUploadUrl("http://127.0.0.1:3003/upload", result.value)).toBe(true);
+    expect(isTrustedUploadUrl(
+      "http://127.0.0.1:3003/upload",
+      { ...result.value, allowLoopbackHttp: false },
+    )).toBe(false);
+    expect(isTrustedUploadUrl("http://objects.example.test/upload", result.value)).toBe(false);
+    expect(isTrustedUploadUrl("https://user:secret@objects.example.test/upload", result.value)).toBe(false);
+    expect(isTrustedUploadUrl("file:///tmp/upload", result.value)).toBe(false);
   });
 });
