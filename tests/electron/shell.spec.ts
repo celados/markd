@@ -153,7 +153,7 @@ test("pre-port generation failure resolves startup and restarts only once", asyn
       ok: false,
       error: {
         kind: "ENGINE_UNAVAILABLE",
-        message: "Markd Engine exited unexpectedly.",
+        message: "Markd Engine is unavailable.",
       },
     });
 

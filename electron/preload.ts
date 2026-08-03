@@ -38,15 +38,26 @@ let lastLifecycleKey = "";
 const pending = new Map<string, PendingCall>();
 const portWaiters = new Set<PortWaiter>();
 const lifecycleListeners = new Set<(event: EngineState) => void>();
+const engineUnavailableMessage = "Markd Engine is unavailable.";
 
-function engineUnavailable(message: string): {
+function engineUnavailable(): {
   ok: false;
   error: DesktopErrorData;
 } {
   return {
     ok: false,
-    error: { kind: "ENGINE_UNAVAILABLE", message },
+    error: { kind: "ENGINE_UNAVAILABLE", message: engineUnavailableMessage },
   };
+}
+
+function publicEngineError(error: DesktopErrorData): DesktopErrorData {
+  return error.kind === "ENGINE_UNAVAILABLE" ? engineUnavailable().error : error;
+}
+
+function publicEngineState(state: EngineState): EngineState {
+  return state.state === "unavailable"
+    ? { ...state, error: publicEngineError(state.error) }
+    : state;
 }
 
 function emitLifecycle(event: EngineState): void {
@@ -56,8 +67,8 @@ function emitLifecycle(event: EngineState): void {
   for (const listener of lifecycleListeners) listener(event);
 }
 
-function resolvePendingBefore(epoch: number, message: string): void {
-  const result = engineUnavailable(message);
+function resolvePendingBefore(epoch: number): void {
+  const result = engineUnavailable();
   for (const [id, call] of pending) {
     if (call.epoch >= epoch) continue;
     pending.delete(id);
@@ -73,8 +84,8 @@ function resolvePendingAt(epoch: number, result: DesktopResult<never>): void {
   }
 }
 
-function resolveWaitersBefore(epoch: number, message: string): void {
-  const result = engineUnavailable(message);
+function resolveWaitersBefore(epoch: number): void {
+  const result = engineUnavailable();
   for (const waiter of portWaiters) {
     if (waiter.epoch >= epoch) continue;
     portWaiters.delete(waiter);
@@ -91,6 +102,9 @@ function resolveWaitersAt(epoch: number, outcome: PortOutcome): void {
 }
 
 function applyEngineState(nextState: EngineState): void {
+  // Main keeps the concrete failure for diagnostics; renderer behavior must not
+  // depend on whether an exit, fatal error, or port close won the race.
+  nextState = publicEngineState(nextState);
   if (currentState && nextState.epoch < currentState.epoch) return;
   if (
     currentState?.epoch === nextState.epoch &&
@@ -101,8 +115,8 @@ function applyEngineState(nextState: EngineState): void {
   }
 
   if (!currentState || nextState.epoch > currentState.epoch) {
-    resolvePendingBefore(nextState.epoch, "Markd Engine restarted.");
-    resolveWaitersBefore(nextState.epoch, "Markd Engine restarted.");
+    resolvePendingBefore(nextState.epoch);
+    resolveWaitersBefore(nextState.epoch);
     if (port && activeEpoch < nextState.epoch) {
       const oldPort = port;
       port = null;
@@ -130,10 +144,11 @@ function applyEngineState(nextState: EngineState): void {
 function invalidateGeneration(nextPort: MessagePort, message: string): void {
   if (port !== nextPort) return;
   const epoch = activeEpoch;
+  console.error("[markd-preload] invalid engine generation", { epoch, message });
   applyEngineState({
     state: "unavailable",
     epoch,
-    error: engineUnavailable(message).error,
+    error: engineUnavailable().error,
   });
   ipcRenderer.send("markd:engine-protocol-error", { epoch });
 }
@@ -175,15 +190,13 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
     if (message.ok) {
       if (!validateResponseValue(call.method, message.value)) {
         invalidateGeneration(nextPort, "Markd Engine sent an invalid response value.");
-        call.resolve(
-          engineUnavailable("Markd Engine sent an invalid response value."),
-        );
+        call.resolve(engineUnavailable());
         return;
       }
       call.resolve({ ok: true, value: message.value });
       return;
     }
-    call.resolve({ ok: false, error: message.error });
+    call.resolve({ ok: false, error: publicEngineError(message.error) });
   };
 
   nextPort.addEventListener("close", () => {
@@ -191,7 +204,7 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
     applyEngineState({
       state: "unavailable",
       epoch,
-      error: engineUnavailable("Markd Engine is unavailable.").error,
+      error: engineUnavailable().error,
     });
   });
   nextPort.start();
@@ -202,38 +215,35 @@ async function readEngineState(): Promise<DesktopResult<EngineState>> {
   const rawState: unknown = await ipcRenderer.invoke("markd:engine-state");
   const state = v.safeParse(engineStateSchema, rawState);
   if (!state.success) {
+    console.error("[markd-preload] invalid engine state", rawState);
     if (currentState) {
       applyEngineState({
         state: "unavailable",
         epoch: currentState.epoch,
-        error: engineUnavailable("Markd Desktop returned an invalid engine state.")
-          .error,
+        error: engineUnavailable().error,
       });
     }
     ipcRenderer.send("markd:engine-channel-error", {
       reason: "invalid-channel",
     });
-    return {
-      ok: false,
-      error: {
-        kind: "ENGINE_UNAVAILABLE",
-        message: "Markd Desktop returned an invalid engine state.",
-      },
-    };
+    return engineUnavailable();
   }
-  applyEngineState(state.output);
-  return { ok: true, value: state.output };
+  const nextState = publicEngineState(state.output);
+  applyEngineState(nextState);
+  return { ok: true, value: currentState ?? nextState };
 }
 
 async function rejectInvalidChannel(nextPort: MessagePort | undefined): Promise<void> {
   nextPort?.close();
   const state = await readEngineState();
   if (state.ok) {
+    console.error("[markd-preload] invalid engine channel", {
+      epoch: state.value.epoch,
+    });
     applyEngineState({
       state: "unavailable",
       epoch: state.value.epoch,
-      error: engineUnavailable("Markd Desktop provided an invalid engine channel.")
-        .error,
+      error: engineUnavailable().error,
     });
   }
   ipcRenderer.send("markd:engine-channel-error", {
@@ -269,7 +279,7 @@ function waitForPort(epoch: number): Promise<PortOutcome> {
     (currentState.epoch > epoch ||
       (currentState.epoch === epoch && currentState.state === "unavailable"))
   ) {
-    return Promise.resolve(engineUnavailable("Markd Engine is unavailable."));
+    return Promise.resolve(engineUnavailable());
   }
   return new Promise((resolve) => {
     portWaiters.add({ epoch, resolve });
