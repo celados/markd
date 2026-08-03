@@ -2,6 +2,7 @@ import { _electron as electron, expect, test } from "@playwright/test";
 import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { runSecureContentJourney } from "../shared/secure-content-journey";
 
 test("packaged utility queries the configured Vault", async () => {
   const executablePath = process.env.MARKD_PACKAGED_EXECUTABLE;
@@ -39,4 +40,19 @@ test("packaged utility queries the configured Vault", async () => {
     await application.close();
     await rm(scratch, { recursive: true, force: true });
   }
+});
+
+test("packaged app keeps assets and native exports inside canonical paths", async () => {
+  const executablePath = process.env.MARKD_PACKAGED_EXECUTABLE;
+  if (!executablePath) throw new Error("MARKD_PACKAGED_EXECUTABLE is required.");
+
+  await runSecureContentJourney((configDir) => electron.launch({
+    executablePath,
+    env: {
+      ...process.env,
+      MARKD_E2E_BACKGROUND: "1",
+      MARKD_TEST_CONFIG_DIR: configDir,
+      MARKD_TEST_QUICK_CAPTURE_ACCELERATOR: "F24",
+    },
+  }));
 });
