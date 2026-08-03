@@ -18,23 +18,47 @@ test("tree keyboard navigation is not captured by drag sensors", async ({ page }
   await expect(page.getByRole("treeitem", { name: "Alpha.md" })).toBeVisible();
 });
 
+test("large Vaults virtualize rows while preserving End navigation", async ({ page }) => {
+  await installTauriFixture(page, { largeTreeSize: 1_000 });
+  await page.goto("/");
+
+  const tree = page.getByRole("tree", { name: "Notes", exact: true });
+  const rows = tree.getByRole("treeitem");
+  await expect(page.locator("[data-note-tree]")).toHaveAttribute(
+    "data-file-tree-virtualized",
+    "true",
+  );
+  expect(await rows.count()).toBeLessThan(80);
+
+  await rows.first().focus();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("treeitem", { name: "Note 0999.md" })).toBeFocused();
+  expect(await rows.count()).toBeLessThan(80);
+});
+
+test("failed rename restores canonical disk projection", async ({ page }) => {
+  await installTauriFixture(page, { mutationFailure: true });
+  await page.goto("/");
+
+  const readme = page.getByRole("treeitem", { name: "README.md" });
+  await readme.focus();
+  await page.keyboard.press("F2");
+  const rename = page.getByRole("textbox", { name: "Rename README.md" });
+  await rename.fill("Guide.md");
+  await rename.press("Enter");
+
+  await expect(page.getByRole("treeitem", { name: "README.md" })).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: "Guide.md" })).toHaveCount(0);
+  await expect(page.getByText("Rename rejected by disk")).toBeVisible();
+});
+
 test("nested row wins over the root drop zone", async ({ page }) => {
   await page.getByRole("treeitem", { name: "Projects" }).click();
   const source = page.getByRole("treeitem", { name: "Alpha.md" });
   const target = page.getByRole("treeitem", { name: "Archive" });
-  const sourceBox = await source.boundingBox();
-  const targetBox = await target.boundingBox();
-  if (!sourceBox || !targetBox) throw new Error("Tree rows must have layout boxes");
-
-  await page.mouse.move(sourceBox.x + 20, sourceBox.y + sourceBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(sourceBox.x + 35, sourceBox.y + sourceBox.height / 2, {
-    steps: 3,
-  });
-  await page.mouse.move(targetBox.x + 20, targetBox.y + targetBox.height / 2, {
-    steps: 8,
-  });
-  await page.mouse.up();
+  // Trees uses the browser's native HTML drag lifecycle rather than pointer
+  // sensors, so Playwright must dispatch a real drag gesture as Chrome does.
+  await source.dragTo(target);
 
   await expect
     .poll(() =>
@@ -58,6 +82,46 @@ test("nested row wins over the root drop zone", async ({ page }) => {
         args: { rel: "Projects/Alpha.md", dir: "Archive" },
       },
     ]);
+  await expect(page.getByRole("treeitem", { name: "Alpha.md" })).toHaveAttribute(
+    "data-item-path",
+    "Archive/Alpha.md",
+  );
+});
+
+test("failed drag does not remain optimistically moved", async ({ page }) => {
+  await installTauriFixture(page, { mutationFailure: true });
+  await page.goto("/");
+  await page.getByRole("treeitem", { name: "Projects" }).click();
+  const source = page.getByRole("treeitem", { name: "Alpha.md" });
+  await source.dragTo(page.getByRole("treeitem", { name: "Archive" }));
+
+  await expect(source).toHaveAttribute("data-item-path", "Projects/Alpha.md");
+  await expect(source).toHaveAttribute("aria-selected", "true");
+  await expect(source).toBeFocused();
+  await expect(page.getByRole("treeitem", { name: "Projects" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.getByText("Move rejected by disk")).toBeVisible();
+});
+
+test("disk collision suffix wins over the optimistic drop path", async ({ page }) => {
+  await installTauriFixture(page, { mutationCollision: true });
+  await page.goto("/");
+  await page.getByRole("treeitem", { name: "Projects" }).click();
+  await page
+    .getByRole("treeitem", { name: "Alpha.md" })
+    .dragTo(page.getByRole("treeitem", { name: "Archive" }));
+
+  const persisted = page.getByRole("treeitem", { name: "Alpha 2.md" });
+  await expect(persisted).toHaveAttribute("data-item-path", "Archive/Alpha 2.md");
+  await expect(persisted).toHaveAttribute("aria-selected", "true");
+  await expect(persisted).toBeFocused();
+  await expect(page.getByRole("treeitem", { name: "Archive" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.getByRole("treeitem", { name: "Alpha.md" })).toHaveCount(0);
 });
 
 test("pinned folders own their subtree without duplicating the main tree", async ({

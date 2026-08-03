@@ -1,6 +1,13 @@
 allowBuilds:
   electron-winstaller: false
   esbuild: true
+autoInstallPeers: false
+peerDependencyRules:
+  # The package root is the Vanilla runtime; React peers belong only to its
+  # explicit `/react` export and would violate Markd's Octane-only renderer.
+  ignoreMissing:
+    - react
+    - react-dom
 minimumReleaseAgeExclude:
   - '@octanejs/app-core@0.0.18'
   - '@octanejs/base-ui@0.1.20'
