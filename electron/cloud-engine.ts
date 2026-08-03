@@ -14,6 +14,7 @@ import {
   type CloudConfigResult,
 } from "./cloud-config";
 import { writeFileAtomically } from "./atomic-write";
+import { NativeContentError, readValidatedAsset } from "./native-content";
 import type {
   CloudAccount,
   CloudAccountStatus,
@@ -546,9 +547,6 @@ async function rewriteAssets(
   objects: Map<string, Uint8Array>,
   descriptors: Map<string, PublishObject>,
 ): Promise<string> {
-  // Issue #11 is introducing the shared asset/path/content seam. Keep this
-  // migration-local implementation only until that branch is integrated, then
-  // consume the shared utility instead of preserving two filesystem policies.
   const image = /!\[[^\]]*\]\(\s*(?<href><[^>]+>|[^)\s]+)/g;
   const replacements: Array<{ start: number; end: number; value: string }> = [];
   for (const match of markdown.matchAll(image)) {
@@ -560,11 +558,20 @@ async function rewriteAssets(
     if (!normalized.startsWith(".markd/assets/")) {
       throw cloudError("INVALID_PUBLISH_ASSET", `Published images must be stored in .markd/assets: ${href}`);
     }
-    const asset = await resolveAssetPath(root, normalized);
-    const bytes = await readFile(asset).catch(() => {
-      throw cloudError("INVALID_PUBLISH_ASSET", `Published image does not exist: ${href}`);
+    const asset = await readValidatedAsset(
+      join(root, ".markd", "assets"),
+      normalized.slice(".markd/assets/".length),
+    ).catch((error: unknown) => {
+      if (error instanceof NativeContentError) {
+        throw cloudError(
+          "INVALID_PUBLISH_ASSET",
+          `Published image is invalid: ${href}`,
+          { kind: error.kind },
+        );
+      }
+      throw error;
     });
-    const contentType = imageContentType(bytes);
+    const { bytes, contentType } = asset;
     const hash = hashBytes(bytes);
     objects.set(hash, bytes);
     descriptors.set(hash, { hash, kind: "asset", contentType, size: bytes.byteLength });
@@ -580,50 +587,6 @@ async function rewriteAssets(
     result = `${result.slice(0, replacement.start)}${replacement.value}${result.slice(replacement.end)}`;
   }
   return result;
-}
-
-function imageContentType(bytes: Uint8Array): string {
-  const hex = Buffer.from(bytes.subarray(0, 12)).toString("hex");
-  if (hex.startsWith("89504e470d0a1a0a")) return "image/png";
-  if (hex.startsWith("ffd8ff")) return "image/jpeg";
-  if (hex.startsWith("474946383761") || hex.startsWith("474946383961")) return "image/gif";
-  if (hex.startsWith("52494646") && Buffer.from(bytes.subarray(8, 12)).toString() === "WEBP") return "image/webp";
-  if (Buffer.from(bytes.subarray(4, 12)).toString().startsWith("ftypavif")) return "image/avif";
-  throw cloudError("INVALID_PUBLISH_ASSET", "Published image has an unsupported format.");
-}
-
-async function resolveAssetPath(root: string, rel: string): Promise<string> {
-  const parts = rel.split(/[\\/]/);
-  if (
-    parts.length < 3 ||
-    parts[0] !== ".markd" ||
-    parts[1] !== "assets" ||
-    parts.slice(2).some(
-      (part) => !part || part === "." || part === ".." || part.startsWith("."),
-    )
-  ) {
-    throw cloudError("invalid_input", `Invalid published image path: ${rel}`);
-  }
-  const assetRoot = await realpath(join(root, ".markd", "assets"));
-  const candidate = resolve(root, ...parts);
-  let canonical: string;
-  try {
-    canonical = await realpath(candidate);
-  } catch {
-    throw cloudError("invalid_input", `Published image does not exist: ${rel}`);
-  }
-  const offset = relative(assetRoot, canonical);
-  if (
-    normalize(candidate) !== normalize(canonical) ||
-    offset === "" ||
-    offset === ".." ||
-    offset.startsWith(`..${sep}`) ||
-    isAbsolute(offset) ||
-    !(await stat(canonical)).isFile()
-  ) {
-    throw cloudError("invalid_input", `Invalid published image path: ${rel}`);
-  }
-  return canonical;
 }
 
 function manifestHash(prepared: PreparedRelease): string {

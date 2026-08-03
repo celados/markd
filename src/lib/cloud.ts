@@ -2,8 +2,9 @@ import { ipc } from "@/lib/ipc";
 import { unwrapDesktopResult } from "@/lib/desktop";
 
 export async function openTrustedCloudUrl(url: string): Promise<void> {
-  if (window.markd) {
-    await unwrapDesktopResult(window.markd.cloud.openExternal(url));
+  const cloud = window.markd?.cloud;
+  if (cloud) {
+    await unwrapDesktopResult(cloud.openExternal(url));
     return;
   }
   const { openUrl } = await import("@tauri-apps/plugin-opener");

@@ -5,6 +5,9 @@ import { describe, expect, test } from "vitest";
 import { CloudEngine, CloudEngineError } from "../electron/cloud-engine";
 import { resolveCloudConfig } from "../electron/cloud-config";
 
+const validPng =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
 const verified = resolveCloudConfig({
   MARKD_CLOUD_TEST_MODE: "1",
   MARKD_CLOUD_API_BASE: "http://127.0.0.1:3001",
@@ -109,7 +112,7 @@ describe("Cloud Engine", () => {
     await writeFile(join(vault, "Linked.md"), "# Linked");
     await writeFile(
       join(vault, ".markd", "assets", "pixel.png"),
-      Buffer.from("89504e470d0a1a0a", "hex"),
+      Buffer.from(validPng, "base64"),
     );
     await writeFile(join(config, "cloud-session.json"), JSON.stringify({
       accessToken: "token_123",
@@ -158,7 +161,7 @@ describe("Cloud Engine", () => {
     const published = await engine.publish(draft);
     expect(published).toMatchObject({ id: "site_123", pageCount: 2 });
     expect((manifests[0] as { objects: Array<{ kind: string }> }).objects)
-      .toEqual(expect.arrayContaining([{ kind: "asset", hash: expect.any(String), contentType: "image/png", size: 8 }]));
+      .toEqual(expect.arrayContaining([{ kind: "asset", hash: expect.any(String), contentType: "image/png", size: Buffer.from(validPng, "base64").byteLength }]));
     await expect(engine.status(draft)).resolves.toMatchObject({
       share: { id: "site_123" },
       isOutdated: false,
@@ -240,6 +243,42 @@ describe("Cloud Engine", () => {
       pages: [],
     })).rejects.toMatchObject({ kind: "CLOUD_UNTRUSTED_UPLOAD_URL" });
     expect(objectWrites).toBe(0);
+  });
+
+  test("rejects publish assets that the save and protocol contract reject", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-invalid-asset-"));
+    const vault = join(scratch, "vault");
+    await mkdir(join(vault, ".markd", "assets"), { recursive: true });
+    await writeFile(join(vault, "Home.md"), "# Home");
+    await writeFile(join(vault, ".markd", "assets", "spoofed.png"), "not a PNG");
+    await writeFile(join(vault, ".markd", "assets", "active.svg"), "<svg/>");
+    await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
+      accessToken: "token_123",
+      expiresAt: Date.now() + 60_000,
+      account: { email: "reader@example.com", plan: "cloud" },
+    }));
+    let networkCalls = 0;
+    const fetch: typeof globalThis.fetch = async () => {
+      networkCalls += 1;
+      throw new Error("invalid assets must fail before publishing");
+    };
+    const canonicalVault = await realpath(vault);
+    const engine = new CloudEngine(
+      scratch,
+      () => canonicalVault,
+      verified,
+      fetch,
+    );
+
+    for (const path of ["spoofed.png", "active.svg"]) {
+      await expect(engine.publish({
+        rel: "Home.md",
+        title: "Home",
+        content: `![asset](.markd/assets/${path})`,
+        pages: [],
+      })).rejects.toMatchObject({ kind: "INVALID_PUBLISH_ASSET" });
+    }
+    expect(networkCalls).toBe(0);
   });
 
   test("remote sign-out failure still removes the authoritative local session", async () => {

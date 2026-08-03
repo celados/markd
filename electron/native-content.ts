@@ -21,7 +21,13 @@ const supportedAssetTypes = {
   webp: "image/webp",
 } as const;
 
-type SupportedAssetExtension = keyof typeof supportedAssetTypes;
+export type SupportedAssetExtension = keyof typeof supportedAssetTypes;
+
+export type ValidatedAsset = {
+  bytes: Buffer;
+  extension: SupportedAssetExtension;
+  contentType: (typeof supportedAssetTypes)[SupportedAssetExtension];
+};
 
 export class NativeContentError extends Error {
   readonly kind: "INVALID_INPUT" | "INVALID_PATH" | "NOT_FOUND" | "IO_ERROR";
@@ -39,7 +45,7 @@ export class NativeContentError extends Error {
 export async function validateAssetContent(
   input: string,
   extension: string,
-): Promise<{ bytes: Buffer; extension: SupportedAssetExtension }> {
+): Promise<ValidatedAsset> {
   const requestedExtension = normalizeAssetExtension(extension);
   const dataUrl = input.startsWith("data:") ? parseImageDataUrl(input) : null;
   const payload = dataUrl?.payload ?? input;
@@ -47,45 +53,21 @@ export async function validateAssetContent(
   if (!isCanonicalBase64(compact)) {
     throw invalidInput("Image data is not valid base64.");
   }
-  const bytes = Buffer.from(compact, "base64");
-  // Asset data crosses two serialized process seams, so reject oversized
-  // payloads before they can become persistent memory pressure.
-  if (bytes.byteLength === 0 || bytes.byteLength > 25 * 1024 * 1024) {
-    throw invalidInput("Image data must be between 1 byte and 25 MiB.");
-  }
-
-  const detected = await fileTypeFromBuffer(bytes);
-  if (!detected || !(detected.ext in supportedAssetTypes)) {
-    throw invalidInput("Image bytes are not a supported PNG, JPEG, GIF, or WebP file.");
-  }
-  const detectedExtension = detected.ext as SupportedAssetExtension;
-  const detectedMime = supportedAssetTypes[detectedExtension];
-  if (requestedExtension !== detectedExtension) {
-    throw invalidInput("Image extension does not match its file contents.");
-  }
-  if (dataUrl && dataUrl.mime !== detectedMime) {
-    throw invalidInput("Image data URL MIME type does not match its file contents.");
-  }
-  return { bytes, extension: detectedExtension };
+  return validateAssetBytes(
+    Buffer.from(compact, "base64"),
+    requestedExtension,
+    dataUrl?.mime,
+  );
 }
 
-export async function loadAssetResponse(
+export async function readValidatedAsset(
   assetRoot: string,
-  requestUrl: string,
-): Promise<Response> {
-  const url = new URL(requestUrl);
-  if (url.protocol !== "markd-asset:" || url.hostname !== "vault") {
-    throw invalidPath("Asset URL is outside the active Vault.");
-  }
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
-  } catch {
-    throw invalidPath("Asset URL is invalid.");
-  }
-  const parts = safeAssetSegments(decoded);
+  path: string,
+): Promise<ValidatedAsset> {
+  const parts = safeAssetSegments(path);
   const contentType = parts ? assetContentType(parts.at(-1)!) : null;
-  if (!parts || !contentType) throw invalidPath("Asset URL is invalid.");
+  if (!parts || !contentType) throw invalidPath("Asset path is invalid.");
+  const extension = normalizeAssetExtension(parts.at(-1)!.slice(parts.at(-1)!.lastIndexOf(".")));
 
   const canonicalRoot = await realpath(assetRoot).catch(() => {
     throw new NativeContentError("NOT_FOUND", "The active Vault asset folder is unavailable.");
@@ -111,18 +93,61 @@ export async function loadAssetResponse(
   });
   try {
     if (!(await handle.stat()).isFile()) throw invalidPath("Asset is not a file.");
-    const bytes = await handle.readFile();
-    return new Response(new Uint8Array(bytes), {
-      headers: {
-        "content-type": contentType,
-        "cache-control": "no-store",
-        "x-content-type-options": "nosniff",
-        "access-control-allow-origin": "*",
-      },
-    });
+    return await validateAssetBytes(await handle.readFile(), extension);
   } finally {
     await handle.close();
   }
+}
+
+async function validateAssetBytes(
+  bytes: Buffer,
+  requestedExtension: SupportedAssetExtension,
+  dataUrlMime?: string,
+): Promise<ValidatedAsset> {
+  // Asset data crosses two serialized process seams, so reject oversized
+  // payloads before they can become persistent memory pressure.
+  if (bytes.byteLength === 0 || bytes.byteLength > 25 * 1024 * 1024) {
+    throw invalidInput("Image data must be between 1 byte and 25 MiB.");
+  }
+
+  const detected = await fileTypeFromBuffer(bytes);
+  if (!detected || !(detected.ext in supportedAssetTypes)) {
+    throw invalidInput("Image bytes are not a supported PNG, JPEG, GIF, or WebP file.");
+  }
+  const detectedExtension = detected.ext as SupportedAssetExtension;
+  const detectedMime = supportedAssetTypes[detectedExtension];
+  if (requestedExtension !== detectedExtension) {
+    throw invalidInput("Image extension does not match its file contents.");
+  }
+  if (dataUrlMime && dataUrlMime !== detectedMime) {
+    throw invalidInput("Image data URL MIME type does not match its file contents.");
+  }
+  return { bytes, extension: detectedExtension, contentType: detectedMime };
+}
+
+export async function loadAssetResponse(
+  assetRoot: string,
+  requestUrl: string,
+): Promise<Response> {
+  const url = new URL(requestUrl);
+  if (url.protocol !== "markd-asset:" || url.hostname !== "vault") {
+    throw invalidPath("Asset URL is outside the active Vault.");
+  }
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+  } catch {
+    throw invalidPath("Asset URL is invalid.");
+  }
+  const asset = await readValidatedAsset(assetRoot, decoded);
+  return new Response(new Uint8Array(asset.bytes), {
+    headers: {
+      "content-type": asset.contentType,
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "access-control-allow-origin": "*",
+    },
+  });
 }
 
 export async function writeExportFile(path: string, content: string): Promise<string> {

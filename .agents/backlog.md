@@ -29,9 +29,6 @@ status: active
   Vaultwarden 到支持 2026.7.0+ client 的版本，再删除这个临时版本 pin。
 - production bundle 仍报告大 chunk，尤其 editor 与 AppShell；这是 code-splitting/performance
   follow-up，不是 build correctness failure。
-- #12 的 Cloud publish 暂时保留了迁移自 Rust 的 asset path、读取与 content-type 校验；#11 合并后
-  必须改为消费其 shared asset/path/content utility，并删除 Cloud 内的副本，避免两个 filesystem policy
-  owner 漂移。当前两条 branch 仍并行变化，因此本提交不提前复制 #11 的未冻结 interface。
 - Octane 2026-07-31 release train 为消费已审计的上游修复而加入了精确
   `minimumReleaseAgeExclude`。这些版本通过普通 install/build/browser 门禁后，待其自然满足 pnpm
   release-age policy 时删除该临时例外列表；不要把例外扩成 package-name wildcard。

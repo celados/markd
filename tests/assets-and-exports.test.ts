@@ -13,6 +13,8 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   atomicWriteText,
   loadAssetResponse,
+  readValidatedAsset,
+  validateAssetContent,
   writeExportFile,
 } from "../electron/native-content";
 import { assetUrl } from "../electron/asset-url";
@@ -254,23 +256,31 @@ describe("native content paths", () => {
     const assetRootPath = join(scratch, "assets");
     await mkdir(assetRootPath);
     const assetRoot = await realpath(assetRootPath);
-    await writeFile(join(assetRoot, "pixel.png"), Buffer.from("png bytes"));
+    const bytes = Buffer.from(validPng, "base64");
+    await writeFile(join(assetRoot, "pixel.png"), bytes);
 
     const url = assetUrl(".markd/assets/pixel.png");
+    const saved = await validateAssetContent(validPng, "png");
+    const loaded = await readValidatedAsset(assetRoot, "pixel.png");
     const response = await loadAssetResponse(assetRoot, url);
 
+    expect(saved).toMatchObject({ extension: "png", contentType: "image/png" });
+    expect(loaded).toMatchObject({ extension: "png", contentType: "image/png" });
+    expect(loaded.bytes).toEqual(saved.bytes);
     expect(url).toBe("markd-asset://vault/pixel.png");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
-    expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from("png bytes"));
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
   });
 
   test("rejects traversal, unsupported files, and symlink escapes", async () => {
     const scratch = await scratchDirectory("markd-protocol-reject-");
-    const assetRoot = join(scratch, "assets");
-    await mkdir(assetRoot);
+    const assetRootPath = join(scratch, "assets");
+    await mkdir(assetRootPath);
+    const assetRoot = await realpath(assetRootPath);
     await writeFile(join(scratch, "outside.png"), "outside");
     await symlink(join(scratch, "outside.png"), join(assetRoot, "escape.png"));
+    await writeFile(join(assetRoot, "spoofed.png"), "not really a PNG");
     await writeFile(join(assetRoot, "page.html"), "<script></script>");
 
     await expect(loadAssetResponse(assetRoot, "markd-asset://vault/%2Fetc/passwd"))
@@ -279,6 +289,8 @@ describe("native content paths", () => {
       .rejects.toEqual(expect.objectContaining({ kind: "INVALID_PATH" }));
     await expect(loadAssetResponse(assetRoot, "markd-asset://vault/page.html"))
       .rejects.toEqual(expect.objectContaining({ kind: "INVALID_PATH" }));
+    await expect(loadAssetResponse(assetRoot, "markd-asset://vault/spoofed.png"))
+      .rejects.toEqual(expect.objectContaining({ kind: "INVALID_INPUT" }));
     expect(assetUrl("../outside.png")).toBeNull();
     expect(assetUrl(".markd/assets/active.svg")).toBeNull();
   });

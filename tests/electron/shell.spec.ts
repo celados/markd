@@ -2,10 +2,20 @@ import { expect, test } from "@playwright/test";
 import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { launchMarkd, markdWindow } from "./launch-markd";
 
 test("secure shell boots with a validated semantic bridge and diagnostics", async () => {
-  const application = await launchMarkd();
+  const application = await launchMarkd({
+    env: {
+      // Inherited upstream-looking variables must never open this fork's
+      // production Cloud gate without the source-level test-mode capability.
+      MARKD_CLOUD_OWNERSHIP: "verified",
+      MARKD_CLOUD_API_BASE: "https://api.usemarkd.app",
+      MARKD_CLOUD_SITE_ORIGIN: "https://usemarkd.app",
+    },
+  });
   const diagnostics: string[] = [];
   application.process().stdout?.on("data", (chunk) => {
     diagnostics.push(String(chunk));
@@ -38,11 +48,36 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
         })),
       )
       .toEqual({
-        bridgeModules: ["app", "capture", "collections", "updates", "vault"],
+        bridgeModules: ["app", "capture", "cloud", "collections", "updates", "vault"],
         hasNodeProcess: false,
         hasRequire: false,
         hasIpcRenderer: false,
       });
+
+    await application.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        process.env.MARKD_TEST_OPENED_EXTERNAL = url;
+      };
+      delete process.env.MARKD_TEST_OPENED_EXTERNAL;
+    });
+    const disabledCloud = await page.evaluate(async () => Promise.all([
+      window.markd!.cloud!.accountStatus(),
+      window.markd!.cloud!.plansUrl(),
+      window.markd!.cloud!.publishedNoteStatus("Home.md", "Home", "# Home", []),
+      window.markd!.cloud!.openExternal("https://usemarkd.app/pricing"),
+    ]));
+    for (const result of disabledCloud) {
+      expect(result).toEqual({
+        ok: false,
+        error: {
+          kind: "CLOUD_OWNERSHIP_UNVERIFIED",
+          message:
+            "Cloud publishing is unavailable because this build has not verified ownership of its Cloud API and site.",
+        },
+      });
+    }
+    expect(await application.evaluate(() => process.env.MARKD_TEST_OPENED_EXTERNAL ?? null))
+      .toBeNull();
 
     await expect
       .poll(() => page.evaluate(() => window.markd!.vault.startup()))
@@ -78,11 +113,13 @@ test("quick-capture preload does not expose main-window export capabilities", as
     expect(
       await quickPage.evaluate(() => ({
         windowKind: window.markd?.app.windowKind,
+        cloud: typeof window.markd?.cloud,
         noteExport: typeof window.markd?.vault.exportNote,
         bookmarkExport: typeof window.markd?.collections.bookmarks.export,
       })),
     ).toEqual({
       windowKind: "quick-capture",
+      cloud: "undefined",
       noteExport: "undefined",
       bookmarkExport: "undefined",
     });
@@ -90,6 +127,160 @@ test("quick-capture preload does not expose main-window export capabilities", as
     await application.close();
   }
 });
+
+test("real Cloud Engine completes account and Published Share lifecycle", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-cloud-"));
+  const configDir = join(scratch, "config");
+  const vault = join(scratch, "vault");
+  await mkdir(join(vault, ".markd", "assets"), { recursive: true });
+  await mkdir(configDir, { recursive: true });
+  await writeFile(join(vault, "Home.md"), "# Home");
+  await writeFile(
+    join(configDir, "config.json"),
+    JSON.stringify({ vaultPath: vault, theme: "system" }),
+  );
+  let publishCount = 0;
+  let entryId = "";
+  let title = "";
+  const server = createServer(async (request, response) => {
+    const path = request.url ?? "";
+    const body = await new Promise<string>((resolve) => {
+      let value = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => { value += chunk; });
+      request.on("end", () => resolve(value));
+    });
+    if (path === "/v1/auth/otp/request") {
+      respondJson(response, {
+        challengeId: "challenge_1",
+        email: "reader@example.com",
+        expiresIn: 600,
+        resendAfter: 30,
+      });
+      return;
+    }
+    if (path === "/v1/auth/otp/verify") {
+      respondJson(response, {
+        accessToken: "token_123",
+        expiresAt: Date.now() + 60_000,
+        user: { email: "reader@example.com", plan: "cloud" },
+      });
+      return;
+    }
+    if (path === "/v1/me") {
+      respondJson(response, { user: { email: "reader@example.com", plan: "cloud" } });
+      return;
+    }
+    if (path === "/v1/billing/portal") {
+      respondJson(response, { url: `${origin()}/account` });
+      return;
+    }
+    if (path === "/v1/publish-sessions") {
+      publishCount += 1;
+      const input = JSON.parse(body) as { entryId: string; title: string };
+      entryId = input.entryId;
+      title = input.title;
+      respondJson(response, { sessionId: `publish_${publishCount}`, uploads: [] }, 201);
+      return;
+    }
+    if (/^\/v1\/publish-sessions\/publish_\d+\/finalize$/.test(path)) {
+      respondJson(response, { site: {
+        id: "site_123",
+        entryId,
+        slug: "published-note",
+        url: `${origin()}/s/published-note`,
+        title,
+        contentHash: "server-hash",
+        publishedAt: 1,
+        updatedAt: publishCount,
+        pageCount: 1,
+        assetCount: 0,
+      } }, 201);
+      return;
+    }
+    if (path === "/v1/sites/site_123" && request.method === "DELETE") {
+      response.writeHead(204).end();
+      return;
+    }
+    respondJson(response, { error: { code: "not_found", message: "Not found" } }, 404);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const origin = () => {
+    const address = server.address() as AddressInfo;
+    return `http://127.0.0.1:${address.port}`;
+  };
+  const application = await launchMarkd({
+    env: {
+      MARKD_TEST_CONFIG_DIR: configDir,
+      MARKD_CLOUD_TEST_MODE: "1",
+      MARKD_CLOUD_API_BASE: origin(),
+      MARKD_CLOUD_SITE_ORIGIN: origin(),
+    },
+  });
+  try {
+    const page = await markdWindow(application, "main");
+    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
+      .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
+    expect(await page.evaluate(() => window.markd!.cloud!.requestOtp("reader@example.com")))
+      .toEqual({ ok: true, value: expect.objectContaining({ challengeId: "challenge_1" }) });
+    expect(await page.evaluate(() => window.markd!.cloud!.verifyOtp("challenge_1", "123456")))
+      .toEqual({ ok: true, value: { email: "reader@example.com", plan: "cloud" } });
+    expect(await page.evaluate(() => window.markd!.cloud!.accountStatus()))
+      .toEqual({ ok: true, value: { account: { email: "reader@example.com", plan: "cloud" } } });
+    const draft = ["Home.md", "Home", "# Home", []] as const;
+    expect(await page.evaluate(
+      ([rel, nextTitle, content, pages]) =>
+        window.markd!.cloud!.publishNote(rel, nextTitle, content, pages),
+      draft,
+    )).toEqual({ ok: true, value: expect.objectContaining({ id: "site_123", title: "Home" }) });
+    expect(await page.evaluate(
+      ([rel, nextTitle, content, pages]) =>
+        window.markd!.cloud!.publishedNoteStatus(rel, nextTitle, content, pages),
+      draft,
+    )).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        share: expect.objectContaining({ id: "site_123" }),
+        isOutdated: false,
+      }),
+    });
+    expect(await page.evaluate(() =>
+      window.markd!.cloud!.updatePublishedNote("Home.md", "Updated", "# Updated", []),
+    )).toEqual({ ok: true, value: expect.objectContaining({ title: "Updated" }) });
+    const portal = await page.evaluate(() => window.markd!.cloud!.billingPortalUrl());
+    expect(portal).toEqual({ ok: true, value: `${origin()}/account` });
+    await application.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        process.env.MARKD_TEST_OPENED_EXTERNAL = url;
+      };
+    });
+    expect(await page.evaluate(
+      (url) => window.markd!.cloud!.openExternal(url),
+      `${origin()}/account`,
+    )).toEqual({ ok: true, value: null });
+    expect(await application.evaluate(() => process.env.MARKD_TEST_OPENED_EXTERNAL))
+      .toBe(`${origin()}/account`);
+    expect(await page.evaluate(() => window.markd!.cloud!.revokePublishedNote("Home.md")))
+      .toEqual({ ok: true, value: null });
+    expect(await page.evaluate(() => window.markd!.cloud!.isNotePublished("Home.md")))
+      .toEqual({ ok: true, value: false });
+  } finally {
+    await application.close();
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => error ? reject(error) : resolve()),
+    );
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
+function respondJson(
+  response: import("node:http").ServerResponse,
+  value: unknown,
+  status = 200,
+): void {
+  response.writeHead(status, { "content-type": "application/json" });
+  response.end(JSON.stringify(value));
+}
 
 test("real Vault Engine and native shell complete the first Vault slice", async () => {
   const scratch = await mkdtemp(join(tmpdir(), "markd-electron-vault-"));
