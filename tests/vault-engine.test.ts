@@ -15,8 +15,10 @@ import { tmpdir } from "node:os";
 import { VaultEngine } from "../electron/vault-engine";
 
 const scratchPaths: string[] = [];
+const engines: VaultEngine[] = [];
 
 afterEach(async () => {
+  for (const engine of engines.splice(0)) engine.destroy();
   await Promise.all(
     scratchPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
@@ -363,6 +365,7 @@ async function setupEngine(trashCalls: string[] = []) {
     rollbackAssetRoot: async () => undefined,
     saveExport: async () => null,
   });
+  engines.push(engine);
   await engine.open(root, false);
   return { engine, root, scratch };
 }

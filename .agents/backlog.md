@@ -7,6 +7,16 @@ status: active
 
 # Deferred work
 
+- `@ff-labs/fff-node@0.10.1` 的 npm prebuilt 启用了 zlob walker；该 backend 当前只读取
+  root/nested `.gitignore` 与 `.ignore`，不会读取 Git user/global excludes 或
+  `<vault>/.git/info/exclude`。非-zlob ripgrep backend 支持两者，但 npm SDK 没有 backend
+  selector。#5 保留一条 `test.fails` contract 锁住此 upstream drift；在 fff prebuilt 修正前不能把
+  Git global/info acceptance gate 标记完成，也不能用 post-index JS filtering 伪装成性能正确。
+- fff 官方 [#723](https://github.com/dmtrKovalenko/fff/issues/723) 已确认 release 使用的 zlob
+  walker 在 `*` + re-include directory 这类合法 negation 下会过早 prune nested directories，ripgrep
+  backend 则正确。Vault Index 保留对应 `test.fails` contract；上游修复前不能宣称完整 nested
+  precedence/negation correctness。
+
 - Electron Phase 2 的首个 Vault slice 使用 utility 内的临时 bootstrap snapshot builder，只为
   choose/create/reopen、Note CRUD 与 native Trash 提供 coherent tree。它没有 watcher、search 或完整
   ignore precedence，只做 `.markd`/hidden、`node_modules` 与 reserved root 的最低限度排除，不能作为最终

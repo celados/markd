@@ -289,7 +289,16 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
   const createdVault = join(scratch, "created-vault");
   await mkdir(configDir, { recursive: true });
   await mkdir(chosenVault, { recursive: true });
+  await mkdir(join(chosenVault, "projects"), { recursive: true });
+  await mkdir(join(chosenVault, "node_modules", "package"), { recursive: true });
   await writeFile(join(chosenVault, "Existing.md"), "existing");
+  await writeFile(join(chosenVault, "projects", ".gitignore"), "*.md\n!Keep.md\n");
+  await writeFile(join(chosenVault, "projects", "Keep.md"), "keep");
+  await writeFile(join(chosenVault, "projects", "Drop.md"), "drop");
+  await writeFile(
+    join(chosenVault, "node_modules", "package", "Invisible.md"),
+    "dependency",
+  );
   await writeFile(
     join(configDir, "config.json"),
     JSON.stringify({ vaultPath: chosenVault, theme: "system" }),
@@ -300,6 +309,18 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
   try {
     const page = await markdWindow(application, "main");
     await expect(page.getByRole("treeitem", { name: "Existing.md" })).toBeVisible();
+    await page.getByRole("treeitem", { name: "projects" }).click();
+    await expect(page.getByRole("treeitem", { name: "Keep.md" })).toBeVisible();
+    await expect(page.getByRole("treeitem", { name: "Drop.md" })).toHaveCount(0);
+    await expect(page.getByRole("treeitem", { name: "Invisible.md" })).toHaveCount(0);
+    expect(await readFile(join(chosenVault, ".ignore"), "utf8")).toContain(
+      "# BEGIN MARKD MANAGED IGNORE",
+    );
+
+    await writeFile(join(chosenVault, "Watched.md"), "external");
+    await expect(page.getByRole("treeitem", { name: "Watched.md" })).toBeVisible();
+    await rm(join(chosenVault, "Watched.md"));
+    await expect(page.getByRole("treeitem", { name: "Watched.md" })).toHaveCount(0);
 
     await application.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = async () => ({
@@ -312,7 +333,9 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
       ok: true,
       value: expect.objectContaining({
         root: await realpath(chosenVault),
-        tree: [expect.objectContaining({ rel: "Existing.md", kind: "note" })],
+        tree: expect.arrayContaining([
+          expect.objectContaining({ rel: "Existing.md", kind: "note" }),
+        ]),
       }),
     });
 

@@ -17,6 +17,15 @@ export default defineConfig(async ({ mode }) => ({
                 main: "electron/main.ts",
                 engine: "electron/engine.ts",
               },
+              vite: {
+                build: {
+                  rolldownOptions: {
+                    // ffi-rs loads platform binaries at runtime; bundling its
+                    // native package would turn the binary into invalid JS.
+                    external: ["@ff-labs/fff-node"],
+                  },
+                },
+              },
             },
             preload: {
               input: "electron/preload.ts",
