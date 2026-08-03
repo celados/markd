@@ -52,7 +52,23 @@ test("artifact inspection accepts complete Electron and native inventories", asy
       "node_modules/@celados/fff-bin-darwin-arm64/libfff_c.dylib",
       "node_modules/@yuuang/ffi-rs-darwin-arm64/ffi-rs.darwin-arm64.node",
     ],
+    nativeVersions: {
+      fff: "0.10.2-nightly.dbc0f62",
+      "ffi-rs": "1.3.4",
+    },
   });
+});
+
+test.each([
+  ["fff", { fffNativeVersion: "0.10.3" }],
+  ["ffi-rs", { ffiNativeVersion: "1.3.5" }],
+])("artifact inspection rejects %s wrapper/native version drift", async (_name, versions) => {
+  const fixture = await packageFixture({
+    includeFff: true,
+    includeFfi: true,
+    ...versions,
+  });
+  expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(/wrapper\/native version mismatch/u);
 });
 
 test("source inventory rejects every retired desktop path and dependency", async () => {
@@ -212,6 +228,8 @@ async function packageFixture(options: {
   extraNativeFiles?: string[];
   archivedOnlyNativeFiles?: string[];
   extraArchivedFiles?: string[];
+  fffNativeVersion?: string;
+  ffiNativeVersion?: string;
 }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "markd-package-test-"));
   scratch.push(root);
@@ -229,11 +247,25 @@ async function packageFixture(options: {
     await mkdir(join(source, path, ".."), { recursive: true });
     await writeFile(join(source, path), "fixture");
   }
+  await mkdir(join(source, "node_modules", "@celados", "fff-node"), { recursive: true });
+  await writeFile(
+    join(source, "node_modules", "@celados", "fff-node", "package.json"),
+    JSON.stringify({ version: "0.10.2-nightly.dbc0f62" }),
+  );
+  await mkdir(join(source, "node_modules", "ffi-rs"), { recursive: true });
+  await writeFile(
+    join(source, "node_modules", "ffi-rs", "package.json"),
+    JSON.stringify({ version: "1.3.4" }),
+  );
   const ffiPackage = `ffi-rs-darwin-${arch}`;
   const ffiFile = `ffi-rs.darwin-${arch}.node`;
   if (options.includeFfi) {
     await mkdir(join(source, "node_modules", "@yuuang", ffiPackage), { recursive: true });
     await writeFile(join(source, "node_modules", "@yuuang", ffiPackage, ffiFile), "native");
+    await writeFile(
+      join(source, "node_modules", "@yuuang", ffiPackage, "package.json"),
+      JSON.stringify({ version: options.ffiNativeVersion ?? "1.3.4" }),
+    );
   }
   if (options.includeFff) {
     const packageName =
@@ -241,6 +273,10 @@ async function packageFixture(options: {
     const library = "libfff_c.dylib";
     await mkdir(join(source, "node_modules", "@celados", packageName), { recursive: true });
     await writeFile(join(source, "node_modules", "@celados", packageName, library), "native");
+    await writeFile(
+      join(source, "node_modules", "@celados", packageName, "package.json"),
+      JSON.stringify({ version: options.fffNativeVersion ?? "0.10.2-nightly.dbc0f62" }),
+    );
   }
   for (const path of [...(options.extraNativeFiles ?? []), ...(options.archivedOnlyNativeFiles ?? [])]) {
     await mkdir(join(source, path, ".."), { recursive: true });

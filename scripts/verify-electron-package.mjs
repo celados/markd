@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { listPackage, statFile } from "@electron/asar";
+import { extractFile, listPackage, statFile } from "@electron/asar";
 import { parse } from "yaml";
 import { electronArtifactNames } from "./electron-artifacts.mjs";
 
@@ -65,6 +65,7 @@ export function inspectElectronPackage(
       `Packaged app contains an unexpected native payload: ${nativeFiles.join(", ") || "none"}.`,
     );
   }
+  const nativeVersions = inspectNativeVersions(asarPath, expected);
 
   const updateConfig = join(resources, "app-update.yml");
   if (!existsSync(updateConfig)) throw new Error(`Updater provider metadata is missing: ${updateConfig}`);
@@ -76,7 +77,7 @@ export function inspectElectronPackage(
   ) {
     throw new Error("Packaged updater provider must target celados/markd GitHub releases.");
   }
-  return { appPath, asarPath, fffLibrary, ffiAddon, nativeFiles, updateConfig };
+  return { appPath, asarPath, fffLibrary, ffiAddon, nativeFiles, nativeVersions, updateConfig };
 }
 
 export function inspectElectronOnlySource(root = process.cwd()) {
@@ -220,6 +221,44 @@ function nativeLayout(arch) {
     ffiPackage: `ffi-rs-darwin-${arch}`,
     ffiFile: `ffi-rs.darwin-${arch}.node`,
   };
+}
+
+function inspectNativeVersions(asarPath, expected) {
+  const pairs = [
+    {
+      name: "fff",
+      wrapper: "node_modules/@celados/fff-node/package.json",
+      native: `node_modules/@celados/${expected.fffPackage}/package.json`,
+    },
+    {
+      name: "ffi-rs",
+      wrapper: "node_modules/ffi-rs/package.json",
+      native: `node_modules/@yuuang/${expected.ffiPackage}/package.json`,
+    },
+  ];
+  return Object.fromEntries(pairs.map((pair) => {
+    const wrapperVersion = packageVersion(asarPath, pair.wrapper);
+    const nativeVersion = packageVersion(asarPath, pair.native);
+    if (wrapperVersion !== nativeVersion) {
+      throw new Error(
+        `Packaged ${pair.name} wrapper/native version mismatch: ${wrapperVersion} != ${nativeVersion}.`,
+      );
+    }
+    return [pair.name, wrapperVersion];
+  }));
+}
+
+function packageVersion(asarPath, path) {
+  let manifest;
+  try {
+    manifest = JSON.parse(extractFile(asarPath, path).toString("utf8"));
+  } catch {
+    throw new Error(`Packaged dependency manifest is missing or invalid: ${path}.`);
+  }
+  if (typeof manifest?.version !== "string" || manifest.version.length === 0) {
+    throw new Error(`Packaged dependency version is invalid: ${path}.`);
+  }
+  return manifest.version;
 }
 
 export function findPackagedApp(
