@@ -10,9 +10,6 @@ status: active
 - Todos 与 Bookmarks CRUD 已由 utility-owned Collections interface 接管；Bookmark 的远程 metadata
   enrichment 仍是 legacy Tauri capability，不属于 #9 的 CRUD seam。迁移这个 effect
   时应继续通过 semantic bridge 进入 utility/native owner，不能恢复 renderer-side fetch 或 raw invoke。
-- pasted assets、Note/Bookmark export 与 `markd-asset` protocol 已覆盖真实 hidden Electron smoke。#13
-  已建立可验证的 packaged app artifact，但当前 packaged smoke 只覆盖 utility/fff 查询；#11 的
-  asset/export/rejection journeys 仍需对安装产物复跑，不能把 dev Electron smoke 当作 packaged evidence。
 - updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。Cloud Engine 已迁移
   现有协议，但 production ownership gate 在源码层保持关闭；只有 tests 可用 loopback origins 启用。
   在启用 production publishing 或部署 fork site 前，必须裁决产品域名与 Cloud API ownership，并把
@@ -22,6 +19,9 @@ status: active
   Vaultwarden 到支持 2026.7.0+ client 的版本，再删除这个临时版本 pin。
 - production bundle 仍报告大 chunk，尤其 editor 与 AppShell；这是 code-splitting/performance
   follow-up，不是 build correctness failure。
+- Playwright browser journeys 仍绑定固定 preview port `4173`；并行 agent 同时运行 suite 时可能因端口
+  已占用而在用例开始前失败。单独复跑已通过 35/35，确认这不是产品 bug；后续应由测试编排分配隔离端口，
+  不能通过杀掉其他 agent 的进程来掩盖冲突。
 - Octane 2026-07-31 release train 为消费已审计的上游修复而加入了精确
   `minimumReleaseAgeExclude`。这些版本通过普通 install/build/browser 门禁后，待其自然满足 pnpm
   release-age policy 时删除该临时例外列表；不要把例外扩成 package-name wildcard。
