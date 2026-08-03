@@ -15,6 +15,18 @@ The UI is Octane-native. Do not reintroduce React compatibility layers or mechan
 React composition patterns. Use TSRX where keyed/control-flow ownership benefits from compiler
 visibility; TSX remains valid for straightforward structure and imperative third-party owners.
 
+## Framework sources of truth
+
+Before changing application code, read both current documentation indexes:
+
+- [Ripple LLM documentation](https://ripple-ts.com/llms.txt) — TSRX language-family context
+- [Octane LLM documentation](https://octanejs.dev/llms.txt) — the active compiler, runtime, and
+  binding contracts used by this fork
+
+Do not work from remembered React, Ripple, or Octane semantics. The installed package versions,
+pnpm patches, and these current indexes are the source of truth. If the docs and installed compiler
+disagree, inspect the installed source and record the unresolved drift in `.agents/backlog.md`.
+
 The root app uses pnpm exclusively. `pnpm-lock.yaml` is the dependency source of truth and
 `pnpm-workspace.yaml` owns patch/install policy. `site/` and `services/cloud-api/` are independent deployment
 packages with their own Bun lockfiles; do not run their scripts from the root or silently absorb them into the
@@ -22,13 +34,19 @@ root pnpm workspace.
 
 ## Commands
 
-- `pnpm tauri dev` — run the app (vite on port 1420 + cargo)
+- `pnpm run dev` — run the Electron + Vite desktop shell; Phase 1 currently reaches the Welcome surface and
+  validated utility lifecycle, while Vault operations remain a Phase 2 migration gate
+- `pnpm run dev:web` — renderer-only diagnostic surface in system browser; it is not the desktop product
+- `pnpm tauri dev` — legacy Tauri implementation for migration comparison only; do not extend its command surface
 - `pnpm run build` — strict app typecheck + Vite production build
 - `pnpm run typecheck` — strict TSRX typecheck；不保留 dependency diagnostic allowlist
 - `pnpm run icons:generate` — 从根 `icons.json` 用 Sigil 生成 Octane-native `src/icons/icons.tsrx`；
   Sigil 通过 workspace 的 `bun link` 提供，只参与开发期 AOT codegen，生成物必须提交，app
   runtime 和 consumer 安装不依赖 Bun/Sigil
-- `pnpm exec playwright test` — run production-preview journeys in system Google Chrome
+- `pnpm run test:browser` — rebuild, then run production-preview journeys in system Google Chrome;
+  do not invoke Playwright directly against a potentially stale `dist/`
+- `pnpm run test:electron` — rebuild, then launch the installed Electron runtime for secure-shell and real
+  utility crash/restart smoke tests; it does not download a Playwright browser
 - `cd src-tauri && cargo test` — Rust unit tests
 - `pnpm run release`: full signed and notarized macOS release (scripts/release.sh)
 - `.github/workflows/release-linux.yml`: signed x86_64 AppImage and Debian release
@@ -36,6 +54,13 @@ root pnpm workspace.
 ## Architecture
 
 Rust owns the filesystem; the frontend is UI + state only. All IO goes through typed Tauri commands (`src/lib/ipc.ts` is the only file that touches `invoke`).
+
+The default development shell is now Electron, with main/preload/utility entries under `electron/`; only the
+Phase 1 startup/update handshake has crossed the new bridge. The remaining application data path still belongs
+to the legacy Tauri implementation until each vertical slice migrates. The Electron-native replacement
+architecture and migration gates are frozen in
+[`docs/electron-native-architecture.md`](docs/electron-native-architecture.md); new migration work must follow that
+proposal instead of extending the Tauri command surface.
 
 ### Vault model
 
@@ -52,6 +77,9 @@ Notes are addressed by path relative to the vault root (e.g. `projects/app.md`),
 One module per concern, each with unit tests; keep files under ~300 lines:
 
 - `error.rs` — `AppError`/`AppResult`, serialized as `{kind, message}` to the frontend
+- `note_scan.rs` — the single ignore-aware vault walker shared by tree, search, and backlinks;
+  the `ignore` crate owns Git user excludes and nested `.gitignore` semantics, while Markd adds a
+  small built-in generated/dependency directory set
 - `vault.rs` — layout, tree scan, rel-path resolution (rejects traversal)
 - `notes.rs` — CRUD, rename/move with collision suffixing ("name 2")
 - `search.rs` — case-insensitive title+content search, title hits ranked first
@@ -96,6 +124,23 @@ Two ways to add one:
 2. **shadcn CLI**: `pnpm dlx shadcn add @beui/<slug>`.
 
 Our `Modal` (`components/ui/Modal.tsx`) is built on the same tokens; keep new dialogs on it for one motion language.
+
+## Agent skills
+
+### Issue tracker
+
+工作项使用 `celados/markd` GitHub Issues 管理。具体操作与 blocking-edge 合同见
+[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)。
+
+### Triage labels
+
+使用默认五角色标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、
+`wontfix`。映射见 [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)。
+
+### Domain docs
+
+采用 single-context：先读根 `CONTEXT.md`，再读取相关 `docs/adr/`。消费规则见
+[`docs/agents/domain.md`](docs/agents/domain.md)。
 
 ## Rules
 
