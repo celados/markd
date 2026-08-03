@@ -65,10 +65,12 @@ export const ipc = {
     window.markd
       ? unwrapDesktopResult(window.markd.vault.readNote(rel))
       : call<string>("read_note", { rel }),
-  writeNote: (rel: string, content: string) =>
+  writeNote: (rel: string, content: string, expectedContent: string) =>
     window.markd
-      ? unwrapDesktopResult(window.markd.vault.writeNote(rel, content))
-      : call<void>("write_note", { rel, content }),
+      ? unwrapDesktopResult(
+          window.markd.vault.writeNote(rel, content, expectedContent),
+        )
+      : call<void>("write_note", { rel, content }).then(() => content),
   createNote: (dir: string, title: string) =>
     window.markd
       ? unwrapDesktopResult(window.markd.vault.createNote(dir, title)).then(({ rel }) => rel)

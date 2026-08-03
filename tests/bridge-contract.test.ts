@@ -81,7 +81,11 @@ describe("Electron bridge contract", () => {
         type: "request",
         id: "operation-3",
         method: "vault.note.write",
-        params: { rel: "notes/idea.md", content: "hello" },
+        params: {
+          rel: "notes/idea.md",
+          content: "hello",
+          expectedContent: "before",
+        },
       }).success,
     ).toBe(true);
     expect(

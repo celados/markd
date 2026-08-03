@@ -28,6 +28,10 @@ import { cx, debounce, noteTitle } from "@/lib/utils";
 import { useTabs } from "@/stores/tabs";
 import { useUi } from "@/stores/ui";
 import { useVault } from "@/stores/vault";
+import {
+  rebaseAppendOnly,
+  SerialNoteWrites,
+} from "@/lib/serial-note-writes";
 import { createExtensions } from "./extensions";
 import { FindReplaceBar } from "./FindReplaceBar.tsrx";
 import { insertImageFile } from "./insertImage";
@@ -94,6 +98,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
   const lastSaved = useRef("");
   const pending = useRef<string | null>(null);
   const savesInFlight = useRef(0);
+  const writers = useRef(new Map<string, SerialNoteWrites>());
   const loadedRel = useRef<string | null | null>(null);
   // True only while we're programmatically replacing the document, so the
   // resulting onUpdate doesn't mark the fresh content as an unsaved edit.
@@ -111,14 +116,43 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       // Re-attach the note's frontmatter (captured now, before any await, so a
       // concurrent note switch can't swap it out mid-save).
       const fullText = joinFrontmatter(frontmatter.current, markdown);
+      let writer = writers.current.get(targetRel);
+      if (!writer) {
+        writer = new SerialNoteWrites(lastSaved.current);
+        writers.current.set(targetRel, writer);
+      }
       savesInFlight.current += 1;
       try {
-        await ipc.writeNote(targetRel, fullText);
+        const { desired, committed } = await writer.save(
+          fullText,
+          (content, expectedContent) =>
+            ipc.writeNote(targetRel, content, expectedContent),
+        );
         invalidatePublishStatus();
         notifyBacklinksChanged();
         if (relRef.current === targetRel) {
-          lastSaved.current = fullText;
-          if (pending.current === null) setSaveState("idle");
+          lastSaved.current = committed;
+          if (committed !== desired) {
+            const currentEditor = editorRef.current;
+            const current = joinFrontmatter(
+              frontmatter.current,
+              currentEditor?.getMarkdown() ?? markdown,
+            );
+            const reconciled = rebaseAppendOnly(desired, current, committed);
+            const { frontmatter: fm, body } = splitFrontmatter(reconciled);
+            frontmatter.current = fm;
+            setProperties(parseFrontmatter(fm));
+            setRawText(reconciled);
+            if (currentEditor) {
+              swapping.current = true;
+              currentEditor.commands.setContent(body, { contentType: "markdown" });
+              swapping.current = false;
+            }
+            if (pending.current !== null) pending.current = body;
+          }
+          if (pending.current === null && savesInFlight.current === 1) {
+            setSaveState("idle");
+          }
         }
         toast.dismiss(`save-${targetRel}`);
       } catch (err) {
@@ -445,6 +479,9 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       .then((text) => {
         if (cancelled) return;
         lastSaved.current = text;
+        const writer = writers.current.get(rel);
+        if (writer) writer.reset(text);
+        else writers.current.set(rel, new SerialNoteWrites(text));
         loadedRel.current = rel;
         // Split off frontmatter (kept for save), then render any `[[wiki]]`
         // links in the body as real page links. lastSaved keeps the raw disk

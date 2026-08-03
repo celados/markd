@@ -146,9 +146,26 @@ export class VaultEngine {
     return readFile(path, "utf8");
   }
 
-  async writeNote(rel: string, content: string): Promise<void> {
+  async writeNote(
+    rel: string,
+    content: string,
+    expectedContent: string,
+  ): Promise<string> {
     const path = await this.#existingPath(rel, "note");
-    await writeFile(path, content);
+    const current = await readFile(path, "utf8");
+    let committed = content;
+    if (current !== expectedContent) {
+      if (!current.startsWith(expectedContent)) {
+        throw domainError(
+          "STALE_NOTE_WRITE",
+          "The Note changed before this edit could be saved.",
+        );
+      }
+      const appended = current.slice(expectedContent.length);
+      committed = content.endsWith(appended) ? content : `${content}${appended}`;
+    }
+    await writeFile(path, committed);
+    return committed;
   }
 
   async moveToTrash(rel: string): Promise<{ snapshot: VaultSnapshot }> {

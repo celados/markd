@@ -113,4 +113,13 @@ test("Quick Capture creates, appends, and reports Engine failures", async ({ pag
   await expect(page.getByPlaceholder("Write something worth keeping…")).toHaveValue(
     "kept draft",
   );
+  await page.getByRole("button", { name: "Close Quick Capture" }).click();
+  await page.evaluate(() => window.markd!.capture.open());
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create new note" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByPlaceholder("Title")).toHaveValue("");
+  await expect(page.getByPlaceholder("Write something worth keeping…")).toHaveValue("");
 });

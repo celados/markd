@@ -116,7 +116,7 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
         writeNote: async (rel, content) => {
           commands.push({ command: "write_note", args: { rel, content } });
           notes.set(rel, content);
-          return success(null);
+          return success(content);
         },
         moveToTrash: async (rel) => {
           notes.delete(rel);

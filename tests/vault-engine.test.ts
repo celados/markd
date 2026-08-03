@@ -175,6 +175,32 @@ describe("Vault Engine Quick Capture", () => {
       expect.objectContaining({ kind: "NO_ACTIVE_VAULT" }),
     );
   });
+
+  test("merges a semantic append into an editor write based on the prior content", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await engine.captureAppend("Inbox.md", "captured");
+
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base"),
+    ).resolves.toBe("edited\ncaptured");
+    expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
+      "edited\ncaptured",
+    );
+  });
+
+  test("rejects a stale editor write after a non-append external change", async () => {
+    const { engine, root } = await setupEngine();
+    await engine.captureCreate("Inbox", "base");
+    await writeFile(join(root, "Inbox.md"), "rewritten elsewhere");
+
+    await expect(
+      engine.writeNote("Inbox.md", "edited", "base"),
+    ).rejects.toEqual(expect.objectContaining({ kind: "STALE_NOTE_WRITE" }));
+    expect(await readFile(join(root, "Inbox.md"), "utf8")).toBe(
+      "rewritten elsewhere",
+    );
+  });
 });
 
 async function setupEngine(trashCalls: string[] = []) {

@@ -13,6 +13,7 @@ import {
 } from "./bridge-contract";
 import { VaultEngine, VaultEngineError } from "./vault-engine";
 import { CollectionsEngineError } from "./collections-engine";
+import { RequestActor } from "./request-actor";
 
 const parentPort = process.parentPort;
 if (!parentPort) {
@@ -37,6 +38,7 @@ let activeEpoch = 0;
 let activeConfigDir = "";
 let vault: VaultEngine | null = null;
 let initialization: Promise<void> | null = null;
+const requests = new RequestActor();
 
 parentPort.on("message", (event) => {
   const nativeResponse = v.safeParse(nativeResponseSchema, event.data);
@@ -74,7 +76,9 @@ parentPort.on("message", (event) => {
         process.exit(1);
         return;
       }
-      void handleRequest(activeVault, parsed.output)
+      // Every renderer gets its own MessagePort, so the utility process is the
+      // only place that can impose one mutation order across editor + capture.
+      void requests.enqueue(() => handleRequest(activeVault, parsed.output))
         .then((value) =>
           respond(port, {
             type: "response",
@@ -129,8 +133,11 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
     case "vault.note.read":
       return vault.readNote(request.params.rel);
     case "vault.note.write":
-      await vault.writeNote(request.params.rel, request.params.content);
-      return null;
+      return vault.writeNote(
+        request.params.rel,
+        request.params.content,
+        request.params.expectedContent,
+      );
     case "vault.trash":
       return vault.moveToTrash(request.params.rel);
     case "vault.note.path":

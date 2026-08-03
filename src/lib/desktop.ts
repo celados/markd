@@ -61,7 +61,11 @@ export type MarkdDesktop = {
       content?: string,
     ) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
     readNote: (rel: string) => Promise<DesktopResult<string>>;
-    writeNote: (rel: string, content: string) => Promise<DesktopResult<null>>;
+    writeNote: (
+      rel: string,
+      content: string,
+      expectedContent: string,
+    ) => Promise<DesktopResult<string>>;
     moveToTrash: (rel: string) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
     resolveNotePath: (rel: string) => Promise<DesktopResult<string>>;
     pins: {

@@ -447,8 +447,8 @@ contextBridge.exposeInMainWorld("markd", {
     createNote: (dir: string, title: string, content = "") =>
       requestEngine("vault.note.create", { dir, title, content }),
     readNote: (rel: string) => requestEngine("vault.note.read", { rel }),
-    writeNote: (rel: string, content: string) =>
-      requestEngine("vault.note.write", { rel, content }),
+    writeNote: (rel: string, content: string, expectedContent: string) =>
+      requestEngine("vault.note.write", { rel, content, expectedContent }),
     moveToTrash: (rel: string) => requestEngine("vault.trash", { rel }),
     resolveNotePath: (rel: string) => requestEngine("vault.note.path", { rel }),
     pins: {

@@ -53,6 +53,7 @@ export function QuickCaptureWindow() {
       setTitle("");
       setValue("");
       setMode("create");
+      setFailure(null);
     } catch (error) {
       toast.error("Quick Capture could not close", {
         description: error instanceof Error ? error.message : String(error),

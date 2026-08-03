@@ -113,7 +113,11 @@ export const engineRequestSchema = v.variant("method", [
     type: v.literal("request"),
     id: operationIdSchema,
     method: v.literal("vault.note.write"),
-    params: v.object({ rel: relSchema, content: v.string() }),
+    params: v.object({
+      rel: relSchema,
+      content: v.string(),
+      expectedContent: v.string(),
+    }),
   }),
   v.object({
     type: v.literal("request"),
@@ -383,7 +387,7 @@ export function validateResponseValue(
     case "vault.note.read":
       return v.safeParse(v.string(), value).success;
     case "vault.note.write":
-      return v.safeParse(v.null(), value).success;
+      return v.safeParse(v.string(), value).success;
     case "vault.trash":
       return v.safeParse(v.object({ snapshot: vaultSnapshotSchema }), value).success;
     case "vault.note.path":

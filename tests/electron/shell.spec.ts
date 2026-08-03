@@ -107,8 +107,8 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
       value: "",
     });
     expect(
-      await page.evaluate(() => window.markd!.vault.writeNote("Untitled.md", "saved")),
-    ).toEqual({ ok: true, value: null });
+      await page.evaluate(() => window.markd!.vault.writeNote("Untitled.md", "saved", "")),
+    ).toEqual({ ok: true, value: "saved" });
     expect(await readFile(join(chosenVault, "Untitled.md"), "utf8")).toBe("saved");
 
     const traversal = await page.evaluate(() => window.markd!.vault.readNote("../outside.md"));
@@ -284,7 +284,7 @@ test("Collections persist across Vault switches and utility restarts", async () 
 
   const first = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
   try {
-    const page = await first.firstWindow();
+    const page = await markdWindow(first, "main");
     await expect
       .poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({
@@ -353,7 +353,7 @@ test("Collections persist across Vault switches and utility restarts", async () 
 
   const restarted = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
   try {
-    const page = await restarted.firstWindow();
+    const page = await markdWindow(restarted, "main");
     await expect
       .poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({
@@ -609,6 +609,45 @@ test("Quick Capture shares the Engine without foreground activation", async () =
       "first thought\nsecond thought",
     );
 
+    const concurrent = await mainPage.evaluate(async () => {
+      const appended = window.markd!.capture.append("Inbox.md", "captured during save");
+      const saved = window.markd!.vault.writeNote(
+        "Inbox.md",
+        "edited thought",
+        "first thought\nsecond thought",
+      );
+      return Promise.all([appended, saved]);
+    });
+    expect(concurrent).toEqual([
+      { ok: true, value: expect.objectContaining({ rel: "Inbox.md" }) },
+      { ok: true, value: "edited thought\ncaptured during save" },
+    ]);
+    expect(await readFile(join(vault, "Inbox.md"), "utf8")).toBe(
+      "edited thought\ncaptured during save",
+    );
+
+    const autosaves = await mainPage.evaluate(() =>
+      Promise.all([
+        window.markd!.vault.writeNote(
+          "Inbox.md",
+          "first autosave\ncaptured during save",
+          "edited thought\ncaptured during save",
+        ),
+        window.markd!.vault.writeNote(
+          "Inbox.md",
+          "second autosave\ncaptured during save",
+          "first autosave\ncaptured during save",
+        ),
+      ]),
+    );
+    expect(autosaves).toEqual([
+      { ok: true, value: "first autosave\ncaptured during save" },
+      { ok: true, value: "second autosave\ncaptured during save" },
+    ]);
+    expect(await readFile(join(vault, "Inbox.md"), "utf8")).toBe(
+      "second autosave\ncaptured during save",
+    );
+
     const firstEnginePid = await application.evaluate(
       ({ app }) =>
         app.getAppMetrics().find((candidate) => candidate.name === "Markd Engine")
@@ -641,8 +680,50 @@ test("Quick Capture shares the Engine without foreground activation", async () =
         value: expect.objectContaining({ rel: "Inbox.md" }),
       });
     expect(await readFile(join(vault, "Inbox.md"), "utf8")).toBe(
-      "first thought\nsecond thought\nafter restart",
+      "second autosave\ncaptured during save\nafter restart",
     );
+  } finally {
+    await application.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
+test("Quick Capture clears a failed draft only after explicit close", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-capture-failure-"));
+  const application = await launchMarkd({
+    env: {
+      MARKD_TEST_CONFIG_DIR: join(scratch, "config"),
+      MARKD_TEST_QUICK_CAPTURE_ACCELERATOR: "F24",
+    },
+  });
+  try {
+    const mainPage = await markdWindow(application, "main");
+    const capturePage = await markdWindow(application, "quick-capture");
+    await mainPage.evaluate(() => window.markd!.capture.open());
+    await capturePage.getByRole("button", { name: "Append to note" }).click();
+    await capturePage.getByPlaceholder(/Note path/).fill("Inbox.md");
+    await capturePage
+      .getByPlaceholder("Write something worth keeping…")
+      .fill("kept draft");
+    await capturePage.getByRole("button", { name: "Append capture" }).click();
+    await expect(capturePage.getByRole("alert")).toContainText(
+      "No Vault is open",
+    );
+
+    await mainPage.evaluate(() => window.markd!.capture.open());
+    await expect(capturePage.getByPlaceholder(/Note path/)).toHaveValue("Inbox.md");
+    await expect(
+      capturePage.getByPlaceholder("Write something worth keeping…"),
+    ).toHaveValue("kept draft");
+    await expect(capturePage.getByRole("alert")).toBeVisible();
+
+    await capturePage.getByRole("button", { name: "Close Quick Capture" }).click();
+    await mainPage.evaluate(() => window.markd!.capture.open());
+    await expect(capturePage.getByRole("alert")).toHaveCount(0);
+    await expect(capturePage.getByPlaceholder("Title")).toHaveValue("");
+    await expect(
+      capturePage.getByPlaceholder("Write something worth keeping…"),
+    ).toHaveValue("");
   } finally {
     await application.close();
     await rm(scratch, { recursive: true, force: true });

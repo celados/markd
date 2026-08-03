@@ -191,7 +191,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
             },
           }),
         readNote: async () => success(""),
-        writeNote: async () => success(null),
+        writeNote: async (_rel, content) => success(content),
         moveToTrash: async () =>
           success({
             snapshot: {
@@ -280,7 +280,7 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         readNote: async (rel) => success(notes.get(rel) ?? ""),
         writeNote: async (rel, content) => {
           notes.set(rel, content);
-          return success(null);
+          return success(content);
         },
         moveToTrash: async (rel) => {
           trashCalls.push(rel);
