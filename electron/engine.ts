@@ -207,6 +207,13 @@ async function handleRequest(
       return vault.moveToTrash(request.params.rel);
     case "vault.note.path":
       return vault.resolveNotePath(request.params.rel);
+    case "vault.search":
+      return vault.searchNotes(request.params.query, request.params.limit);
+    case "vault.search.recordAccess":
+      await vault.recordNoteAccess(request.params.rel);
+      return null;
+    case "vault.backlinks":
+      return vault.backlinksFor(request.params.rel);
     case "vault.pins.list":
       return vault.listPins();
     case "vault.pins.add":

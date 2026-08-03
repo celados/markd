@@ -207,6 +207,9 @@ export async function installMarkdFixture(page: Page): Promise<void> {
             },
           }),
         resolveNotePath: async (rel) => success(`/tmp/markd-fixture/${rel}`),
+        search: async () => success([]),
+        recordSearchAccess: async () => success(null),
+        backlinks: async () => success([]),
         exportNote: async (rel) => success(`/tmp/${rel.split("/").at(-1)}`),
         assets: {
           save: async () => success(".markd/assets/fixture.png"),
@@ -342,6 +345,9 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
           return success({ snapshot: snapshot() });
         },
         resolveNotePath: async (rel) => success(`${root}/${rel}`),
+        search: async () => success([]),
+        recordSearchAccess: async () => success(null),
+        backlinks: async () => success([]),
         exportNote: async (rel) => success(`/tmp/${rel.split("/").at(-1)}`),
         assets: {
           save: async () => success(".markd/assets/fixture.png"),

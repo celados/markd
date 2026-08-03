@@ -99,7 +99,7 @@ export function CommandPalette() @{
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [open]);
 
-  // Content search is still owned by Rust; cmdk owns selection and activation.
+  // Vault Engine owns path/content projection; cmdk owns selection and activation.
   useEffect(() => {
     if (!open || status !== "ready") return;
     const trimmed = query.trim();
@@ -224,6 +224,11 @@ export function CommandPalette() @{
       hint: hit.titleMatch ? undefined : hit.snippet,
       icon: FileText,
       run: () => {
+        // Opening the Note must not wait on a secondary ranking signal, but a
+        // failed access record stays observable instead of becoming silent success.
+        void ipc.recordSearchAccess(hit.rel).catch((error) => {
+          console.error("[markd] failed to record search access", error);
+        });
         vault.expandTo(hit.rel);
         vault.setView({ type: "note", rel: hit.rel });
       },

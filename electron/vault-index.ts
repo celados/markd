@@ -1,7 +1,14 @@
-import { FileFinder, type FileFinderApi, type WatchEvent } from "@celados/fff-node";
+import {
+  FileFinder,
+  type FileFinderApi,
+  type GrepCursor,
+  type GrepResult,
+  type SearchResult,
+  type WatchEvent,
+} from "@celados/fff-node";
 import { lstat } from "node:fs/promises";
 import { basename, relative, sep } from "node:path";
-import type { Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
+import type { SearchHit, Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
 import { reconcileManagedIgnore } from "./managed-ignore";
 import { isAcceptedVaultRel } from "./vault-path-policy";
 
@@ -9,6 +16,10 @@ const SCAN_TIMEOUT_MS = 15_000;
 // Watch delivery is normally immediate; a short grace period avoids a full
 // rescan on healthy writes without turning a missed event into a frozen UI.
 const MUTATION_OBSERVATION_TIMEOUT_MS = 250;
+
+type SearchableFinder = FileFinderApi & {
+  trackAccess(relativePath: string): { ok: true; value: undefined } | { ok: false; error: string };
+};
 
 export type VaultIndexEntry = {
   rel: string;
@@ -47,12 +58,13 @@ export type VaultIndexOptions = {
     mtimeMs: number;
   }>;
   entryTimeoutMs?: number;
+  frecencyDbPath?: string;
 };
 
 export class VaultIndex {
   readonly #root: string;
   readonly #theme: Theme;
-  readonly #finder: FileFinderApi;
+  readonly #finder: SearchableFinder;
   readonly #listener: (event: VaultIndexEvent) => void;
   readonly #allocateEpoch: () => number;
   readonly #onFatal: (error: Error) => void;
@@ -75,7 +87,9 @@ export class VaultIndex {
   ) {
     this.#root = root;
     this.#theme = theme;
-    this.#finder = finder;
+    // The exact fff release is promoted with this slice; keeping its new method
+    // inside Vault Index prevents the native implementation type from escaping.
+    this.#finder = finder as SearchableFinder;
     this.#listener = options.listener ?? (() => {});
     let localEpoch = 0;
     this.#allocateEpoch = options.allocateEpoch ?? (() => ++localEpoch);
@@ -91,7 +105,8 @@ export class VaultIndex {
   ): Promise<VaultIndex> {
     await reconcileManagedIgnore(root);
     const created = options.createFinder?.(root) ?? FileFinder.create({
-        basePath: root,
+      basePath: root,
+        frecencyDbPath: options.frecencyDbPath,
         disableMmapCache: true,
         disableContentIndexing: false,
         followSymlinks: false,
@@ -117,6 +132,120 @@ export class VaultIndex {
   async snapshot(): Promise<VaultSnapshot> {
     this.#assertAvailable();
     return this.#snapshot();
+  }
+
+  searchNotes(query: string, limit: number): SearchHit[] {
+    this.#assertAvailable();
+    const needle = query.trim();
+    if (!needle || limit <= 0) return [];
+
+    try {
+      const pathHits = new Map<string, SearchHit>();
+      for (let pageIndex = 0; pathHits.size < limit; pageIndex += 1) {
+        const result: SearchResult = unwrap(
+          this.#finder.fileSearch(needle, { pageIndex, pageSize: Math.max(limit * 2, 50) }),
+          "FFF Note path search failed",
+        );
+        for (const item of result.items) {
+          if (!this.#isAcceptedNote(item.relativePath) || pathHits.has(item.relativePath)) {
+            continue;
+          }
+          pathHits.set(item.relativePath, searchHit(item.relativePath, "", true));
+          if (pathHits.size === limit) break;
+        }
+        if (result.items.length === 0 || (pageIndex + 1) * Math.max(limit * 2, 50) >= result.totalMatched) {
+          break;
+        }
+      }
+
+      const contentHits = new Map<string, SearchHit>();
+      let cursor: GrepCursor | null = null;
+      do {
+        const result: GrepResult = unwrap(
+          this.#finder.grep(needle, {
+            mode: "plain",
+            smartCase: true,
+            maxMatchesPerFile: 1,
+            pageSize: Math.max(limit * 2, 50),
+            cursor,
+          }),
+          "FFF Note content search failed",
+        );
+        for (const item of result.items) {
+          if (!this.#isAcceptedNote(item.relativePath) || contentHits.has(item.relativePath)) {
+            continue;
+          }
+          contentHits.set(
+            item.relativePath,
+            searchHit(item.relativePath, item.lineContent, false),
+          );
+        }
+        cursor = result.nextCursor;
+      } while (cursor && contentHits.size < limit);
+
+      const merged = [...pathHits.values()].map((hit) => ({
+        ...hit,
+        snippet: contentHits.get(hit.rel)?.snippet ?? hit.snippet,
+      }));
+      for (const hit of contentHits.values()) {
+        if (!pathHits.has(hit.rel)) merged.push(hit);
+      }
+      return merged.slice(0, limit);
+    } catch (cause) {
+      this.#fail(cause);
+      throw cause;
+    }
+  }
+
+  recordAccess(rel: string): void {
+    this.#assertAvailable();
+    if (!this.#isAcceptedNote(rel)) {
+      throw new Error(`Cannot record access for a Note outside the Vault Index: ${rel}`);
+    }
+    try {
+      unwrap(this.#finder.trackAccess(rel), "FFF Note access tracking failed");
+    } catch (cause) {
+      this.#fail(cause);
+      throw cause;
+    }
+  }
+
+  backlinkCandidates(targetRel: string): string[] {
+    this.#assertAvailable();
+    const patterns = backlinkPatterns(targetRel);
+    if (patterns.length === 0) return [];
+    try {
+      const candidates = new Set<string>();
+      let cursor: GrepCursor | null = null;
+      do {
+        const result: GrepResult = unwrap(
+          this.#finder.multiGrep({
+            patterns,
+            constraints: "*.md",
+            maxMatchesPerFile: 1,
+            pageSize: 512,
+            cursor,
+          }),
+          "FFF backlink candidate search failed",
+        );
+        for (const item of result.items) {
+          if (this.#isAcceptedNote(item.relativePath)) candidates.add(item.relativePath);
+        }
+        cursor = result.nextCursor;
+      } while (cursor);
+      return [...candidates];
+    } catch (cause) {
+      this.#fail(cause);
+      throw cause;
+    }
+  }
+
+  noteRels(): string[] {
+    this.#assertAvailable();
+    return [...this.#entries.values()]
+      .filter((entry) => entry.kind === "note")
+      .map((entry) => entry.rel)
+      .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
   }
 
   synchronize(): VaultIndexEvent {
@@ -368,6 +497,33 @@ export class VaultIndex {
     );
     return found === present;
   }
+
+  #isAcceptedNote(rel: string): boolean {
+    return this.#entries.get(normalizeFffRel(rel))?.kind === "note";
+  }
+}
+
+function searchHit(rel: string, snippet: string, titleMatch: boolean): SearchHit {
+  return {
+    rel,
+    title: basename(rel).replace(/\.md$/i, ""),
+    snippet: snippet.trim().replace(/\s+/g, " "),
+    titleMatch,
+  };
+}
+
+function backlinkPatterns(targetRel: string): string[] {
+  const normalized = normalizeFffRel(targetRel).replace(/^\/+/, "");
+  if (!normalized || !normalized.toLowerCase().endsWith(".md")) return [];
+  const withoutExtension = normalized.slice(0, -3);
+  const basenameWithoutExtension = basename(withoutExtension);
+  const encoded = normalized.split("/").map(encodeURIComponent).join("/");
+  return [...new Set([
+    normalized,
+    encoded,
+    withoutExtension,
+    basenameWithoutExtension,
+  ])];
 }
 
 function readAllEntries(finder: FileFinderApi): Map<string, VaultIndexEntry> {

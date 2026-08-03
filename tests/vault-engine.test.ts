@@ -95,6 +95,47 @@ describe("Vault Engine path policy", () => {
 
 });
 
+describe("Vault Engine search and backlinks", () => {
+  test("ranks path hits first and validates backlink candidates as Markdown", async () => {
+    const { engine } = await setupEngine([], async (root) => {
+      await mkdir(join(root, "Projects"));
+      await writeFile(join(root, "Projects", "Alpha.md"), "Alpha also appears here.");
+      await writeFile(join(root, "README.md"), "Alpha appears only in content.");
+      await writeFile(join(root, ".gitignore"), "Ignored.md\n");
+      await writeFile(join(root, "Ignored.md"), "Alpha must not escape the index.");
+      await writeFile(join(root, "Target.md"), "# Target");
+      await writeFile(
+        join(root, "Source.md"),
+        [
+          "Plain Target.md text is not a backlink.",
+          "![preview](Target.md)",
+          "```md",
+          "[example](Target.md)",
+          "```",
+          "A real [target](Target.md#details).",
+        ].join("\n"),
+      );
+    });
+
+    const hits = await engine.searchNotes("alpha", 10);
+    expect(hits.map((hit) => hit.rel)).toEqual([
+      "Projects/Alpha.md",
+      "README.md",
+    ]);
+    expect(hits[0]).toEqual(expect.objectContaining({ titleMatch: true }));
+    expect(hits[1]).toEqual(expect.objectContaining({ titleMatch: false }));
+
+    expect(await engine.backlinksFor("Target.md")).toEqual([
+      {
+        sourceRel: "Source.md",
+        context: "A real target.",
+        line: 6,
+        occurrence: 0,
+      },
+    ]);
+  });
+});
+
 describe("Vault Engine Pins", () => {
   test("persists valid note and folder Pins without duplicating descendants", async () => {
     const { engine, root } = await setupEngine();

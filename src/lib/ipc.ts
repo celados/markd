@@ -108,8 +108,17 @@ export const ipc = {
       ? unwrapDesktopResult(window.markd.vault.moveToTrash(rel)).then(() => undefined)
       : call<void>("delete_entry", { rel }),
   searchNotes: (query: string, limit?: number) =>
-    call<SearchHit[]>("search_notes", { query, limit }),
-  backlinksFor: (rel: string) => call<BacklinkMention[]>("backlinks_for", { rel }),
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.search(query, limit))
+      : call<SearchHit[]>("search_notes", { query, limit }),
+  recordSearchAccess: (rel: string) =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.recordSearchAccess(rel))
+      : call<void>("record_search_access", { rel }).then(() => null),
+  backlinksFor: (rel: string) =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.backlinks(rel))
+      : call<BacklinkMention[]>("backlinks_for", { rel }),
   cloudAccountStatus: () =>
     window.markd?.cloud
       ? unwrapDesktopResult(window.markd.cloud.accountStatus())

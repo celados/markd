@@ -19,6 +19,7 @@ import {
   type TodoChange,
 } from "./collections-domain";
 import type { PinSnapshot, Theme, VaultSnapshot } from "../src/lib/types";
+import { findBacklinkMentions } from "./backlink-links";
 import {
   atomicWriteText,
   NativeContentError,
@@ -72,6 +73,7 @@ export class VaultEngineError extends Error {
 
 export class VaultEngine {
   readonly #configFile: string;
+  readonly #frecencyDbPath: string;
   readonly #native: NativeVaultOperations;
   readonly #commitConfig: ConfigCommit;
   readonly #collections = new CollectionsEngine();
@@ -95,6 +97,7 @@ export class VaultEngine {
     onFatal: (error: VaultEngineError) => void = () => {},
   ) {
     this.#configFile = join(configDir, "config.json");
+    this.#frecencyDbPath = join(configDir, "fff-frecency");
     this.#native = native;
     this.#commitConfig = commitConfig;
     this.#onIndexEvent = onIndexEvent;
@@ -141,6 +144,7 @@ export class VaultEngine {
           if (!activated) candidateFailure = error;
           else this.#failIndex(error);
         },
+        frecencyDbPath: this.#frecencyDbPath,
       },
     );
     const previousRoot = this.#root;
@@ -398,6 +402,37 @@ export class VaultEngine {
   async readNote(rel: string): Promise<string> {
     const path = await this.#existingPath(rel, "note");
     return readFile(path, "utf8");
+  }
+
+  async searchNotes(query: string, limit: number) {
+    this.#requireRoot();
+    return this.#requireIndex().searchNotes(query, limit);
+  }
+
+  async recordNoteAccess(rel: string): Promise<void> {
+    await this.#existingPath(rel, "note");
+    this.#requireIndex().recordAccess(rel);
+  }
+
+  async backlinksFor(rel: string) {
+    await this.#existingPath(rel, "note");
+    const index = this.#requireIndex();
+    const noteRels = index.noteRels();
+    const mentions = [];
+    for (const sourceRel of index.backlinkCandidates(rel)) {
+      let content: string;
+      try {
+        content = await this.readNote(sourceRel);
+      } catch (error) {
+        if (error instanceof VaultEngineError && error.kind === "NOT_FOUND") continue;
+        throw error;
+      }
+      mentions.push(...findBacklinkMentions(content, sourceRel, rel, noteRels));
+    }
+    return mentions.sort((left, right) =>
+      left.sourceRel.localeCompare(right.sourceRel, undefined, { sensitivity: "base" }) ||
+      left.line - right.line
+    );
   }
 
   async writeNote(
