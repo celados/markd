@@ -4,7 +4,7 @@ import { installTauriFixture } from "./tauri-fixture";
 test.beforeEach(async ({ page }) => {
   await installTauriFixture(page);
   await page.goto("/");
-  await page.getByText("README.md", { exact: true }).click();
+  await page.getByRole("treeitem", { name: "README.md" }).click();
   await expect(page.locator('[data-note-editor="active"] .ProseMirror')).toBeVisible();
 });
 

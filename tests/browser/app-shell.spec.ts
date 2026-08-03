@@ -13,7 +13,7 @@ test("note actions preserve keyboard focus and dismissal", async ({ page }) => {
   });
 
   await page.goto("/");
-  await page.getByText("README.md", { exact: true }).click();
+  await page.getByRole("treeitem", { name: "README.md" }).click();
 
   await expect(
     page

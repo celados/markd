@@ -41,8 +41,8 @@ interface VaultState {
   createNote: (dir: string) => Promise<void>;
   openDailyNote: () => Promise<void>;
   createFolder: (dir: string, name: string) => Promise<string | null>;
-  renameEntry: (rel: string, name: string) => Promise<void>;
-  moveEntry: (rel: string, dir: string) => Promise<void>;
+  renameEntry: (rel: string, name: string) => Promise<string | null>;
+  moveEntry: (rel: string, dir: string) => Promise<string | null>;
   deleteEntry: (rel: string) => Promise<void>;
 
   setTheme: (theme: Theme) => Promise<void>;
@@ -330,8 +330,10 @@ export const useVault = create<VaultState>((set, get) => ({
         }
       }
       notifyNotesRewritten();
+      return next;
     } catch (err) {
       oops(err);
+      return null;
     }
   },
 
@@ -351,8 +353,10 @@ export const useVault = create<VaultState>((set, get) => ({
         }
       }
       notifyNotesRewritten();
+      return next;
     } catch (err) {
       oops(err);
+      return null;
     }
   },
 

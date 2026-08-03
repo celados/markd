@@ -10,7 +10,7 @@ import {
   LuSettings as Settings,
 } from "@/icons/icons.tsrx";
 import type { OctaneNode } from "octane";
-import { FileTree } from "@/components/tree/FileTree.tsrx";
+import { TreesFileTree } from "@/components/tree/trees-file-tree";
 import { PinnedNotes } from "@/components/tree/PinnedNotes.tsrx";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { Spinner } from "@/components/ui/Spinner";
@@ -102,7 +102,7 @@ export function Sidebar() @{
         </div>
       </div>
 
-      <FileTree />
+      <TreesFileTree />
 
       <UpdateRow />
 

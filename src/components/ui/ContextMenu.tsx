@@ -77,6 +77,7 @@ export function ContextMenu(props: ContextMenuProps) {
       ref={ref}
       role="menu"
       data-markd-no-drag
+      data-file-tree-context-menu-root="true"
       className="fixed z-100 min-w-[168px] rounded-lg border border-line bg-bg p-1 shadow-lg shadow-black/8 dark:shadow-black/40"
       style={{ left: adjusted.x, top: adjusted.y }}
     >

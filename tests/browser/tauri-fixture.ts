@@ -3,6 +3,9 @@ import type { Page } from "@playwright/test";
 type TauriFixtureOptions = {
   cloudLifecycle?: boolean;
   cloudSignOutFailure?: boolean;
+  largeTreeSize?: number;
+  mutationCollision?: boolean;
+  mutationFailure?: boolean;
   pinnedFolder?: boolean;
   stalePin?: string;
   taggedTodos?: boolean;
@@ -12,7 +15,14 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
   await page.addInitScript((fixtureOptions) => {
     let nextCallbackId = 1;
     const callbacks = new Map<number, { callback: (data: unknown) => void; once: boolean }>();
-    let tree = [
+    let tree: import("@/lib/types").TreeNode[] = fixtureOptions.largeTreeSize
+      ? Array.from({ length: fixtureOptions.largeTreeSize }, (_, index) => ({
+          name: `Note ${String(index).padStart(4, "0")}.md`,
+          rel: `Note ${String(index).padStart(4, "0")}.md`,
+          kind: "note" as const,
+          modifiedMs: index,
+        }))
+      : [
       {
         name: "README.md",
         rel: "README.md",
@@ -40,7 +50,7 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
         modifiedMs: 4,
         children: [],
       },
-    ];
+        ];
     let todos = fixtureOptions.taggedTodos
       ? [
           {
@@ -419,8 +429,42 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
             return args.handler ?? 1;
           case "plugin:event|unlisten":
           case "plugin:updater|check":
-          case "move_entry":
             return null;
+          case "create_folder": {
+            const dir = String(args.dir);
+            const name = String(args.name);
+            const rel = dir ? `${dir}/${name}` : name;
+            tree = insertTreeEntry(tree, dir, {
+              name,
+              rel,
+              kind: "folder",
+              modifiedMs: Date.now(),
+              children: [],
+            });
+            return rel;
+          }
+          case "rename_entry": {
+            if (fixtureOptions.mutationFailure) throw new Error("Rename rejected by disk");
+            const rel = String(args.rel);
+            const name = String(args.name);
+            const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+            const persistedName = fixtureOptions.mutationCollision ? withCollisionSuffix(name) : name;
+            const next = parent ? `${parent}/${persistedName}` : persistedName;
+            tree = remapTree(tree, rel, next);
+            return next;
+          }
+          case "move_entry": {
+            if (fixtureOptions.mutationFailure) throw new Error("Move rejected by disk");
+            const rel = String(args.rel);
+            const dir = String(args.dir);
+            const requestedName = rel.slice(rel.lastIndexOf("/") + 1);
+            const name = fixtureOptions.mutationCollision
+              ? withCollisionSuffix(requestedName)
+              : requestedName;
+            const next = dir ? `${dir}/${name}` : name;
+            tree = moveTreeEntry(tree, rel, next);
+            return next;
+          }
           default:
             return null;
         }
@@ -442,5 +486,72 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
     Object.assign(window, {
       __MARKD_TEST__: { clipboard, commands, notes, openedExternalUrls },
     });
+    function remapTree(
+      nodes: import("@/lib/types").TreeNode[],
+      rel: string,
+      next: string,
+    ): import("@/lib/types").TreeNode[] {
+      return nodes.map((node) => {
+        if (node.rel !== rel && !node.rel.startsWith(`${rel}/`)) {
+          return node.children ? { ...node, children: remapTree(node.children, rel, next) } : node;
+        }
+        const remappedRel = next + node.rel.slice(rel.length);
+        return {
+          ...node,
+          name: remappedRel.slice(remappedRel.lastIndexOf("/") + 1),
+          rel: remappedRel,
+          children: node.children ? remapTree(node.children, rel, next) : node.children,
+        };
+      });
+    }
+
+    function moveTreeEntry(
+      nodes: import("@/lib/types").TreeNode[],
+      rel: string,
+      next: string,
+    ): import("@/lib/types").TreeNode[] {
+      let moved: import("@/lib/types").TreeNode | null = null;
+      const remove = (items: import("@/lib/types").TreeNode[]) =>
+        items.flatMap((node): import("@/lib/types").TreeNode[] => {
+          if (node.rel === rel) {
+            moved = remapTree([node], rel, next)[0] ?? null;
+            return [];
+          }
+          return [node.children ? { ...node, children: remove(node.children) } : node];
+        });
+      const without = remove(nodes);
+      if (!moved) return without;
+      const parent = next.includes("/") ? next.slice(0, next.lastIndexOf("/")) : "";
+      if (!parent) return [...without, moved];
+      const insert = (items: import("@/lib/types").TreeNode[]): import("@/lib/types").TreeNode[] =>
+        items.map((node) =>
+          node.rel === parent
+            ? { ...node, children: [...(node.children ?? []), moved!] }
+            : node.children
+              ? { ...node, children: insert(node.children) }
+              : node,
+        );
+      return insert(without);
+    }
+
+    function withCollisionSuffix(name: string): string {
+      const dot = name.lastIndexOf(".");
+      return dot > 0 ? `${name.slice(0, dot)} 2${name.slice(dot)}` : `${name} 2`;
+    }
+
+    function insertTreeEntry(
+      nodes: import("@/lib/types").TreeNode[],
+      parent: string,
+      entry: import("@/lib/types").TreeNode,
+    ): import("@/lib/types").TreeNode[] {
+      if (!parent) return [...nodes, entry];
+      return nodes.map((node) =>
+        node.rel === parent
+          ? { ...node, children: [...(node.children ?? []), entry] }
+          : node.children
+            ? { ...node, children: insertTreeEntry(node.children, parent, entry) }
+            : node,
+      );
+    }
   }, options);
 }

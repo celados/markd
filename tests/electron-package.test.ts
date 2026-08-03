@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { createPackageWithOptions } from "@electron/asar";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { parse } from "yaml";
 import {
   inspectElectronPackage,
   inspectUpdateManifest,
@@ -51,6 +52,34 @@ test("artifact inspection accepts complete Electron and native inventories", asy
       "node_modules/@yuuang/ffi-rs-darwin-arm64/ffi-rs.darwin-arm64.node",
     ],
   });
+});
+
+test("arm64 packaging excludes foreign native packages without weakening inventory", async () => {
+  const config = parse(
+    await readFile(join(process.cwd(), "electron-builder.yml"), "utf8"),
+  ) as { asarUnpack: string[]; files: string[] };
+  const nativeExclusions = config.files.filter((entry) =>
+    entry.startsWith("!node_modules/@celados/") ||
+    entry.startsWith("!node_modules/@yuuang/"),
+  );
+
+  expect(nativeExclusions).toEqual([
+    "!node_modules/@celados/fff-bin-darwin-x64/**/*",
+    "!node_modules/@yuuang/ffi-rs-android-arm64/**/*",
+    "!node_modules/@yuuang/ffi-rs-darwin-x64/**/*",
+    "!node_modules/@yuuang/ffi-rs-linux-arm-gnueabihf/**/*",
+    "!node_modules/@yuuang/ffi-rs-linux-arm64-gnu/**/*",
+    "!node_modules/@yuuang/ffi-rs-linux-arm64-musl/**/*",
+    "!node_modules/@yuuang/ffi-rs-linux-x64-gnu/**/*",
+    "!node_modules/@yuuang/ffi-rs-linux-x64-musl/**/*",
+    "!node_modules/@yuuang/ffi-rs-win32-arm64-msvc/**/*",
+    "!node_modules/@yuuang/ffi-rs-win32-ia32-msvc/**/*",
+    "!node_modules/@yuuang/ffi-rs-win32-x64-msvc/**/*",
+  ]);
+  expect(config.asarUnpack).toEqual([
+    "node_modules/@celados/fff-bin-darwin-arm64/**/*",
+    "node_modules/@yuuang/ffi-rs-darwin-arm64/**/*",
+  ]);
 });
 
 test("artifact inspection rejects wrong-arch and extra native payloads", async () => {

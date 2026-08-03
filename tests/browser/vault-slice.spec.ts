@@ -111,6 +111,37 @@ test("live index changes reload clean Notes and preserve dirty drafts", async ({
   await expect(page.getByRole("treeitem", { name: "Existing.md" })).toHaveCount(0);
 });
 
+test("Vault Changes update the mounted Trees model incrementally", async ({ page }) => {
+  await installVaultSliceFixture(page);
+  await page.goto("/");
+  const host = page.locator("[data-markd-trees-host] > [data-note-tree]");
+  const identity = await host.evaluate((element) => {
+    (element as HTMLElement).dataset.testIdentity = "mounted-once";
+    return element.tagName;
+  });
+
+  await page.evaluate(() => {
+    const fixture = (window as Window & {
+      __MARKD_VAULT_TEST__: {
+        emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => void;
+      };
+    }).__MARKD_VAULT_TEST__;
+    fixture.emitIndexEvent({
+      kind: "changes",
+      indexEpoch: 1,
+      sequence: 1,
+      changes: [{
+        kind: "created",
+        entry: { rel: "External.md", kind: "note", modifiedMs: 2 },
+      }],
+    });
+  });
+
+  await expect(page.getByRole("treeitem", { name: "External.md" })).toBeVisible();
+  await expect(host).toHaveAttribute("data-test-identity", "mounted-once");
+  expect(identity).toBe("FILE-TREE-CONTAINER");
+});
+
 test("external removal closes a clean Note tab and view", async ({ page }) => {
   await installVaultSliceFixture(page);
   await page.goto("/");
