@@ -44,6 +44,8 @@ type AppConfig = {
   theme?: Theme;
 };
 
+type ConfigCommit = (path: string, content: string) => Promise<void>;
+
 type CaptureAppendProvenance = {
   events: Array<{
     beforeContent: string;
@@ -70,18 +72,26 @@ export class VaultEngineError extends Error {
 export class VaultEngine {
   readonly #configFile: string;
   readonly #native: NativeVaultOperations;
+  readonly #commitConfig: ConfigCommit;
   readonly #collections = new CollectionsEngine();
   readonly #captureAppends = new Map<string, CaptureAppendProvenance>();
   #root: string | null = null;
   #assetRoot: string | null = null;
   #theme: Theme = "system";
+  #fatalError: VaultEngineError | null = null;
 
-  constructor(configDir: string, native: NativeVaultOperations) {
+  constructor(
+    configDir: string,
+    native: NativeVaultOperations,
+    commitConfig: ConfigCommit = atomicWriteText,
+  ) {
     this.#configFile = join(configDir, "config.json");
     this.#native = native;
+    this.#commitConfig = commitConfig;
   }
 
   async startup(): Promise<VaultSnapshot | null> {
+    this.#assertOperational();
     if (this.#root) return this.snapshot();
     const config = await this.#readConfig();
     this.#theme = config.theme ?? "system";
@@ -97,6 +107,7 @@ export class VaultEngine {
   }
 
   async open(root: string, create: boolean): Promise<VaultSnapshot> {
+    this.#assertOperational();
     if (create) await mkdir(root, { recursive: true });
     const canonical = await canonicalDirectory(root);
     const assetRoot = await canonicalAssetRoot(canonical);
@@ -127,17 +138,36 @@ export class VaultEngine {
     } catch (error) {
       this.#root = previousRoot;
       this.#assetRoot = previousAssetRoot;
-      await Promise.allSettled([
-        this.#collections.activate(previousRoot),
-        this.#restoreConfig(previousConfig),
-        this.#native.rollbackAssetRoot(stageId),
-      ]).then((results) => {
-        for (const result of results) {
-          if (result.status === "rejected") {
-            console.error("[markd-engine] Vault activation rollback failed", result.reason);
-          }
-        }
-      });
+      const rollbackParticipants = [
+        ["collections", this.#collections.activate(previousRoot)],
+        ["config", this.#restoreConfig(previousConfig)],
+        ["native", this.#native.rollbackAssetRoot(stageId)],
+      ] as const;
+      const rollbackResults = await Promise.allSettled(
+        rollbackParticipants.map(([, operation]) => operation),
+      );
+      const rollbackFailures = rollbackResults.flatMap((result, index) =>
+        result.status === "rejected"
+          ? [{
+              participant: rollbackParticipants[index]![0],
+              error: describeError(result.reason),
+            }]
+          : [],
+      );
+      if (rollbackFailures.length > 0) {
+        const fatal = domainError(
+          "VAULT_ROLLBACK_FAILED",
+          "Vault activation failed and could not be rolled back safely. Restart Markd before continuing.",
+          {
+            original: describeError(error),
+            rollbackFailures,
+          },
+        );
+        // Once durable and in-memory roots may disagree, no operation can be
+        // reported successful until a new utility process reconstructs state.
+        this.#fatalError = fatal;
+        throw fatal;
+      }
       throw nativeOperationError(error);
     }
   }
@@ -148,42 +178,52 @@ export class VaultEngine {
   }
 
   collectionsSnapshot() {
+    this.#assertOperational();
     return this.#collections.snapshot();
   }
 
   createTodo(text: string, tags: string[]) {
+    this.#assertOperational();
     return this.#collections.createTodo(text, tags);
   }
 
   changeTodo(id: string, change: TodoChange) {
+    this.#assertOperational();
     return this.#collections.changeTodo(id, change);
   }
 
   removeTodo(id: string) {
+    this.#assertOperational();
     return this.#collections.removeTodo(id);
   }
 
   clearCompletedTodos() {
+    this.#assertOperational();
     return this.#collections.clearCompletedTodos();
   }
 
   createBookmark(url: string, tags: string[]) {
+    this.#assertOperational();
     return this.#collections.createBookmark(url, tags);
   }
 
   changeBookmark(id: string, change: BookmarkChange) {
+    this.#assertOperational();
     return this.#collections.changeBookmark(id, change);
   }
 
   removeBookmark(id: string) {
+    this.#assertOperational();
     return this.#collections.removeBookmark(id);
   }
 
   createCollectionTag(collection: CollectionKind, name: string) {
+    this.#assertOperational();
     return this.#collections.createTag(collection, name);
   }
 
   deleteCollectionTag(collection: CollectionKind, name: string) {
+    this.#assertOperational();
     return this.#collections.deleteTag(collection, name);
   }
 
@@ -305,6 +345,7 @@ export class VaultEngine {
   }
 
   async exportBookmarks(): Promise<string | null> {
+    this.#assertOperational();
     const snapshot = await this.#collections.snapshot();
     return this.#native.saveExport({
       suggestedName: "bookmarks.md",
@@ -447,8 +488,13 @@ export class VaultEngine {
   }
 
   #requireRoot(): string {
+    this.#assertOperational();
     if (!this.#root) throw domainError("NO_ACTIVE_VAULT", "No Vault is open.");
     return this.#root;
+  }
+
+  #assertOperational(): void {
+    if (this.#fatalError) throw this.#fatalError;
   }
 
   async #readConfig(): Promise<AppConfig> {
@@ -470,7 +516,7 @@ export class VaultEngine {
 
   async #writeConfig(config: AppConfig): Promise<void> {
     await mkdir(dirname(this.#configFile), { recursive: true });
-    await atomicWriteText(this.#configFile, `${JSON.stringify(config, null, 2)}\n`);
+    await this.#commitConfig(this.#configFile, `${JSON.stringify(config, null, 2)}\n`);
   }
 
   async #readConfigText(): Promise<string | null> {
@@ -487,7 +533,7 @@ export class VaultEngine {
       await rm(this.#configFile, { force: true });
       return;
     }
-    await atomicWriteText(this.#configFile, content);
+    await this.#commitConfig(this.#configFile, content);
   }
 }
 
@@ -600,8 +646,17 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function domainError(kind: string, message: string): VaultEngineError {
-  return new VaultEngineError({ kind, message });
+function domainError(kind: string, message: string, details?: unknown): VaultEngineError {
+  return new VaultEngineError({ kind, message, details });
+}
+
+function describeError(error: unknown): DesktopErrorData {
+  const tagged = error as { kind?: unknown; details?: unknown };
+  return {
+    kind: typeof tagged?.kind === "string" ? tagged.kind : "UNKNOWN",
+    message: error instanceof Error ? error.message : String(error),
+    ...(tagged?.details === undefined ? {} : { details: tagged.details }),
+  };
 }
 
 function appendCapture(current: string, content: string): string {

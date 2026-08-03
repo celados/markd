@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import {
+  atomicWriteText,
   loadAssetResponse,
   writeExportFile,
 } from "../electron/native-content";
@@ -132,6 +133,84 @@ describe("Vault Engine assets", () => {
     expect((await engine.collectionsSnapshot()).todos.map((todo) => todo.text)).toEqual(["keep"]);
     expect(await readFile(join(configDir, "config.json"), "utf8")).toBe(configBefore);
     expect(native.activeAssetRoot()).toBe(join(first.root, ".markd", "assets"));
+  });
+
+  test("a one-off config commit failure rolls back without poisoning the Engine", async () => {
+    const native = nativeDouble();
+    const scratch = await scratchDirectory("markd-open-config-failure-");
+    const firstRoot = join(scratch, "first");
+    const secondRoot = join(scratch, "second");
+    const configDir = join(scratch, "config");
+    await mkdir(firstRoot);
+    await mkdir(secondRoot);
+    let configCommits = 0;
+    const engine = new VaultEngine(
+      configDir,
+      native.operations,
+      async (path, content) => {
+        configCommits += 1;
+        if (configCommits === 2) throw new Error("config commit rejected");
+        await atomicWriteText(path, content);
+      },
+    );
+    const first = await engine.open(firstRoot, false);
+
+    await expect(engine.open(secondRoot, false)).rejects.toEqual(
+      expect.objectContaining({ kind: "NATIVE_OPERATION_FAILED" }),
+    );
+
+    expect((await engine.snapshot()).root).toBe(first.root);
+    expect(await engine.createTodo("still operational", [])).toEqual(
+      expect.objectContaining({ item: expect.objectContaining({ text: "still operational" }) }),
+    );
+    expect(JSON.parse(await readFile(join(configDir, "config.json"), "utf8"))).toEqual(
+      expect.objectContaining({ vaultPath: first.root }),
+    );
+    expect(native.activeAssetRoot()).toBe(join(first.root, ".markd", "assets"));
+  });
+
+  test("a config rollback failure is fatal and closes later mutation paths", async () => {
+    const native = nativeDouble();
+    const scratch = await scratchDirectory("markd-open-rollback-fatal-");
+    const firstRoot = join(scratch, "first");
+    const secondRoot = join(scratch, "second");
+    const configDir = join(scratch, "config");
+    await mkdir(firstRoot);
+    await mkdir(secondRoot);
+    let configCommits = 0;
+    const engine = new VaultEngine(
+      configDir,
+      native.operations,
+      async (path, content) => {
+        configCommits += 1;
+        if (configCommits === 3) throw new Error("config restore rejected");
+        await atomicWriteText(path, content);
+      },
+    );
+    await engine.open(firstRoot, false);
+    native.failNextCommit();
+
+    const activationError = await engine.open(secondRoot, false).catch((error) => error);
+
+    expect(activationError).toEqual(expect.objectContaining({
+      kind: "VAULT_ROLLBACK_FAILED",
+      details: {
+        original: expect.objectContaining({ message: "commit rejected" }),
+        rollbackFailures: [
+          {
+            participant: "config",
+            error: expect.objectContaining({ message: "config restore rejected" }),
+          },
+        ],
+      },
+    }));
+    expect(JSON.parse(await readFile(join(configDir, "config.json"), "utf8"))).toEqual(
+      expect.objectContaining({ vaultPath: await realpath(secondRoot) }),
+    );
+    expect(() => engine.createTodo("must not persist", [])).toThrow(activationError);
+    await expect(engine.createNote("", "Must not persist", "")).rejects.toBe(
+      activationError,
+    );
   });
 });
 
