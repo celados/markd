@@ -21,7 +21,7 @@ test("account and Published Share lifecycle use the semantic Cloud bridge", asyn
   ).__MARKD_TEST__.openedExternalUrls)).toEqual(["https://example.test/billing"]);
 
   await page.keyboard.press("Escape");
-  await page.getByText("README.md", { exact: true }).click();
+  await page.getByRole("treeitem", { name: "README.md" }).click();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   const publishing = page.getByRole("dialog", { name: "Publish note site on the web" });
   await expect(publishing.getByRole("button", { name: "Publish site" })).toBeVisible();

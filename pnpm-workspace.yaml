@@ -6,6 +6,9 @@ peerDependencyRules:
   # The package root is the Vanilla runtime; React peers belong only to its
   # explicit `/react` export and would violate Markd's Octane-only renderer.
   ignoreMissing:
+    # electron-builder's Windows target is irrelevant to the macOS-only
+    # package pipeline, but app-builder-lib declares it as a global peer.
+    - electron-builder-squirrel-windows
     - react
     - react-dom
 minimumReleaseAgeExclude:
