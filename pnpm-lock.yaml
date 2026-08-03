@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@celados/fff-node':
-        specifier: 0.10.2-nightly.8a9a970
-        version: 0.10.2-nightly.8a9a970
+        specifier: 0.10.2-nightly.0e97c3b
+        version: 0.10.2-nightly.0e97c3b
       '@codemirror/commands':
         specifier: ^6.10.4
         version: 6.10.4
@@ -246,18 +246,18 @@ packages:
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
 
-  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.8a9a970':
-    resolution: {integrity: sha512-h6ida3aEDlddCRXufJrecE/R/TlQfnjz2z+uLAo9kEkk7BrRtetAGY5dSyqFuLrqoJgqwrcM9Bec7yNSaU/x6w==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-arm64/-/@celados/fff-bin-darwin-arm64-0.10.2-nightly.8a9a970.tgz}
+  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.0e97c3b':
+    resolution: {integrity: sha512-L0AFqzB06TdrQzcrHldcJ+WYwzFif7PExaU5kjj4YybAZUbhpEfaIESXLxQ464b0FmZf8Oo6Ua2MeObqXXH4CA==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-arm64/-/@celados/fff-bin-darwin-arm64-0.10.2-nightly.0e97c3b.tgz}
     cpu: [arm64]
     os: [darwin]
 
-  '@celados/fff-bin-darwin-x64@0.10.2-nightly.8a9a970':
-    resolution: {integrity: sha512-qqJZgfGvCN32HqCtTVEQ2TIgD8QBkW2RGTmHwRCvvhpSxM0pur8LYBB6fM8/vREEcvyBKo0VpOfXxwHUngrpjw==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-x64/-/@celados/fff-bin-darwin-x64-0.10.2-nightly.8a9a970.tgz}
+  '@celados/fff-bin-darwin-x64@0.10.2-nightly.0e97c3b':
+    resolution: {integrity: sha512-OO3aGOHJwqeZZh4X9vo2zxXqfqVKrScP4zGHvi/Pl+ITn7u3n2rgV7TTBLMEKRE9uCWqfA3HJEn+4HZsFUUWmw==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-x64/-/@celados/fff-bin-darwin-x64-0.10.2-nightly.0e97c3b.tgz}
     cpu: [x64]
     os: [darwin]
 
-  '@celados/fff-node@0.10.2-nightly.8a9a970':
-    resolution: {integrity: sha512-4pJRgNzeWfWXQy32Hdl9opx73I1VNA9wb2BHBTWpVPPBDHmDOQrEyxSy1buw9JrjrxxAekEeS/C4FpTFJF/aCA==, tarball: https://npm.celados.com/@celados/fff-node/-/@celados/fff-node-0.10.2-nightly.8a9a970.tgz}
+  '@celados/fff-node@0.10.2-nightly.0e97c3b':
+    resolution: {integrity: sha512-z1i5GHzjle3Rv3RcH50GBU5xrP8mQN2edFAoiIbDfVit05lXIGjX/ynOBKJUT5XgnxMRXkhKAffyUIpBdvX6Tg==, tarball: https://npm.celados.com/@celados/fff-node/-/@celados/fff-node-0.10.2-nightly.0e97c3b.tgz}
     engines: {node: '>=18.0.0'}
     cpu: [x64, arm64]
     os: [darwin]
@@ -2924,18 +2924,18 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.8a9a970':
+  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.0e97c3b':
     optional: true
 
-  '@celados/fff-bin-darwin-x64@0.10.2-nightly.8a9a970':
+  '@celados/fff-bin-darwin-x64@0.10.2-nightly.0e97c3b':
     optional: true
 
-  '@celados/fff-node@0.10.2-nightly.8a9a970':
+  '@celados/fff-node@0.10.2-nightly.0e97c3b':
     dependencies:
       ffi-rs: 1.3.4
     optionalDependencies:
-      '@celados/fff-bin-darwin-arm64': 0.10.2-nightly.8a9a970
-      '@celados/fff-bin-darwin-x64': 0.10.2-nightly.8a9a970
+      '@celados/fff-bin-darwin-arm64': 0.10.2-nightly.0e97c3b
+      '@celados/fff-bin-darwin-x64': 0.10.2-nightly.0e97c3b
 
   '@codemirror/autocomplete@6.20.3':
     dependencies:

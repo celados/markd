@@ -16,6 +16,6 @@ minimumReleaseAgeExclude:
   - '@octanejs/vite-plugin@0.1.22'
   - '@octanejs/zustand@0.1.21'
   - octane@0.1.22
-  - '@celados/fff-bin-darwin-arm64@0.10.2-nightly.8a9a970'
-  - '@celados/fff-bin-darwin-x64@0.10.2-nightly.8a9a970'
-  - '@celados/fff-node@0.10.2-nightly.8a9a970'
+  - '@celados/fff-bin-darwin-arm64@0.10.2-nightly.0e97c3b'
+  - '@celados/fff-bin-darwin-x64@0.10.2-nightly.0e97c3b'
+  - '@celados/fff-node@0.10.2-nightly.0e97c3b'

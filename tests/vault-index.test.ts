@@ -12,6 +12,10 @@ import type { FileFinderApi, WatchEvent } from "@celados/fff-node";
 const execFileAsync = promisify(execFile);
 const scratchPaths: string[] = [];
 const indexes: VaultIndex[] = [];
+// Real fff watchers can pay a cold-start penalty on the shared runner. Keep the
+// outer budget above waitUntil's 10s diagnostic window so its contextual error
+// wins instead of Vitest's generic 5s timeout.
+const VAULT_INDEX_TEST_TIMEOUT_MS = 15_000;
 
 afterEach(async () => {
   for (const index of indexes.splice(0)) index.destroy();
@@ -20,7 +24,7 @@ afterEach(async () => {
   );
 });
 
-describe("fff-backed Vault Index", () => {
+describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () => {
   test("combines Vault ignore layers and enforces the hard policy", async () => {
     const scratch = await createScratch();
     const root = join(scratch, "vault");
