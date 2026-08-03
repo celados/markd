@@ -237,6 +237,32 @@ test("quick-capture preload does not expose main-window export capabilities", as
   }
 });
 
+test("updater quit lets Quick Capture close so ShipIt can replace the app", async () => {
+  const application = await launchMarkd({
+    env: { MARKD_TEST_QUICK_CAPTURE_ACCELERATOR: "F24" },
+  });
+  try {
+    await expect.poll(() => application.windows().length).toBe(2);
+    const result = await application.evaluate(async ({ autoUpdater, BrowserWindow, globalShortcut }) => {
+      autoUpdater.emit("before-quit-for-update");
+      const quickCapture = BrowserWindow.getAllWindows().find(
+        (window) => window.getBounds().width === 500,
+      );
+      if (!quickCapture) throw new Error("Quick Capture window was not created.");
+      const closed = new Promise<void>((resolve) => quickCapture.once("closed", resolve));
+      quickCapture.close();
+      await closed;
+      return {
+        destroyed: quickCapture.isDestroyed(),
+        shortcutRegistered: globalShortcut.isRegistered("F24"),
+      };
+    });
+    expect(result).toEqual({ destroyed: true, shortcutRegistered: false });
+  } finally {
+    await application.close();
+  }
+});
+
 test("real Cloud Engine completes account and Published Share lifecycle", async () => {
   const scratch = await mkdtemp(join(tmpdir(), "markd-electron-cloud-"));
   const configDir = join(scratch, "config");

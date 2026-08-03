@@ -34,6 +34,7 @@ test-results
 !CONTRIBUTING.md
 !brand.md
 !NOTARIZATION.md
+!RELEASE_NOTES.md
 !.agents/
 !.agents/**/*.md
 !docs/

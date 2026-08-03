@@ -1,5 +1,6 @@
 import {
   app,
+  autoUpdater as nativeAutoUpdater,
   BrowserWindow,
   dialog,
   globalShortcut,
@@ -12,7 +13,7 @@ import {
   type UtilityProcess,
   type WebContents,
 } from "electron";
-import { realpath } from "node:fs/promises";
+import { realpath, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,13 +37,33 @@ import { createEngineGenerationTerminal } from "./engine-generation";
 import { isTrustedCloudUrl, resolveCloudConfig } from "./cloud-config";
 import { loadAssetResponse, NativeContentError, writeExportFile } from "./native-content";
 import { UpdaterService, UpdaterServiceError } from "./updater-service";
+import { resolveE2eUpdateChannel } from "./update-channel";
+import {
+  consumeReleaseE2eState,
+  prepareReleaseE2eState,
+  readReleaseE2eState,
+} from "./release-e2e-state";
+import { createQuitCoordinator } from "./quit-coordinator";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const development =
   Boolean(process.env.VITE_DEV_SERVER_URL) ||
   process.env.MARKD_ENABLE_DEVTOOLS === "1";
-const backgroundE2e = process.env.MARKD_E2E_BACKGROUND === "1";
+const explicitBackgroundE2e = process.env.MARKD_E2E_BACKGROUND === "1";
+const releaseE2eState =
+  prepareReleaseE2eState(process.env, process.execPath) ??
+  readReleaseE2eState(process.execPath);
+const backgroundE2e = explicitBackgroundE2e || releaseE2eState !== null;
+if (releaseE2eState) app.setPath("userData", releaseE2eState.configDir);
 const { autoUpdater } = electronUpdater;
+const e2eUpdateChannel = resolveE2eUpdateChannel(
+  process.env.MARKD_E2E_UPDATE_URL,
+  backgroundE2e,
+);
+if (e2eUpdateChannel) {
+  // A loopback-only override lets signed packages exercise the real updater before publication.
+  autoUpdater.setFeedURL({ provider: "generic", url: e2eUpdateChannel });
+}
 const updater = new UpdaterService(autoUpdater, app.getVersion(), app.isPackaged);
 
 autoUpdater.logger = {
@@ -64,12 +85,17 @@ let engineEpoch = 0;
 let restartAvailable = true;
 let engineState: EngineState | null = null;
 let engineSpawned = false;
-let quitting = false;
 const attachedWebContents = new Set<number>();
 const loadedWebContents = new Set<number>();
 const windowKinds = new Map<number, v.InferOutput<typeof windowKindSchema>>();
 const captureAccelerator =
   process.env.MARKD_TEST_QUICK_CAPTURE_ACCELERATOR ?? "Control+Shift+Space";
+const quitCoordinator = createQuitCoordinator(() => {
+  globalShortcut.unregisterAll();
+  engine?.kill();
+  engine = null;
+});
+nativeAutoUpdater.on("before-quit-for-update", quitCoordinator.begin);
 
 if (process.platform === "linux") {
   // Wayland exposes global accelerators through the desktop portal rather than
@@ -171,7 +197,7 @@ function createCaptureWindow(): BrowserWindow {
   attachWindowDiagnostics(window.webContents);
   wireRendererWindow(window, "quick-capture");
   window.on("close", (event) => {
-    if (quitting) return;
+    if (quitCoordinator.isQuitting()) return;
     event.preventDefault();
     window.hide();
   });
@@ -247,7 +273,7 @@ function connectEngine(): UtilityProcess {
       error: unavailableError(message),
     });
     if (engine === child) engine = null;
-    if (quitting || !restartAvailable || markdWindows().length === 0) return;
+    if (quitCoordinator.isQuitting() || !restartAvailable || markdWindows().length === 0) return;
     restartAvailable = false;
     console.log(`[markd-main] restarting engine after epoch=${epoch}`);
     engine = connectEngine();
@@ -328,7 +354,10 @@ function attachRendererToEngine(window: BrowserWindow): void {
     child.postMessage({
       type: "connect",
       epoch: engineEpoch,
-      configDir: process.env.MARKD_TEST_CONFIG_DIR ?? app.getPath("userData"),
+      configDir:
+        releaseE2eState?.configDir ??
+        process.env.MARKD_TEST_CONFIG_DIR ??
+        app.getPath("userData"),
       windowKind,
     }, [port1]);
     webContents.postMessage(
@@ -769,6 +798,21 @@ ipcMain.on("markd:window-kind", (event) => {
 
 app.whenReady().then(() => {
   console.log("[markd-main] app ready");
+  if (releaseE2eState) {
+    // ShipIt does not promise to preserve env; parent-scoped state keeps the replacement hidden and observable.
+    void writeFile(releaseE2eState.markerPath, JSON.stringify({
+      version: app.getVersion(),
+      pid: process.pid,
+      executable: app.getPath("exe"),
+      nonce: releaseE2eState.nonce,
+    })).then(() => {
+      if (app.getVersion() === releaseE2eState.expectedVersion) {
+        consumeReleaseE2eState(process.execPath, releaseE2eState.nonce);
+      }
+    }).catch((error: unknown) => {
+      console.error("[markd-main] could not write release evidence", error);
+    });
+  }
   protocol.handle("markd-asset", handleAssetRequest);
   mainWindow = createMainWindow();
   mainWindow.webContents.once("did-finish-load", () => {
@@ -800,8 +844,5 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
-  quitting = true;
-  globalShortcut.unregisterAll();
-  engine?.kill();
-  engine = null;
+  quitCoordinator.begin();
 });

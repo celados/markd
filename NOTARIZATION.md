@@ -19,7 +19,7 @@ The executable contract is split across three files:
 - [`scripts/verify-electron-package.mjs`](./scripts/verify-electron-package.mjs) fails closed on native payload,
   updater metadata, and stale or extra artifacts;
 - [`.github/workflows/release-macos.yml`](./.github/workflows/release-macos.yml) owns tag validation, signing,
-  notarization, Gatekeeper checks, background packaged smoke, and upload.
+  notarization, Gatekeeper checks, installed-app journeys, updater promotion, and publication.
 
 # Local package gate
 
@@ -38,7 +38,9 @@ Both `.npmrc.tpl` and the rendered `.npmrc` are local-only and gitignored: the t
 locator, while the rendered file contains the registry credential. Neither may be committed.
 
 `package:test` builds an unsigned local macOS arm64 DMG and ZIP, checks the exact ASAR-unpacked fff/ffi native
-payload, validates `latest-mac.yml`, and launches the packaged app with `MARKD_E2E_BACKGROUND=1`.
+payload, validates `latest-mac.yml`, and launches the packaged app with `MARKD_E2E_BACKGROUND=1`. The packaged
+journeys cover Settings, Vault selection, editor-to-disk writes, fff search/watch, assets, Quick Capture, and
+the empty-Untitled Trash regression without taking foreground focus.
 
 # Release workflow
 
@@ -63,12 +65,23 @@ Markd-<version>-mac-arm64.zip.blockmap
 latest-mac.yml
 ```
 
-The workflow verifies the signed app and both unpacked native libraries with `codesign`, validates the app and
-DMG notarization tickets with `stapler`, assesses them with Gatekeeper, then runs the packaged Vault Index smoke
-without activating Markd in the foreground.
+The workflow mounts the DMG read-only, copies `Markd.app` into a unique isolated `Applications` directory, and
+then verifies signing, stapling, Gatekeeper, bundle identity, version, and the background packaged journeys on
+that installed copy. It also builds a temporary signed Electron `0.1.10` app and proves that the exact final ZIP
+replaces and relaunches it through Squirrel/ShipIt. The public Tauri `0.1.9` build is a different runtime and is
+therefore not a meaningful updater baseline for the Electron bootstrap release.
 
 # Publication boundary
 
-The website continues linking the real legacy `v0.1.9` DMG until #15 uploads the first canonical Electron asset.
-That issue must switch the website URL and release asset atomically; pointing the site at a not-yet-published
-canonical filename would create a public 404.
+Publication is a promotion, not a blind upload. The workflow creates or resumes a draft, rejects unexpected
+assets, refuses to clobber bytes already present, downloads every draft asset through the authenticated API,
+and checks its size plus SHA-256/SHA-512 against the local canonical payload. Only that verified draft is made
+public and explicitly marked latest. Anonymous readback then verifies both the tag endpoint and `/releases/latest`
+before the production GitHub updater performs the same signed install-and-relaunch journey.
+
+Failure before promotion leaves a draft for byte-identical resumption. Failure after promotion leaves the public
+release intact for diagnosis; published releases are never deleted or overwritten by recovery logic. Shared
+Squirrel cache, preferences, launchd state, and per-run `app.usemarkd.ShipIt.*` temporary entries are isolated and
+restored by exact path. Only after anonymous asset readback and the production updater smoke pass may #15 land its
+follow-up website commit/PR, switch `site/lib/config.ts` and the changelog to the canonical DMG, and verify the
+public download button. The implementation PR must not point the site at an asset that is not public yet.
