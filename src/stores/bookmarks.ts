@@ -24,8 +24,7 @@ interface BookmarksState {
   exportAll: () => Promise<void>;
 }
 
-const oops = (err: unknown) =>
-  toast.error(err instanceof Error ? err.message : String(err));
+const oops = (err: unknown) => toast.error(err instanceof Error ? err.message : String(err));
 
 export const useBookmarks = create<BookmarksState>((set, get) => ({
   bookmarks: [],
@@ -38,10 +37,9 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
 
   load: async () => {
     try {
-      const [bookmarks, tagRegistry] = await Promise.all([
-        ipc.bookmarksList(),
-        ipc.bookmarkTagsList(),
-      ]);
+      const snapshot = await ipc.collectionsSnapshot();
+      const bookmarks = snapshot.bookmarks;
+      const tagRegistry = snapshot.bookmarkTags;
       set({ bookmarks, tagRegistry, loaded: true });
       // pick up bookmarks whose metadata never arrived (e.g. app closed mid-fetch)
       for (const bookmark of bookmarks) {
@@ -67,6 +65,9 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
   },
 
   fetchMeta: async (id) => {
+    // Metadata enrichment remains a legacy native capability; Electron CRUD
+    // must not invoke a Tauri command that cannot exist in the new shell.
+    if (window.markd) return;
     if (get().fetching.has(id)) return;
     set({ fetching: new Set(get().fetching).add(id) });
     try {

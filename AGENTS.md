@@ -35,7 +35,7 @@ root pnpm workspace.
 ## Commands
 
 - `pnpm run dev` — run the Electron + Vite desktop shell; Phase 2 currently supports Vault choose/create/reopen,
-  coherent bootstrap snapshots, Note create/read/write and native Trash, while later domain slices remain on Tauri
+  coherent bootstrap snapshots, Note create/read/write, native Trash, Pins and Collections CRUD, while later domain slices remain on Tauri
 - `pnpm run dev:web` — renderer-only diagnostic surface in system browser; it is not the desktop product
 - `pnpm tauri dev` — legacy Tauri implementation for migration comparison only; do not extend its command surface
 - `pnpm run build` — strict app typecheck + Vite production build

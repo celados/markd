@@ -34,11 +34,8 @@ export const useTodos = create<TodosState>((set, get) => ({
 
   load: async () => {
     try {
-      const [todos, tagRegistry] = await Promise.all([
-        ipc.todosList(),
-        ipc.todoTagsList(),
-      ]);
-      set({ todos, tagRegistry, loaded: true });
+      const snapshot = await ipc.collectionsSnapshot();
+      set({ todos: snapshot.todos, tagRegistry: snapshot.todoTags, loaded: true });
     } catch (err) {
       oops(err);
     }

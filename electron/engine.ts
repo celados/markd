@@ -12,6 +12,7 @@ import {
   type EngineResponse,
 } from "./bridge-contract";
 import { VaultEngine, VaultEngineError } from "./vault-engine";
+import { CollectionsEngineError } from "./collections-engine";
 
 const parentPort = process.parentPort;
 if (!parentPort) {
@@ -117,6 +118,26 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
       return vault.pin(request.params.rel);
     case "vault.pins.remove":
       return vault.unpin(request.params.rel);
+    case "collections.snapshot":
+      return vault.collectionsSnapshot();
+    case "collections.todos.create":
+      return vault.createTodo(request.params.text, request.params.tags);
+    case "collections.todos.change":
+      return vault.changeTodo(request.params.id, request.params.change);
+    case "collections.todos.remove":
+      return vault.removeTodo(request.params.id);
+    case "collections.todos.clearCompleted":
+      return vault.clearCompletedTodos();
+    case "collections.bookmarks.create":
+      return vault.createBookmark(request.params.url, request.params.tags);
+    case "collections.bookmarks.change":
+      return vault.changeBookmark(request.params.id, request.params.change);
+    case "collections.bookmarks.remove":
+      return vault.removeBookmark(request.params.id);
+    case "collections.tags.create":
+      return vault.createCollectionTag(request.params.collection, request.params.name);
+    case "collections.tags.delete":
+      return vault.deleteCollectionTag(request.params.collection, request.params.name);
   }
 }
 
@@ -141,7 +162,7 @@ function respond(port: Electron.MessagePortMain, response: EngineResponse): void
 }
 
 function errorData(error: unknown): DesktopErrorData {
-  if (error instanceof VaultEngineError) {
+  if (error instanceof VaultEngineError || error instanceof CollectionsEngineError) {
     return { kind: error.kind, message: error.message, details: error.details };
   }
   const message = error instanceof Error ? error.message : String(error);

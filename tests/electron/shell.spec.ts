@@ -1,13 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  realpath,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { launchMarkd } from "./launch-markd";
@@ -46,7 +38,7 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
         })),
       )
       .toEqual({
-        bridgeModules: ["app", "updates", "vault"],
+        bridgeModules: ["app", "collections", "updates", "vault"],
         hasNodeProcess: false,
         hasRequire: false,
         hasIpcRenderer: false,
@@ -64,12 +56,8 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
           message: "No update is ready to install.",
         },
       });
-    await expect
-      .poll(() => diagnostics.join(""))
-      .toContain("[markd-main] engine ready epoch=1");
-    await expect
-      .poll(() => diagnostics.join(""))
-      .toContain("[markd-engine] ready epoch=1");
+    await expect.poll(() => diagnostics.join("")).toContain("[markd-main] engine ready epoch=1");
+    await expect.poll(() => diagnostics.join("")).toContain("[markd-engine] ready epoch=1");
     expect(pageErrors).toEqual([]);
   } finally {
     await application.close();
@@ -114,16 +102,16 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
     const untitled = page.getByRole("treeitem", { name: "Untitled.md" });
     await expect(untitled).toBeVisible();
     await expect(page.getByRole("tab", { name: /Untitled/ })).toBeVisible();
-    expect(await page.evaluate(() => window.markd!.vault.readNote("Untitled.md")))
-      .toEqual({ ok: true, value: "" });
-    expect(await page.evaluate(() =>
-      window.markd!.vault.writeNote("Untitled.md", "saved"),
-    )).toEqual({ ok: true, value: null });
+    expect(await page.evaluate(() => window.markd!.vault.readNote("Untitled.md"))).toEqual({
+      ok: true,
+      value: "",
+    });
+    expect(
+      await page.evaluate(() => window.markd!.vault.writeNote("Untitled.md", "saved")),
+    ).toEqual({ ok: true, value: null });
     expect(await readFile(join(chosenVault, "Untitled.md"), "utf8")).toBe("saved");
 
-    const traversal = await page.evaluate(() =>
-      window.markd!.vault.readNote("../outside.md"),
-    );
+    const traversal = await page.evaluate(() => window.markd!.vault.readNote("../outside.md"));
     expect(traversal).toEqual({
       ok: false,
       error: expect.objectContaining({ kind: "INVALID_PATH" }),
@@ -131,44 +119,31 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
     const outside = join(scratch, "outside.md");
     await writeFile(outside, "outside");
     await symlink(outside, join(chosenVault, "Escape.md"));
-    expect(await page.evaluate(() => window.markd!.vault.readNote("Escape.md")))
-      .toEqual({
-        ok: false,
-        error: expect.objectContaining({ kind: "INVALID_PATH" }),
-      });
+    expect(await page.evaluate(() => window.markd!.vault.readNote("Escape.md"))).toEqual({
+      ok: false,
+      error: expect.objectContaining({ kind: "INVALID_PATH" }),
+    });
     await mkdir(join(chosenVault, "Real"));
     await writeFile(join(chosenVault, "Real", "Inside.md"), "inside");
     await symlink("Real/Inside.md", join(chosenVault, "Alias.md"));
     await symlink("Real", join(chosenVault, "AliasFolder"));
     await mkdir(join(chosenVault, "notes", "node_modules"), { recursive: true });
-    await writeFile(
-      join(chosenVault, "notes", "node_modules", "Invisible.md"),
-      "invisible",
-    );
-    for (const rel of [
-      "Alias.md",
-      "AliasFolder/Inside.md",
-      "notes/node_modules/Invisible.md",
-    ]) {
-      expect(await page.evaluate(
-        (path) => window.markd!.vault.readNote(path),
-        rel,
-      )).toEqual({
+    await writeFile(join(chosenVault, "notes", "node_modules", "Invisible.md"), "invisible");
+    for (const rel of ["Alias.md", "AliasFolder/Inside.md", "notes/node_modules/Invisible.md"]) {
+      expect(await page.evaluate((path) => window.markd!.vault.readNote(path), rel)).toEqual({
         ok: false,
         error: expect.objectContaining({ kind: "INVALID_PATH" }),
       });
     }
-    expect(await page.evaluate(() => window.markd!.vault.moveToTrash("Alias.md")))
-      .toEqual({
-        ok: false,
-        error: expect.objectContaining({ kind: "INVALID_PATH" }),
-      });
-    expect(await readFile(join(chosenVault, "Real", "Inside.md"), "utf8"))
-      .toBe("inside");
+    expect(await page.evaluate(() => window.markd!.vault.moveToTrash("Alias.md"))).toEqual({
+      ok: false,
+      error: expect.objectContaining({ kind: "INVALID_PATH" }),
+    });
+    expect(await readFile(join(chosenVault, "Real", "Inside.md"), "utf8")).toBe("inside");
 
     await untitled.click({ button: "right" });
-    const responsiveness = page.evaluate(() =>
-      new Promise<string>((resolve) => setTimeout(() => resolve("responsive"), 0)),
+    const responsiveness = page.evaluate(
+      () => new Promise<string>((resolve) => setTimeout(() => resolve("responsive"), 0)),
     );
     await page.getByRole("menuitem", { name: "Move to Trash" }).click();
     await expect(responsiveness).resolves.toBe("responsive");
@@ -177,9 +152,7 @@ test("real Vault Engine and native shell complete the first Vault slice", async 
     expect(await page.evaluate(() => window.markd!.vault.snapshot())).toEqual({
       ok: true,
       value: expect.objectContaining({
-        tree: expect.arrayContaining([
-          expect.objectContaining({ rel: "Existing.md" }),
-        ]),
+        tree: expect.arrayContaining([expect.objectContaining({ rel: "Existing.md" })]),
       }),
     });
 
@@ -216,15 +189,16 @@ test("native Trash failure remains tagged and leaves the snapshot coherent", asy
   });
   try {
     const page = await application.firstWindow();
-    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup())).toEqual({
-      ok: true,
-      value: expect.objectContaining({ tree: [expect.objectContaining({ rel: "Untitled.md" })] }),
-    });
-    expect(await page.evaluate(() => window.markd!.vault.moveToTrash("Untitled.md")))
+    await expect
+      .poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({
-        ok: false,
-        error: expect.objectContaining({ kind: "NATIVE_OPERATION_FAILED" }),
+        ok: true,
+        value: expect.objectContaining({ tree: [expect.objectContaining({ rel: "Untitled.md" })] }),
       });
+    expect(await page.evaluate(() => window.markd!.vault.moveToTrash("Untitled.md"))).toEqual({
+      ok: false,
+      error: expect.objectContaining({ kind: "NATIVE_OPERATION_FAILED" }),
+    });
     expect(await page.evaluate(() => window.markd!.vault.snapshot())).toEqual({
       ok: true,
       value: expect.objectContaining({ tree: [expect.objectContaining({ rel: "Untitled.md" })] }),
@@ -253,17 +227,21 @@ test("Pins persist in the Vault and canonical paths expand a Vault symlink", asy
   const first = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
   try {
     const page = await first.firstWindow();
-    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
+    await expect
+      .poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
-    expect(await page.evaluate(() => window.markd!.vault.pins.add("Kept.md")))
-      .toEqual({ ok: true, value: { pins: ["Kept.md"], stale: [] } });
-    expect(await page.evaluate(() => window.markd!.vault.pins.add("Removed.md")))
-      .toEqual({
-        ok: true,
-        value: { pins: ["Removed.md", "Kept.md"], stale: [] },
-      });
-    expect(await page.evaluate(() => window.markd!.vault.resolveNotePath("Kept.md")))
-      .toEqual({ ok: true, value: join(await realpath(vault), "Kept.md") });
+    expect(await page.evaluate(() => window.markd!.vault.pins.add("Kept.md"))).toEqual({
+      ok: true,
+      value: { pins: ["Kept.md"], stale: [] },
+    });
+    expect(await page.evaluate(() => window.markd!.vault.pins.add("Removed.md"))).toEqual({
+      ok: true,
+      value: { pins: ["Removed.md", "Kept.md"], stale: [] },
+    });
+    expect(await page.evaluate(() => window.markd!.vault.resolveNotePath("Kept.md"))).toEqual({
+      ok: true,
+      value: join(await realpath(vault), "Kept.md"),
+    });
   } finally {
     await first.close();
   }
@@ -272,18 +250,127 @@ test("Pins persist in the Vault and canonical paths expand a Vault symlink", asy
   const second = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
   try {
     const page = await second.firstWindow();
-    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
+    await expect
+      .poll(() => page.evaluate(() => window.markd!.vault.startup()))
       .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
     expect(await page.evaluate(() => window.markd!.vault.pins.list())).toEqual({
       ok: true,
       value: { pins: ["Kept.md"], stale: ["Removed.md"] },
     });
-    expect(await page.evaluate(() => window.markd!.vault.pins.remove("Removed.md")))
-      .toEqual({ ok: true, value: { pins: ["Kept.md"], stale: [] } });
-    expect(JSON.parse(await readFile(join(vault, ".markd", "pins.json"), "utf8")))
-      .toEqual(["Kept.md"]);
+    expect(await page.evaluate(() => window.markd!.vault.pins.remove("Removed.md"))).toEqual({
+      ok: true,
+      value: { pins: ["Kept.md"], stale: [] },
+    });
+    expect(JSON.parse(await readFile(join(vault, ".markd", "pins.json"), "utf8"))).toEqual([
+      "Kept.md",
+    ]);
   } finally {
     await second.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
+test("Collections persist across Vault switches and utility restarts", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-collections-"));
+  const configDir = join(scratch, "config");
+  const firstVault = join(scratch, "first-vault");
+  const secondVault = join(scratch, "second-vault");
+  await mkdir(configDir, { recursive: true });
+  await mkdir(firstVault, { recursive: true });
+  await mkdir(secondVault, { recursive: true });
+  await writeFile(join(firstVault, "Visible.md"), "visible");
+  await writeFile(
+    join(configDir, "config.json"),
+    JSON.stringify({ vaultPath: firstVault, theme: "system" }),
+  );
+
+  const first = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
+  try {
+    const page = await first.firstWindow();
+    await expect
+      .poll(() => page.evaluate(() => window.markd!.vault.startup()))
+      .toEqual({
+        ok: true,
+        value: expect.objectContaining({ tree: [expect.objectContaining({ rel: "Visible.md" })] }),
+      });
+    const todo = await page.evaluate(() =>
+      window.markd!.collections.todos.create("Ship Electron", ["Work"]),
+    );
+    const bookmark = await page.evaluate(() =>
+      window.markd!.collections.bookmarks.create("example.com/read", ["Later"]),
+    );
+    expect(todo).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        item: expect.objectContaining({ text: "Ship Electron", tags: ["work"] }),
+      }),
+    });
+    expect(bookmark).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        item: expect.objectContaining({ url: "https://example.com/read", tags: ["later"] }),
+      }),
+    });
+    expect(await page.evaluate(() => window.markd!.vault.snapshot())).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        tree: [expect.objectContaining({ rel: "Visible.md" })],
+      }),
+    });
+
+    await first.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+    }, secondVault);
+    expect(await page.evaluate(() => window.markd!.vault.choose())).toEqual({
+      ok: true,
+      value: expect.objectContaining({ root: await realpath(secondVault), tree: [] }),
+    });
+    expect(await page.evaluate(() => window.markd!.collections.snapshot())).toEqual({
+      ok: true,
+      value: { todos: [], todoTags: [], bookmarks: [], bookmarkTags: [] },
+    });
+
+    await first.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+    }, firstVault);
+    await page.evaluate(() => window.markd!.vault.choose());
+    expect(await page.evaluate(() => window.markd!.collections.snapshot())).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        todos: [expect.objectContaining({ text: "Ship Electron" })],
+        bookmarks: [expect.objectContaining({ url: "https://example.com/read" })],
+      }),
+    });
+    expect(
+      await page.evaluate(() =>
+        window.markd!.collections.todos.change("missing", { type: "toggle" }),
+      ),
+    ).toEqual({
+      ok: false,
+      error: expect.objectContaining({ kind: "NOT_FOUND" }),
+    });
+  } finally {
+    await first.close();
+  }
+
+  const restarted = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
+  try {
+    const page = await restarted.firstWindow();
+    await expect
+      .poll(() => page.evaluate(() => window.markd!.vault.startup()))
+      .toEqual({
+        ok: true,
+        value: expect.objectContaining({ root: await realpath(firstVault) }),
+      });
+    expect(await page.evaluate(() => window.markd!.collections.snapshot())).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        todos: [expect.objectContaining({ text: "Ship Electron" })],
+        bookmarks: [expect.objectContaining({ url: "https://example.com/read" })],
+      }),
+    });
+  } finally {
+    await restarted.close();
     await rm(scratch, { recursive: true, force: true });
   }
 });
@@ -299,9 +386,7 @@ test("utility crash rejects outstanding calls and spends one restart", async () 
 
     const firstPid = await application.evaluate(({ app }) => {
       process.env.MARKD_ENGINE_READY_DELAY_MS = "1000";
-      const metric = app
-        .getAppMetrics()
-        .find((candidate) => candidate.name === "Markd Engine");
+      const metric = app.getAppMetrics().find((candidate) => candidate.name === "Markd Engine");
       if (!metric) throw new Error("Markd Engine process was not registered");
       process.kill(metric.pid);
       return metric.pid;
@@ -311,16 +396,14 @@ test("utility crash rejects outstanding calls and spends one restart", async () 
       .poll(async () => {
         const metrics = await application.evaluate(({ app }) => app.getAppMetrics());
         return metrics.find(
-          (candidate) =>
-            candidate.name === "Markd Engine" && candidate.pid !== firstPid,
+          (candidate) => candidate.name === "Markd Engine" && candidate.pid !== firstPid,
         )?.pid;
       })
       .toBeTruthy()
       .then(async () => {
         const metrics = await application.evaluate(({ app }) => app.getAppMetrics());
         return metrics.find(
-          (candidate) =>
-            candidate.name === "Markd Engine" && candidate.pid !== firstPid,
+          (candidate) => candidate.name === "Markd Engine" && candidate.pid !== firstPid,
         )!.pid;
       });
 
@@ -335,8 +418,7 @@ test("utility crash rejects outstanding calls and spends one restart", async () 
     await expect
       .poll(() =>
         page.evaluate(
-          () =>
-            (window as typeof window & { __engineResult?: unknown }).__engineResult,
+          () => (window as typeof window & { __engineResult?: unknown }).__engineResult,
         ),
       )
       .toEqual({

@@ -6,16 +6,10 @@ type TauriFixtureOptions = {
   taggedTodos?: boolean;
 };
 
-export async function installTauriFixture(
-  page: Page,
-  options: TauriFixtureOptions = {},
-) {
+export async function installTauriFixture(page: Page, options: TauriFixtureOptions = {}) {
   await page.addInitScript((fixtureOptions) => {
     let nextCallbackId = 1;
-    const callbacks = new Map<
-      number,
-      { callback: (data: unknown) => void; once: boolean }
-    >();
+    const callbacks = new Map<number, { callback: (data: unknown) => void; once: boolean }>();
     let tree = [
       {
         name: "README.md",
@@ -66,14 +60,13 @@ export async function installTauriFixture(
         ]
       : [];
     let todoTags = fixtureOptions.taggedTodos ? ["work", "later"] : [];
+    let bookmarks: import("@/lib/types").Bookmark[] = [];
+    let bookmarkTags: string[] = [];
     let pins = fixtureOptions.pinnedFolder ? ["Projects"] : [];
     let stalePins = fixtureOptions.stalePin ? [fixtureOptions.stalePin] : [];
     const clipboard: string[] = [];
     const notes = new Map([
-      [
-        "README.md",
-        "---\nfixture: preserved\n---\n# README\n\nOctane + pnpm verification.",
-      ],
+      ["README.md", "---\nfixture: preserved\n---\n# README\n\nOctane + pnpm verification."],
       ["Projects/Alpha.md", "# Alpha\n\nSecond live editor."],
     ]);
     const commands: Array<{ command: string; args: Record<string, unknown> }> = [];
@@ -102,10 +95,7 @@ export async function installTauriFixture(
           const base = dir ? `${dir}/` : "";
           const rel = `${base}${title}.md`;
           notes.set(rel, content);
-          tree = [
-            ...tree,
-            { name: `${title}.md`, rel, kind: "note", modifiedMs: Date.now() },
-          ];
+          tree = [...tree, { name: `${title}.md`, rel, kind: "note", modifiedMs: Date.now() }];
           return success({ rel, snapshot: snapshot() });
         },
         readNote: async (rel) => success(notes.get(rel) ?? ""),
@@ -119,8 +109,7 @@ export async function installTauriFixture(
           tree = tree.filter((node) => node.rel !== rel);
           return success({ snapshot: snapshot() });
         },
-        resolveNotePath: async (rel) =>
-          success(`/private/tmp/markd-browser-fixture/${rel}`),
+        resolveNotePath: async (rel) => success(`/private/tmp/markd-browser-fixture/${rel}`),
         pins: {
           list: async () => success({ pins, stale: stalePins }),
           add: async (rel) => {
@@ -132,6 +121,107 @@ export async function installTauriFixture(
             pins = pins.filter((pin) => pin !== rel);
             stalePins = stalePins.filter((pin) => pin !== rel);
             return success({ pins, stale: stalePins });
+          },
+        },
+      },
+      collections: {
+        snapshot: async () => success({ todos, todoTags, bookmarks, bookmarkTags }),
+        todos: {
+          create: async (text, tags = []) => {
+            const item = {
+              id: crypto.randomUUID(),
+              text: text.trim(),
+              done: false,
+              createdAt: Date.now(),
+              completedAt: null,
+              tags,
+            };
+            todos = [item, ...todos];
+            todoTags = [...new Set([...todoTags, ...tags])];
+            return success({ snapshot: { todos, todoTags, bookmarks, bookmarkTags }, item });
+          },
+          change: async (id, change) => {
+            let item = todos.find((todo) => todo.id === id)!;
+            if (change.type === "toggle")
+              item = { ...item, done: !item.done, completedAt: item.done ? null : Date.now() };
+            if (change.type === "text") item = { ...item, text: change.text };
+            if (change.type === "tags") {
+              item = { ...item, tags: change.tags };
+              todoTags = [...new Set([...todoTags, ...change.tags])];
+            }
+            todos = todos.map((todo) => (todo.id === id ? item : todo));
+            return success({ snapshot: { todos, todoTags, bookmarks, bookmarkTags }, item });
+          },
+          remove: async (id) => {
+            todos = todos.filter((todo) => todo.id !== id);
+            return success({ todos, todoTags, bookmarks, bookmarkTags });
+          },
+          clearCompleted: async () => {
+            todos = todos.filter((todo) => !todo.done);
+            return success({ todos, todoTags, bookmarks, bookmarkTags });
+          },
+        },
+        bookmarks: {
+          create: async (url, tags = []) => {
+            const normalized = url.startsWith("http") ? url : `https://${url}`;
+            const item = {
+              id: crypto.randomUUID(),
+              url: normalized,
+              title: normalized.replace(/^https?:\/\//, ""),
+              image: null,
+              favicon: null,
+              metaFetched: false,
+              tags,
+              createdAt: Date.now(),
+            };
+            bookmarks = [item, ...bookmarks];
+            bookmarkTags = [...new Set([...bookmarkTags, ...tags])];
+            return success({ snapshot: { todos, todoTags, bookmarks, bookmarkTags }, item });
+          },
+          change: async (id, change) => {
+            let item = bookmarks.find((bookmark) => bookmark.id === id)!;
+            if (change.type === "title") item = { ...item, title: change.title };
+            if (change.type === "tags") {
+              item = { ...item, tags: change.tags };
+              bookmarkTags = [...new Set([...bookmarkTags, ...change.tags])];
+            }
+            if (change.type === "metadata")
+              item = {
+                ...item,
+                title: change.title ?? item.title,
+                image: change.image ?? item.image,
+                favicon: change.favicon ?? item.favicon,
+                metaFetched: change.fetched,
+              };
+            bookmarks = bookmarks.map((bookmark) => (bookmark.id === id ? item : bookmark));
+            return success({ snapshot: { todos, todoTags, bookmarks, bookmarkTags }, item });
+          },
+          remove: async (id) => {
+            bookmarks = bookmarks.filter((bookmark) => bookmark.id !== id);
+            return success({ todos, todoTags, bookmarks, bookmarkTags });
+          },
+        },
+        tags: {
+          create: async (collection, name) => {
+            if (collection === "todos") todoTags = [...new Set([...todoTags, name])];
+            else bookmarkTags = [...new Set([...bookmarkTags, name])];
+            return success({ todos, todoTags, bookmarks, bookmarkTags });
+          },
+          delete: async (collection, name) => {
+            if (collection === "todos") {
+              todoTags = todoTags.filter((tag) => tag !== name);
+              todos = todos.map((item) => ({
+                ...item,
+                tags: item.tags.filter((tag) => tag !== name),
+              }));
+            } else {
+              bookmarkTags = bookmarkTags.filter((tag) => tag !== name);
+              bookmarks = bookmarks.map((item) => ({
+                ...item,
+                tags: item.tags.filter((tag) => tag !== name),
+              }));
+            }
+            return success({ todos, todoTags, bookmarks, bookmarkTags });
           },
         },
       },
@@ -224,12 +314,8 @@ export async function installTauriFixture(
             return todoTags;
           case "todo_set_tags": {
             const id = String(args.id);
-            const tags = Array.isArray(args.tags)
-              ? args.tags.map((tag) => String(tag))
-              : [];
-            todos = todos.map((todo) =>
-              todo.id === id ? { ...todo, tags } : todo,
-            );
+            const tags = Array.isArray(args.tags) ? args.tags.map((tag) => String(tag)) : [];
+            todos = todos.map((todo) => (todo.id === id ? { ...todo, tags } : todo));
             return todos.find((todo) => todo.id === id);
           }
           case "todo_tag_delete": {

@@ -14,9 +14,7 @@ import {
   type EngineState,
 } from "./bridge-contract";
 
-type DesktopResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: DesktopErrorData };
+type DesktopResult<T> = { ok: true; value: T } | { ok: false; error: DesktopErrorData };
 
 type PendingCall = {
   epoch: number;
@@ -321,9 +319,7 @@ async function requestEngine<T>(
   });
 }
 
-async function requestControl<T>(
-  requestInput: unknown,
-): Promise<DesktopResult<T>> {
+async function requestControl<T>(requestInput: unknown): Promise<DesktopResult<T>> {
   const parsedRequest = v.safeParse(controlRequestSchema, requestInput);
   if (!parsedRequest.success) {
     return {
@@ -420,10 +416,33 @@ contextBridge.exposeInMainWorld("markd", {
       remove: (rel: string) => requestEngine("vault.pins.remove", { rel }),
     },
   },
+  collections: {
+    snapshot: () => requestEngine("collections.snapshot", null),
+    todos: {
+      create: (text: string, tags: string[] = []) =>
+        requestEngine("collections.todos.create", { text, tags }),
+      change: (id: string, change: unknown) =>
+        requestEngine("collections.todos.change", { id, change }),
+      remove: (id: string) => requestEngine("collections.todos.remove", { id }),
+      clearCompleted: () => requestEngine("collections.todos.clearCompleted", null),
+    },
+    bookmarks: {
+      create: (url: string, tags: string[] = []) =>
+        requestEngine("collections.bookmarks.create", { url, tags }),
+      change: (id: string, change: unknown) =>
+        requestEngine("collections.bookmarks.change", { id, change }),
+      remove: (id: string) => requestEngine("collections.bookmarks.remove", { id }),
+    },
+    tags: {
+      create: (collection: "todos" | "bookmarks", name: string) =>
+        requestEngine("collections.tags.create", { collection, name }),
+      delete: (collection: "todos" | "bookmarks", name: string) =>
+        requestEngine("collections.tags.delete", { collection, name }),
+    },
+  },
   updates: {
     check: () => requestControl(controlRequestInput("updates.check", null)),
-    install: (id: string) =>
-      requestControl(controlRequestInput("updates.install", { id })),
+    install: (id: string) => requestControl(controlRequestInput("updates.install", { id })),
     relaunch: () => requestControl(controlRequestInput("app.relaunch", null)),
   },
 });

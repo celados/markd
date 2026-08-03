@@ -1,6 +1,12 @@
 import type {
+  Bookmark,
+  BookmarkChange,
   CloudAccountStatus,
+  CollectionKind,
+  CollectionsSnapshot,
   PinSnapshot,
+  Todo,
+  TodoChange,
   VaultSnapshot,
 } from "./types";
 
@@ -10,9 +16,7 @@ export type DesktopErrorData = {
   details?: unknown;
 };
 
-export type DesktopResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: DesktopErrorData };
+export type DesktopResult<T> = { ok: true; value: T } | { ok: false; error: DesktopErrorData };
 
 export type EngineLifecycle =
   | { state: "starting"; epoch: number }
@@ -45,14 +49,48 @@ export type MarkdDesktop = {
     ) => Promise<DesktopResult<{ rel: string; snapshot: VaultSnapshot }>>;
     readNote: (rel: string) => Promise<DesktopResult<string>>;
     writeNote: (rel: string, content: string) => Promise<DesktopResult<null>>;
-    moveToTrash: (
-      rel: string,
-    ) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
+    moveToTrash: (rel: string) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
     resolveNotePath: (rel: string) => Promise<DesktopResult<string>>;
     pins: {
       list: () => Promise<DesktopResult<PinSnapshot>>;
       add: (rel: string) => Promise<DesktopResult<PinSnapshot>>;
       remove: (rel: string) => Promise<DesktopResult<PinSnapshot>>;
+    };
+  };
+  collections: {
+    snapshot: () => Promise<DesktopResult<CollectionsSnapshot>>;
+    todos: {
+      create: (
+        text: string,
+        tags?: string[],
+      ) => Promise<DesktopResult<{ snapshot: CollectionsSnapshot; item: Todo }>>;
+      change: (
+        id: string,
+        change: TodoChange,
+      ) => Promise<DesktopResult<{ snapshot: CollectionsSnapshot; item: Todo }>>;
+      remove: (id: string) => Promise<DesktopResult<CollectionsSnapshot>>;
+      clearCompleted: () => Promise<DesktopResult<CollectionsSnapshot>>;
+    };
+    bookmarks: {
+      create: (
+        url: string,
+        tags?: string[],
+      ) => Promise<DesktopResult<{ snapshot: CollectionsSnapshot; item: Bookmark }>>;
+      change: (
+        id: string,
+        change: BookmarkChange,
+      ) => Promise<DesktopResult<{ snapshot: CollectionsSnapshot; item: Bookmark }>>;
+      remove: (id: string) => Promise<DesktopResult<CollectionsSnapshot>>;
+    };
+    tags: {
+      create: (
+        collection: CollectionKind,
+        name: string,
+      ) => Promise<DesktopResult<CollectionsSnapshot>>;
+      delete: (
+        collection: CollectionKind,
+        name: string,
+      ) => Promise<DesktopResult<CollectionsSnapshot>>;
     };
   };
   cloud?: {
@@ -95,9 +133,7 @@ export async function onNotesChanged(listener: () => void): Promise<() => void> 
   return listen("markd:notes-changed", listener);
 }
 
-export async function unwrapDesktopResult<T>(
-  resultPromise: Promise<DesktopResult<T>>,
-): Promise<T> {
+export async function unwrapDesktopResult<T>(resultPromise: Promise<DesktopResult<T>>): Promise<T> {
   const result = await resultPromise;
   if (result.ok) return result.value;
   throw new DesktopError(result.error);

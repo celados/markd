@@ -294,6 +294,7 @@ function RowAction(props: {
   <Tooltip label={label} side="top">
       <button
         type="button"
+        aria-label={label}
         disabled={spinning}
         className="grid h-7 w-7 place-items-center rounded-md text-faint transition-colors duration-100 hover:bg-active hover:text-ink"
         onClick={(event) => {

@@ -47,6 +47,22 @@ describe("Electron bridge contract", () => {
     expect(
       v.safeParse(engineRequestSchema, {
         type: "request",
+        id: "operation-collections",
+        method: "collections.todos.change",
+        params: { id: "todo-1", change: { type: "toggle" } },
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: "operation-invalid-collections",
+        method: "collections.todos.change",
+        params: { id: "todo-1", change: { type: "unknown" } },
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(engineRequestSchema, {
+        type: "request",
         id: "operation-2",
         method: "vault.open",
         params: { root: "/tmp/vault", create: false },
@@ -116,9 +132,16 @@ describe("Electron bridge contract", () => {
         stale: ["gone.md"],
       }),
     ).toBe(true);
-    expect(validateResponseValue("vault.note.path", "/tmp/vault/idea.md")).toBe(
-      true,
-    );
+    expect(validateResponseValue("vault.note.path", "/tmp/vault/idea.md")).toBe(true);
+    expect(
+      validateResponseValue("collections.snapshot", {
+        todos: [],
+        todoTags: [],
+        bookmarks: [],
+        bookmarkTags: [],
+      }),
+    ).toBe(true);
+    expect(validateResponseValue("collections.snapshot", { todos: {} })).toBe(false);
   });
 
   test("keeps expected failures as tagged data until the renderer boundary", async () => {
@@ -127,17 +150,15 @@ describe("Electron bridge contract", () => {
       message: "Markd Engine is unavailable.",
     });
 
-    await expect(
-      unwrapDesktopResult(Promise.resolve({ ok: false, error: data })),
-    ).rejects.toEqual(
+    await expect(unwrapDesktopResult(Promise.resolve({ ok: false, error: data }))).rejects.toEqual(
       expect.objectContaining({
         name: "DesktopError",
         kind: "ENGINE_UNAVAILABLE",
         message: "Markd Engine is unavailable.",
       }),
     );
-    await unwrapDesktopResult(Promise.resolve({ ok: false, error: data })).catch(
-      (error: unknown) => expect(error).toBeInstanceOf(DesktopError),
+    await unwrapDesktopResult(Promise.resolve({ ok: false, error: data })).catch((error: unknown) =>
+      expect(error).toBeInstanceOf(DesktopError),
     );
   });
 

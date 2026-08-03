@@ -43,6 +43,31 @@ export interface Bookmark {
   createdAt: number;
 }
 
+export type CollectionsSnapshot = {
+  todos: Todo[];
+  todoTags: string[];
+  bookmarks: Bookmark[];
+  bookmarkTags: string[];
+};
+
+export type CollectionKind = "todos" | "bookmarks";
+
+export type TodoChange =
+  | { type: "toggle" }
+  | { type: "text"; text: string }
+  | { type: "tags"; tags: string[] };
+
+export type BookmarkChange =
+  | { type: "title"; title: string }
+  | { type: "tags"; tags: string[] }
+  | {
+      type: "metadata";
+      title?: string;
+      image?: string | null;
+      favicon?: string | null;
+      fetched: boolean;
+    };
+
 export interface SearchHit {
   rel: string;
   title: string;
@@ -99,7 +124,4 @@ export interface PublishedNoteStatus {
   isOutdated: boolean;
 }
 
-export type View =
-  | { type: "note"; rel: string }
-  | { type: "todos" }
-  | { type: "bookmarks" };
+export type View = { type: "note"; rel: string } | { type: "todos" } | { type: "bookmarks" };

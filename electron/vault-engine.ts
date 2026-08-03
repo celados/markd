@@ -1,29 +1,9 @@
-import {
-  mkdir,
-  readFile,
-  readdir,
-  realpath,
-  rename,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  normalize,
-  relative,
-  resolve,
-  sep,
-} from "node:path";
+import { mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import type { DesktopErrorData } from "./bridge-contract";
-import type {
-  PinSnapshot,
-  Theme,
-  TreeNode,
-  VaultSnapshot,
-} from "../src/lib/types";
+import { CollectionsEngine } from "./collections-engine";
+import type { BookmarkChange, CollectionKind, TodoChange } from "./collections-domain";
+import type { PinSnapshot, Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
 
 type NativeTrash = (root: string, path: string) => Promise<void>;
 
@@ -47,6 +27,7 @@ export class VaultEngineError extends Error {
 export class VaultEngine {
   readonly #configFile: string;
   readonly #trash: NativeTrash;
+  readonly #collections = new CollectionsEngine();
   #root: string | null = null;
   #theme: Theme = "system";
 
@@ -74,7 +55,9 @@ export class VaultEngine {
     const canonical = await canonicalDirectory(root);
     await mkdir(join(canonical, ".markd", "assets"), { recursive: true });
     const snapshot = await buildSnapshot(canonical, this.#theme);
+    await this.#collections.validate(canonical);
     await this.#writeConfig({ vaultPath: canonical, theme: this.#theme });
+    await this.#collections.activate(canonical);
     this.#root = canonical;
     return snapshot;
   }
@@ -82,6 +65,46 @@ export class VaultEngine {
   async snapshot(): Promise<VaultSnapshot> {
     const root = this.#requireRoot();
     return buildSnapshot(root, this.#theme);
+  }
+
+  collectionsSnapshot() {
+    return this.#collections.snapshot();
+  }
+
+  createTodo(text: string, tags: string[]) {
+    return this.#collections.createTodo(text, tags);
+  }
+
+  changeTodo(id: string, change: TodoChange) {
+    return this.#collections.changeTodo(id, change);
+  }
+
+  removeTodo(id: string) {
+    return this.#collections.removeTodo(id);
+  }
+
+  clearCompletedTodos() {
+    return this.#collections.clearCompletedTodos();
+  }
+
+  createBookmark(url: string, tags: string[]) {
+    return this.#collections.createBookmark(url, tags);
+  }
+
+  changeBookmark(id: string, change: BookmarkChange) {
+    return this.#collections.changeBookmark(id, change);
+  }
+
+  removeBookmark(id: string) {
+    return this.#collections.removeBookmark(id);
+  }
+
+  createCollectionTag(collection: CollectionKind, name: string) {
+    return this.#collections.createTag(collection, name);
+  }
+
+  deleteCollectionTag(collection: CollectionKind, name: string) {
+    return this.#collections.deleteTag(collection, name);
   }
 
   async createNote(
@@ -151,10 +174,7 @@ export class VaultEngine {
       pins: active
         .map((pin) => pin.rel)
         .filter(
-          (rel) =>
-            !folderPins.some(
-              (folder) => rel !== folder && rel.startsWith(`${folder}/`),
-            ),
+          (rel) => !folderPins.some((folder) => rel !== folder && rel.startsWith(`${folder}/`)),
         ),
       stale,
     };
@@ -185,10 +205,7 @@ export class VaultEngine {
     return this.listPins();
   }
 
-  async #existingPath(
-    rel: string,
-    expected: "folder" | "note" | "entry" | "pin",
-  ): Promise<string> {
+  async #existingPath(rel: string, expected: "folder" | "note" | "entry" | "pin"): Promise<string> {
     const root = this.#requireRoot();
     const candidate = resolveVaultRel(root, rel);
     let canonical: string;
@@ -205,8 +222,7 @@ export class VaultEngine {
     const valid =
       expected === "entry" ||
       (expected === "pin" &&
-        (metadata.isDirectory() ||
-          (metadata.isFile() && canonical.endsWith(".md")))) ||
+        (metadata.isDirectory() || (metadata.isFile() && canonical.endsWith(".md")))) ||
       (expected === "folder" && metadata.isDirectory()) ||
       (expected === "note" && metadata.isFile() && canonical.endsWith(".md"));
     if (!valid) throw domainError("INVALID_PATH", `Invalid Vault path: ${rel}`);
@@ -218,20 +234,14 @@ export class VaultEngine {
       const input: unknown = JSON.parse(
         await readFile(join(this.#requireRoot(), ".markd", "pins.json"), "utf8"),
       );
-      if (
-        !Array.isArray(input) ||
-        !input.every((value) => typeof value === "string")
-      ) {
+      if (!Array.isArray(input) || !input.every((value) => typeof value === "string")) {
         throw domainError("PIN_STORE_INVALID", "The Vault Pin store is invalid.");
       }
       return input;
     } catch (error) {
       if (error instanceof VaultEngineError) throw error;
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw domainError(
-        "PIN_STORE_INVALID",
-        "The Vault Pin store could not be read.",
-      );
+      throw domainError("PIN_STORE_INVALID", "The Vault Pin store could not be read.");
     }
   }
 
@@ -244,9 +254,7 @@ export class VaultEngine {
 
   async #removePinsUnder(rel: string): Promise<void> {
     const pins = await this.#readPins();
-    const next = pins.filter(
-      (pin) => pin !== rel && !pin.startsWith(`${rel}/`),
-    );
+    const next = pins.filter((pin) => pin !== rel && !pin.startsWith(`${rel}/`));
     if (next.length !== pins.length) await this.#writePins(next);
   }
 
@@ -306,11 +314,7 @@ function resolveVaultRel(root: string, rel: string): string {
   if (
     parts.some(
       (part) =>
-        !part ||
-        part === "." ||
-        part === ".." ||
-        part === "node_modules" ||
-        part.startsWith("."),
+        !part || part === "." || part === ".." || part === "node_modules" || part.startsWith("."),
     ) ||
     (parts.length > 0 && ["AGENTS.md", "CLAUDE.md"].includes(parts[0]!))
   ) {
@@ -343,7 +347,13 @@ async function scanBootstrapTree(root: string): Promise<TreeNode[]> {
       const rel = toVaultRel(root, path);
       const modifiedMs = (await stat(path)).mtimeMs;
       if (entry.isDirectory()) {
-        nodes.push({ name: entry.name, rel, kind: "folder", children: await walk(path), modifiedMs });
+        nodes.push({
+          name: entry.name,
+          rel,
+          kind: "folder",
+          children: await walk(path),
+          modifiedMs,
+        });
       } else if (entry.isFile() && entry.name.endsWith(".md")) {
         nodes.push({ name: entry.name, rel, kind: "note", modifiedMs });
       }
