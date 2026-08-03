@@ -6,5 +6,9 @@ export type ElectronPackageInventory = {
   updateConfig: string;
 };
 
-export function inspectElectronPackage(appPath: string): ElectronPackageInventory;
+export function inspectElectronPackage(
+  appPath: string,
+  platform?: NodeJS.Platform,
+  arch?: string,
+): ElectronPackageInventory;
 export function findPackagedApp(outputDir: string): string;

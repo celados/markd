@@ -74,3 +74,93 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+  package-macos:
+    name: Package Electron macOS arm64
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 45
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          clean: false
+
+      - name: Prepare persistent workspace
+        run: |
+          git reset --hard --quiet "$GITHUB_SHA"
+          # These are generated package/test roots; preserving node_modules keeps the runner warm.
+          git clean -fdqx release/electron dist dist-electron test-results
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build installable Electron artifacts
+        run: pnpm run package:artifact
+
+      - name: Inspect native and updater payloads
+        run: pnpm run package:verify
+
+      - name: Run packaged utility smoke in background
+        run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
+
+      - name: Keep Electron test artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: markd-electron-macos-arm64
+          path: |
+            release/electron/Markd-*.dmg
+            release/electron/Markd-*.zip
+            release/electron/latest-mac.yml
+          if-no-files-found: error
+
+  package-linux:
+    name: Package Electron Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build installable Electron artifacts
+        run: pnpm run package:artifact
+
+      - name: Inspect native and updater payloads
+        run: pnpm run package:verify
+
+      - name: Run packaged utility smoke in background
+        run: xvfb-run --auto-servernum env MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
+
+      - name: Keep Electron test artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: markd-electron-linux-x64
+          path: |
+            release/electron/Markd-*.AppImage
+            release/electron/Markd-*.deb
+            release/electron/latest-linux.yml
+          if-no-files-found: error

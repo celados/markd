@@ -1,9 +1,14 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { listPackage } from "@electron/asar";
+import { parse } from "yaml";
 
-export function inspectElectronPackage(appPath) {
+export function inspectElectronPackage(
+  appPath,
+  platform = process.platform,
+  arch = process.arch,
+) {
   const resources = resolveResources(appPath);
   const asarPath = join(resources, "app.asar");
   const unpackedPath = `${asarPath}.unpacked`;
@@ -23,15 +28,64 @@ export function inspectElectronPackage(appPath) {
     if (!archived.includes(required)) throw new Error(`Packaged entry is missing: ${required}`);
   }
 
-  const unpacked = walkFiles(unpackedPath);
-  const fffLibrary = unpacked.find((path) => /libfff_c\.(dylib|so)$|fff_c\.dll$/u.test(path));
-  if (!fffLibrary) throw new Error("Packaged fff dynamic library is missing from app.asar.unpacked.");
-  const ffiAddon = unpacked.find((path) => /ffi-rs\..+\.node$/u.test(path));
-  if (!ffiAddon) throw new Error("Packaged ffi-rs native addon is missing from app.asar.unpacked.");
+  const expected = nativeLayout(platform, arch);
+  const fffLibrary = join("node_modules", "@celados", expected.fffPackage, expected.fffFile);
+  if (!existsSync(join(unpackedPath, fffLibrary))) {
+    throw new Error(`Packaged fff dynamic library is missing: ${fffLibrary}`);
+  }
+  const ffiAddon = join("node_modules", "@yuuang", expected.ffiPackage, expected.ffiFile);
+  if (!existsSync(join(unpackedPath, ffiAddon))) {
+    throw new Error(`Packaged ffi-rs native addon is missing: ${ffiAddon}`);
+  }
 
   const updateConfig = join(resources, "app-update.yml");
   if (!existsSync(updateConfig)) throw new Error(`Updater provider metadata is missing: ${updateConfig}`);
+  const provider = parse(readFileSync(updateConfig, "utf8"));
+  if (
+    provider?.provider !== "github" ||
+    provider?.owner !== "celados" ||
+    provider?.repo !== "markd"
+  ) {
+    throw new Error("Packaged updater provider must target celados/markd GitHub releases.");
+  }
   return { appPath, asarPath, fffLibrary, ffiAddon, updateConfig };
+}
+
+function nativeLayout(platform, arch) {
+  if (!new Set(["arm64", "x64"]).has(arch)) {
+    throw new Error(`Unsupported packaged architecture: ${arch}`);
+  }
+  if (platform === "darwin") {
+    return {
+      fffPackage: `fff-bin-darwin-${arch}`,
+      fffFile: "libfff_c.dylib",
+      ffiPackage: `ffi-rs-darwin-${arch}`,
+      ffiFile: `ffi-rs.darwin-${arch}.node`,
+    };
+  }
+  if (platform === "linux") {
+    const libc = runtimeLibc();
+    return {
+      fffPackage: `fff-bin-linux-${arch}-${libc}`,
+      fffFile: "libfff_c.so",
+      ffiPackage: `ffi-rs-linux-${arch}-${libc}`,
+      ffiFile: `ffi-rs.linux-${arch}-${libc}.node`,
+    };
+  }
+  if (platform === "win32") {
+    return {
+      fffPackage: `fff-bin-win32-${arch}`,
+      fffFile: "fff_c.dll",
+      ffiPackage: `ffi-rs-win32-${arch}-msvc`,
+      ffiFile: `ffi-rs.win32-${arch}-msvc.node`,
+    };
+  }
+  throw new Error(`Unsupported packaged platform: ${platform}`);
+}
+
+function runtimeLibc() {
+  const report = process.report?.getReport();
+  return report && "glibcVersionRuntime" in report.header ? "gnu" : "musl";
 }
 
 export function findPackagedApp(outputDir) {
@@ -50,21 +104,6 @@ function resolveResources(appPath) {
   return process.platform === "darwin"
     ? join(appPath, "Contents", "Resources")
     : join(appPath, "resources");
-}
-
-function walkFiles(root) {
-  if (!existsSync(root)) return [];
-  const files = [];
-  const pending = [root];
-  while (pending.length > 0) {
-    const dir = pending.pop();
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) pending.push(path);
-      else if (entry.isFile()) files.push(relative(root, path));
-    }
-  }
-  return files;
 }
 
 function walkDirectories(root) {

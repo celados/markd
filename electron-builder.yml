@@ -11,7 +11,6 @@ asar: true
 asarUnpack:
   # fff passes its dylib path to ffi-rs, so both native layers must be real
   # files. The packaged smoke rejects an ASAR-only or missing native payload.
-  - node_modules/@ff-labs/fff-bin-*/**/*
   - node_modules/@celados/fff-bin-*/**/*
   - node_modules/@yuuang/ffi-rs-*/**/*
 npmRebuild: false
@@ -23,13 +22,15 @@ mac:
   category: public.app-category.productivity
   icon: src-tauri/icons/icon.icns
   hardenedRuntime: true
-  entitlements: src-tauri/Entitlements.plist
-  entitlementsInherit: src-tauri/Entitlements.plist
+  notarize: true
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
   target:
     - dmg
     - zip
 linux:
   category: Office
+  executableName: Markd
   icon: src-tauri/icons
   target:
     - AppImage

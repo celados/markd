@@ -1,4 +1,4 @@
-name: Release Linux
+name: Release Electron Linux
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag, for example v0.1.5
+        description: Existing release tag, for example v0.1.9
         required: true
         type: string
 
@@ -15,33 +15,25 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-linux-${{ github.event.inputs.tag || github.ref_name }}
+  group: release-electron-linux-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   build:
-    name: Build Linux x86_64
-    runs-on: ubuntu-22.04
+    name: Build Electron Linux x64
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       GH_TOKEN: ${{ github.token }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
     steps:
       - name: Check out release source
-        uses: actions/checkout@v6
-
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -51,54 +43,63 @@ jobs:
         with:
           node-version: 24
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate release inputs
+      - name: Validate tag version
         run: |
-          : "${TAURI_SIGNING_PRIVATE_KEY:?TAURI_SIGNING_PRIVATE_KEY is not configured}"
-          VERSION="${RELEASE_TAG#v}"
-          CONFIG_VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
-          test "$VERSION" = "$CONFIG_VERSION" || {
-            echo "Tag $RELEASE_TAG does not match app version $CONFIG_VERSION"
+          tag_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+          test "$(git rev-parse HEAD)" = "$tag_sha" || {
+            echo "Checked-out source does not match $RELEASE_TAG" >&2
             exit 1
           }
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          version="${RELEASE_TAG#v}"
+          package_version="$(node -p "require('./package.json').version")"
+          test "$version" = "$package_version" || {
+            echo "Tag $RELEASE_TAG does not match package version $package_version" >&2
+            exit 1
+          }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
-      - name: Build AppImage and Debian package
-        run: pnpm exec tauri build --bundles appimage,deb
-
-      - name: Prepare release artifacts
+      - name: Run release gates
         run: |
-          APPIMAGE="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
-          DEB="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
-          test -n "$APPIMAGE" && test -f "$APPIMAGE.sig"
-          test -n "$DEB"
+          pnpm test
+          pnpm run build
 
-          mkdir -p release-artifacts
-          install -m 755 "$APPIMAGE" "release-artifacts/Markd_${VERSION}_amd64.AppImage"
-          cp "$APPIMAGE.sig" "release-artifacts/Markd_${VERSION}_amd64.AppImage.sig"
-          cp "$DEB" "release-artifacts/Markd_${VERSION}_amd64.deb"
+      - name: Build Electron AppImage and Debian package
+        run: pnpm exec electron-builder --linux AppImage deb --publish never
 
-          node scripts/generate-linux-update-manifest.js \
-            "$VERSION" \
-            "release-artifacts/Markd_${VERSION}_amd64.AppImage.sig" \
-            "release-artifacts/latest-linux.json" \
-            "Markd ${VERSION} for Linux"
+      - name: Inspect native and updater payloads
+        run: pnpm run package:verify
 
-      - name: Keep a workflow artifact
+      - name: Run packaged utility smoke in background
+        run: xvfb-run --auto-servernum env MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
+
+      - name: Verify release metadata
+        run: |
+          test -s release/electron/latest-linux.yml
+          test -n "$(find release/electron -maxdepth 1 -name 'Markd-*.AppImage' -print -quit)"
+          test -n "$(find release/electron -maxdepth 1 -name 'Markd-*.deb' -print -quit)"
+
+      - name: Keep verified workflow artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: markd-linux-${{ env.VERSION }}
-          path: release-artifacts/
+          name: markd-electron-linux-${{ env.VERSION }}
+          path: |
+            release/electron/Markd-*.AppImage
+            release/electron/Markd-*.AppImage.blockmap
+            release/electron/Markd-*.deb
+            release/electron/latest-linux.yml
           if-no-files-found: error
 
       - name: Upload to GitHub release
         run: |
           gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
-            gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "Markd ${VERSION}" || \
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "Markd $VERSION" || \
             gh release view "$RELEASE_TAG" >/dev/null
-          gh release upload "$RELEASE_TAG" release-artifacts/* --clobber
+          gh release upload "$RELEASE_TAG" \
+            release/electron/Markd-*.AppImage \
+            release/electron/Markd-*.AppImage.blockmap \
+            release/electron/Markd-*.deb \
+            release/electron/latest-linux.yml \
+            --clobber

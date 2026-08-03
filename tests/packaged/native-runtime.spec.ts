@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-test("packaged utility loads fff and queries the configured Vault", async () => {
+test("packaged utility queries the configured Vault", async () => {
   const executablePath = process.env.MARKD_PACKAGED_EXECUTABLE;
   if (!executablePath) throw new Error("MARKD_PACKAGED_EXECUTABLE is required.");
   const scratch = await mkdtemp(join(tmpdir(), "markd-packaged-smoke-"));
