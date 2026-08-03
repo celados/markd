@@ -547,6 +547,11 @@ contextBridge.exposeInMainWorld("markd", {
       requestEngine("vault.note.write", { rel, content, expectedContent }),
     moveToTrash: (rel: string) => requestEngine("vault.trash", { rel }),
     resolveNotePath: (rel: string) => requestEngine("vault.note.path", { rel }),
+    search: (query: string, limit = 12) =>
+      requestEngine("vault.search", { query, limit }),
+    recordSearchAccess: (rel: string) =>
+      requestEngine("vault.search.recordAccess", { rel }),
+    backlinks: (rel: string) => requestEngine("vault.backlinks", { rel }),
     ...(windowKind === "main"
       ? {
           exportNote: (rel: string, content: string) =>

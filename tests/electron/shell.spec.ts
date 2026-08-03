@@ -759,6 +759,81 @@ test("real utility owns ignore-correct initial scan, watch, and policy rescan", 
   }
 });
 
+test("real utility owns search frecency and validated backlinks", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-search-"));
+  const configDir = join(scratch, "config");
+  const vault = join(scratch, "vault");
+  await mkdir(join(vault, "node_modules", "package"), { recursive: true });
+  await mkdir(configDir, { recursive: true });
+  await writeFile(join(vault, "Content A.md"), "shared needle");
+  await writeFile(join(vault, "Content B.md"), "shared needle");
+  await writeFile(join(vault, "Target.md"), "# Target");
+  await writeFile(
+    join(vault, "Source.md"),
+    [
+      "---",
+      "ref: '[metadata](Target.md)'",
+      "---",
+      "Plain Target.md text.",
+      "![preview](Target.md)",
+      "```md",
+      "[example](Target.md)",
+      "```",
+      "See [the target](Target.md#details) and [[Target|its wiki alias]].",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(vault, "node_modules", "package", "Ignored.md"),
+    "shared needle",
+  );
+  await writeFile(
+    join(configDir, "config.json"),
+    JSON.stringify({ vaultPath: vault, theme: "system" }),
+  );
+
+  const application = await launchMarkd({ env: { MARKD_TEST_CONFIG_DIR: configDir } });
+  try {
+    const page = await markdWindow(application, "main");
+    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup()))
+      .toEqual({ ok: true, value: expect.objectContaining({ root: await realpath(vault) }) });
+
+    const searchOrder = () => page.evaluate(async () => {
+      const result = await window.markd!.vault.search("shared needle", 10);
+      return result.ok ? result.value.map((hit) => hit.rel) : [`ERROR:${result.error.kind}`];
+    });
+    await expect.poll(searchOrder).toEqual(["Content A.md", "Content B.md"]);
+
+    // fff intentionally treats access as a secondary signal; repeat the user
+    // action so it crosses the stable lexical tie-breaker without changing weights.
+    expect(await page.evaluate(() => window.markd!.vault.recordSearchAccess("Content B.md")))
+      .toEqual({ ok: true, value: null });
+    expect(await page.evaluate(() => window.markd!.vault.recordSearchAccess("Content B.md")))
+      .toEqual({ ok: true, value: null });
+    await expect.poll(searchOrder).toEqual(["Content B.md", "Content A.md"]);
+
+    expect(await page.evaluate(() => window.markd!.vault.backlinks("Target.md"))).toEqual({
+      ok: true,
+      value: [
+        {
+          sourceRel: "Source.md",
+          context: "See the target and its wiki alias.",
+          line: 9,
+          occurrence: 0,
+        },
+        {
+          sourceRel: "Source.md",
+          context: "See the target and its wiki alias.",
+          line: 9,
+          occurrence: 1,
+        },
+      ],
+    });
+  } finally {
+    await application.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
 test("native Trash failure remains tagged and leaves the snapshot coherent", async () => {
   const scratch = await mkdtemp(join(tmpdir(), "markd-electron-trash-failure-"));
   const configDir = join(scratch, "config");

@@ -10,6 +10,8 @@ import type {
   PublishedNoteStatus,
   PublishedShare,
   PublishPageDraft,
+  BacklinkMention,
+  SearchHit,
   Todo,
   TodoChange,
   VaultSnapshot,
@@ -97,6 +99,9 @@ export type MarkdDesktop = {
     ) => Promise<DesktopResult<string>>;
     moveToTrash: (rel: string) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
     resolveNotePath: (rel: string) => Promise<DesktopResult<string>>;
+    search: (query: string, limit?: number) => Promise<DesktopResult<SearchHit[]>>;
+    recordSearchAccess: (rel: string) => Promise<DesktopResult<null>>;
+    backlinks: (rel: string) => Promise<DesktopResult<BacklinkMention[]>>;
     exportNote?: (rel: string, content: string) => Promise<DesktopResult<string | null>>;
     assets: {
       save: (data: string, extension: string) => Promise<DesktopResult<string>>;

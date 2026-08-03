@@ -25,6 +25,121 @@ afterEach(async () => {
 });
 
 describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () => {
+  test("projects accepted Note search candidates without leaking fff result types", async () => {
+    const scratch = await createScratch();
+    const root = join(scratch, "vault");
+    await mkdir(root);
+    const accessed: string[] = [];
+    const finder = fakeFinder(["Projects/Alpha.md", "README.md"], () => {});
+    finder.fileSearch = () => ({
+      ok: true,
+      value: {
+        items: [
+          fakeFileItem("Projects/Alpha.md", 80),
+          fakeFileItem("Ignored.md", 100),
+        ],
+        scores: [],
+        totalMatched: 2,
+        totalFiles: 3,
+      },
+    });
+    finder.grep = () => ({
+      ok: true,
+      value: fakeGrepResult([
+        fakeGrepMatch("README.md", "Alpha appears in content", 60),
+        fakeGrepMatch("Projects/Alpha.md", "duplicate content match", 90),
+        fakeGrepMatch("Ignored.md", "ignored content", 100),
+      ]),
+    });
+    finder.trackAccess = (rel) => {
+      accessed.push(rel);
+      return { ok: true, value: undefined };
+    };
+    const index = await VaultIndex.open(root, "system", {
+      createFinder: () => ({ ok: true, value: finder }),
+    });
+    indexes.push(index);
+
+    expect(index.searchNotes("alpha", 10)).toEqual([
+      {
+        rel: "Projects/Alpha.md",
+        title: "Alpha",
+        snippet: "duplicate content match",
+        titleMatch: true,
+      },
+      {
+        rel: "README.md",
+        title: "README",
+        snippet: "Alpha appears in content",
+        titleMatch: false,
+      },
+    ]);
+    expect(index.recordAccess("Projects/Alpha.md")).toBeUndefined();
+    expect(accessed).toEqual(["Projects/Alpha.md"]);
+  });
+
+  test("narrows backlink candidates to deduplicated accepted Notes", async () => {
+    const scratch = await createScratch();
+    const root = join(scratch, "vault");
+    await mkdir(root);
+    const patterns: string[][] = [];
+    const finder = fakeFinder(["Source.md", "Other.md"], () => {});
+    finder.multiGrep = (options) => {
+      patterns.push(options.patterns);
+      return {
+        ok: true,
+        value: fakeGrepResult([
+          fakeGrepMatch("Source.md", "[target](Projects/Target%20Note.md)", 0),
+          fakeGrepMatch("Source.md", "Projects/Target Note.md plain text", 0),
+          fakeGrepMatch("Ignored.md", "[[Target Note]]", 0),
+          fakeGrepMatch("Other.md", "[[Target Note]]", 0),
+        ]),
+      };
+    };
+    const index = await VaultIndex.open(root, "system", {
+      createFinder: () => ({ ok: true, value: finder }),
+    });
+    indexes.push(index);
+
+    expect(index.backlinkCandidates("Projects/Target Note.md")).toEqual([
+      "Source.md",
+      "Other.md",
+    ]);
+    expect(patterns[0]).toEqual(expect.arrayContaining([
+      "projects/target note.md",
+      "projects/target%20note.md",
+      "projects/target%20note",
+      "target note",
+    ]));
+  });
+
+  test("native candidate narrowing is a conservative superset of link parsing", async () => {
+    const scratch = await createScratch();
+    const root = join(scratch, "vault");
+    await mkdir(join(root, "Projects"), { recursive: true });
+    await writeFile(join(root, "Target.md"), "# Target");
+    await writeFile(join(root, "Projects", "Target Note.md"), "# Target Note");
+    await writeFile(join(root, "Case.md"), "[lowercase](target.md)");
+    await writeFile(join(root, "Encoded Letter.md"), "[letter](%54arget.md)");
+    await writeFile(
+      join(root, "Encoded.md"),
+      "[extensionless](Projects/Target%20Note)",
+    );
+    await writeFile(
+      join(root, "Encoded Separator.md"),
+      "[encoded separator](Projects%2FTarget%20Note)",
+    );
+
+    const index = await VaultIndex.open(root, "system");
+    indexes.push(index);
+
+    expect(index.backlinkCandidates("Target.md")).toEqual(
+      expect.arrayContaining(["Case.md", "Encoded Letter.md"]),
+    );
+    expect(index.backlinkCandidates("Projects/Target Note.md")).toEqual(
+      expect.arrayContaining(["Encoded.md", "Encoded Separator.md"]),
+    );
+  });
   test("combines Vault ignore layers and enforces the hard policy", async () => {
     const scratch = await createScratch();
     const root = join(scratch, "vault");
@@ -527,6 +642,46 @@ function deferred<T>() {
 
 function fakeResidentFile(relativePath: string) {
   return { type: "file" as const, relativePath, modified: 1 };
+}
+
+function fakeFileItem(relativePath: string, totalFrecencyScore: number) {
+  return {
+    relativePath,
+    fileName: relativePath.split("/").at(-1) ?? relativePath,
+    size: 1,
+    modified: 1,
+    accessFrecencyScore: totalFrecencyScore,
+    modificationFrecencyScore: 0,
+    totalFrecencyScore,
+    gitStatus: "clean",
+  };
+}
+
+function fakeGrepMatch(
+  relativePath: string,
+  lineContent: string,
+  totalFrecencyScore: number,
+) {
+  return {
+    ...fakeFileItem(relativePath, totalFrecencyScore),
+    isBinary: false,
+    lineNumber: 1,
+    col: 0,
+    byteOffset: 0,
+    lineContent,
+    matchRanges: [[0, 5]] as [number, number][],
+  };
+}
+
+function fakeGrepResult(items: ReturnType<typeof fakeGrepMatch>[]) {
+  return {
+    items,
+    totalMatched: items.length,
+    totalFilesSearched: items.length,
+    totalFiles: items.length,
+    filteredFileCount: items.length,
+    nextCursor: null,
+  };
 }
 
 function fakeFinder(

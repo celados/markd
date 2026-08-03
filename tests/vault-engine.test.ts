@@ -95,6 +95,136 @@ describe("Vault Engine path policy", () => {
 
 });
 
+describe("Vault Engine search and backlinks", () => {
+  test("ranks path hits first and validates backlink candidates as Markdown", async () => {
+    const { engine } = await setupEngine([], async (root) => {
+      await mkdir(join(root, "Projects"));
+      await writeFile(join(root, "Projects", "Alpha.md"), "Alpha also appears here.");
+      await writeFile(join(root, "README.md"), "Alpha appears only in content.");
+      await writeFile(join(root, ".gitignore"), "Ignored.md\n");
+      await writeFile(join(root, "Ignored.md"), "Alpha must not escape the index.");
+      await writeFile(join(root, "Target.md"), "# Target");
+      await writeFile(
+        join(root, "Source.md"),
+        [
+          "Plain Target.md text is not a backlink.",
+          "![preview](Target.md)",
+          "```md",
+          "[example](Target.md)",
+          "```",
+          "A real [target](Target.md#details).",
+        ].join("\n"),
+      );
+    });
+
+    const hits = await engine.searchNotes("alpha", 10);
+    expect(hits.map((hit) => hit.rel)).toEqual([
+      "Projects/Alpha.md",
+      "README.md",
+    ]);
+    expect(hits[0]).toEqual(expect.objectContaining({ titleMatch: true }));
+    expect(hits[1]).toEqual(expect.objectContaining({ titleMatch: false }));
+
+    expect(await engine.backlinksFor("Target.md")).toEqual([
+      {
+        sourceRel: "Source.md",
+        context: "A real target.",
+        line: 6,
+        occurrence: 0,
+      },
+    ]);
+  });
+
+  test("persists access ranking for the same canonical Vault across restarts", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-frecency-"));
+    scratchPaths.push(scratch);
+    const root = join(scratch, "vault");
+    const config = join(scratch, "config");
+    await mkdir(root);
+    await writeFile(join(root, "Content A.md"), "shared needle");
+    await writeFile(join(root, "Content B.md"), "shared needle");
+    const native = fakeNative();
+
+    const first = new VaultEngine(config, native);
+    engines.push(first);
+    await first.open(root, false);
+    await first.recordNoteAccess("Content B.md");
+    await first.recordNoteAccess("Content B.md");
+    expect((await first.searchNotes("shared needle", 2))[0]?.rel).toBe("Content B.md");
+    first.destroy();
+
+    const restarted = new VaultEngine(config, native);
+    engines.push(restarted);
+    await restarted.startup();
+    expect((await restarted.searchNotes("shared needle", 2))[0]?.rel).toBe("Content B.md");
+  });
+});
+
+describe("Vault Engine transactional open", () => {
+  test("switches real native indexes without sharing a frecency environment", async () => {
+    const { engine, root, scratch } = await setupEngine();
+    const otherRoot = join(scratch, "other-vault");
+    await mkdir(otherRoot);
+    await writeFile(join(otherRoot, "Other.md"), "other");
+
+    await expect(engine.open(otherRoot, false)).resolves.toEqual(
+      expect.objectContaining({ root: await realpath(otherRoot) }),
+    );
+    expect(await engine.readNote("Other.md")).toBe("other");
+    await expect(engine.readNote("Missing.md")).rejects.toEqual(
+      expect.objectContaining({ kind: "NOT_FOUND" }),
+    );
+    expect(root).not.toBe(otherRoot);
+  });
+
+  test("reuses the active index when an alias resolves to the same Vault", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-same-root-"));
+    scratchPaths.push(scratch);
+    const root = join(scratch, "vault");
+    const alias = join(scratch, "alias");
+    await mkdir(root);
+    await symlink(root, alias);
+    let stages = 0;
+    const native = fakeNative({ stageAssetRoot: async () => `stage-${++stages}` });
+    const engine = new VaultEngine(join(scratch, "config"), native);
+    engines.push(engine);
+
+    await engine.open(root, false);
+    await engine.open(alias, false);
+    expect(stages).toBe(1);
+  });
+
+  test("keeps the old native index operational when candidate commit rolls back", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-rollback-"));
+    scratchPaths.push(scratch);
+    const root = join(scratch, "vault");
+    const otherRoot = join(scratch, "other-vault");
+    await mkdir(root);
+    await mkdir(otherRoot);
+    await writeFile(join(root, "Old.md"), "old");
+    await writeFile(join(otherRoot, "New.md"), "new");
+    let commits = 0;
+    let rollbacks = 0;
+    const native = fakeNative({
+      commitAssetRoot: async () => {
+        commits += 1;
+        if (commits === 2) throw new Error("candidate commit failed");
+      },
+      rollbackAssetRoot: async () => { rollbacks += 1; },
+    });
+    const engine = new VaultEngine(join(scratch, "config"), native);
+    engines.push(engine);
+    await engine.open(root, false);
+
+    await expect(engine.open(otherRoot, false)).rejects.toEqual(
+      expect.objectContaining({ kind: "NATIVE_OPERATION_FAILED" }),
+    );
+    expect(rollbacks).toBe(1);
+    expect(await engine.readNote("Old.md")).toBe("old");
+    expect((await engine.snapshot()).root).toBe(await realpath(root));
+  });
+});
+
 describe("Vault Engine Pins", () => {
   test("persists valid note and folder Pins without duplicating descendants", async () => {
     const { engine, root } = await setupEngine();
@@ -402,4 +532,17 @@ async function setupEngine(
   engines.push(engine);
   await engine.open(root, false);
   return { engine, root, scratch };
+}
+
+function fakeNative(
+  overrides: Partial<ConstructorParameters<typeof VaultEngine>[1]> = {},
+): ConstructorParameters<typeof VaultEngine>[1] {
+  return {
+    moveToTrash: async (_root, path) => rm(path, { recursive: true }),
+    stageAssetRoot: async () => "stage",
+    commitAssetRoot: async () => undefined,
+    rollbackAssetRoot: async () => undefined,
+    saveExport: async () => null,
+    ...overrides,
+  };
 }

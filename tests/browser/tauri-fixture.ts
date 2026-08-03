@@ -150,6 +150,25 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
           return success({ snapshot: snapshot() });
         },
         resolveNotePath: async (rel) => success(`/private/tmp/markd-browser-fixture/${rel}`),
+        search: async () => success([
+          {
+            rel: "Projects/Alpha.md",
+            title: "Alpha result",
+            snippet: "first result",
+            titleMatch: true,
+          },
+          {
+            rel: "README.md",
+            title: "README result",
+            snippet: "second result",
+            titleMatch: false,
+          },
+        ]),
+        recordSearchAccess: async (rel) => {
+          commands.push({ command: "record_search_access", args: { rel } });
+          return success(null);
+        },
+        backlinks: async () => success([]),
         pins: {
           list: async () => success({ pins, stale: stalePins }),
           add: async (rel) => {

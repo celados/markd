@@ -126,6 +126,20 @@ export const pinSnapshotSchema = v.object({
   stale: v.array(relSchema),
 });
 
+export const searchHitSchema = v.object({
+  rel: entryRelSchema,
+  title: v.string(),
+  snippet: v.string(),
+  titleMatch: v.boolean(),
+});
+
+export const backlinkMentionSchema = v.object({
+  sourceRel: entryRelSchema,
+  context: v.string(),
+  line: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  occurrence: v.pipe(v.number(), v.integer(), v.minValue(0)),
+});
+
 export const todoSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
   text: v.pipe(v.string(), v.minLength(1)),
@@ -230,6 +244,27 @@ export const engineRequestSchema = v.variant("method", [
     type: v.literal("request"),
     id: operationIdSchema,
     method: v.literal("vault.note.path"),
+    params: v.object({ rel: entryRelSchema }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.search"),
+    params: v.object({
+      query: v.pipe(v.string(), v.maxLength(512)),
+      limit: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),
+    }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.search.recordAccess"),
+    params: v.object({ rel: entryRelSchema }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.backlinks"),
     params: v.object({ rel: entryRelSchema }),
   }),
   v.object({
@@ -577,6 +612,12 @@ export function validateResponseValue(
       return v.safeParse(v.object({ snapshot: vaultSnapshotSchema }), value).success;
     case "vault.note.path":
       return v.safeParse(v.pipe(v.string(), v.minLength(1)), value).success;
+    case "vault.search":
+      return v.safeParse(v.array(searchHitSchema), value).success;
+    case "vault.search.recordAccess":
+      return v.safeParse(v.null(), value).success;
+    case "vault.backlinks":
+      return v.safeParse(v.array(backlinkMentionSchema), value).success;
     case "vault.asset.save":
       return v.safeParse(v.pipe(v.string(), v.regex(/^\.markd\/assets\/[^/]+$/)), value).success;
     case "vault.note.export":

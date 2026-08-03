@@ -82,6 +82,16 @@ test("command palette preserves result order and keyboard activation", async ({
       .getByText("Alpha", { exact: true })
       .filter({ visible: true }),
   ).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const state = window as typeof window & {
+      __MARKD_TEST__?: { commands: Array<{ command: string; args: Record<string, unknown> }> };
+    };
+    return state.__MARKD_TEST__?.commands.filter(
+      (call) => call.command === "record_search_access",
+    ) ?? [];
+  })).toEqual([
+    { command: "record_search_access", args: { rel: "Projects/Alpha.md" } },
+  ]);
 });
 
 test("settings pages retain dialog focus and dismissal", async ({ page }) => {

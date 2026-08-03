@@ -29,7 +29,7 @@
     "icon:generate": "bash scripts/generate-icns.sh"
   },
   "dependencies": {
-    "@celados/fff-node": "0.10.2-nightly.0e97c3b",
+    "@celados/fff-node": "0.10.2-nightly.dbc0f62",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.4",
@@ -38,6 +38,7 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@lezer/highlight": "^1.2.3",
+    "@lezer/markdown": "^1.7.2",
     "@octanejs/base-ui": "^0.1.20",
     "@octanejs/cmdk": "^0.1.5",
     "@octanejs/dnd-kit": "^0.1.17",

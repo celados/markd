@@ -123,6 +123,44 @@ describe("Electron bridge contract", () => {
         params: null,
       }).success,
     ).toBe(false);
+    for (const request of [
+      { method: "vault.search", params: { query: "alpha", limit: 12 } },
+      { method: "vault.search.recordAccess", params: { rel: "Projects/Alpha.md" } },
+      { method: "vault.backlinks", params: { rel: "Projects/Alpha.md" } },
+    ]) {
+      expect(v.safeParse(engineRequestSchema, {
+        type: "request",
+        id: `search-${request.method}`,
+        ...request,
+      }).success).toBe(true);
+    }
+    expect(v.safeParse(engineRequestSchema, {
+      type: "request",
+      id: "search-too-large",
+      method: "vault.search",
+      params: { query: "alpha", limit: 10_000 },
+    }).success).toBe(false);
+  });
+
+  test("validates search and backlink response projections", () => {
+    expect(validateResponseValue("vault.search", [{
+      rel: "Projects/Alpha.md",
+      title: "Alpha",
+      snippet: "matching line",
+      titleMatch: true,
+    }])).toBe(true);
+    expect(validateResponseValue("vault.search", [{
+      rel: "Projects/Alpha.md",
+      title: "Alpha",
+      snippet: "matching line",
+      fffScore: 42,
+    }])).toBe(false);
+    expect(validateResponseValue("vault.backlinks", [{
+      sourceRel: "Source.md",
+      context: "See Alpha.",
+      line: 3,
+      occurrence: 0,
+    }])).toBe(true);
   });
 
   test("validates the utility-to-main native content operations", () => {
