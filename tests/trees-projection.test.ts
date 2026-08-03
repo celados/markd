@@ -3,6 +3,7 @@ import {
   createTreesProjection,
   diffTreesProjection,
   fromTreesPath,
+  planExternalTreesReconcile,
 } from "../src/lib/trees-projection";
 
 describe("Vault tree to Trees projection", () => {
@@ -73,9 +74,14 @@ describe("Vault tree to Trees projection", () => {
       },
     ]);
 
-    expect(diffTreesProjection(previous, next)).toEqual([
+    const operations = [
       { type: "remove", path: "README.md" },
       { type: "add", path: "Archive/Later.md" },
-    ]);
+    ];
+    expect(diffTreesProjection(previous, next)).toEqual(operations);
+    expect(planExternalTreesReconcile(previous, next)).toEqual({
+      kind: "batch",
+      operations,
+    });
   });
 });

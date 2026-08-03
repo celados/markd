@@ -430,6 +430,19 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
           case "plugin:event|unlisten":
           case "plugin:updater|check":
             return null;
+          case "create_folder": {
+            const dir = String(args.dir);
+            const name = String(args.name);
+            const rel = dir ? `${dir}/${name}` : name;
+            tree = insertTreeEntry(tree, dir, {
+              name,
+              rel,
+              kind: "folder",
+              modifiedMs: Date.now(),
+              children: [],
+            });
+            return rel;
+          }
           case "rename_entry": {
             if (fixtureOptions.mutationFailure) throw new Error("Rename rejected by disk");
             const rel = String(args.rel);
@@ -524,6 +537,21 @@ export async function installTauriFixture(page: Page, options: TauriFixtureOptio
     function withCollisionSuffix(name: string): string {
       const dot = name.lastIndexOf(".");
       return dot > 0 ? `${name.slice(0, dot)} 2${name.slice(dot)}` : `${name} 2`;
+    }
+
+    function insertTreeEntry(
+      nodes: import("@/lib/types").TreeNode[],
+      parent: string,
+      entry: import("@/lib/types").TreeNode,
+    ): import("@/lib/types").TreeNode[] {
+      if (!parent) return [...nodes, entry];
+      return nodes.map((node) =>
+        node.rel === parent
+          ? { ...node, children: [...(node.children ?? []), entry] }
+          : node.children
+            ? { ...node, children: insertTreeEntry(node.children, parent, entry) }
+            : node,
+      );
     }
   }, options);
 }

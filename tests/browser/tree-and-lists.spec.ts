@@ -124,6 +124,56 @@ test("disk collision suffix wins over the optimistic drop path", async ({ page }
   await expect(page.getByRole("treeitem", { name: "Alpha.md" })).toHaveCount(0);
 });
 
+test("folder rename preserves its expanded selected and focused interaction", async ({
+  page,
+}) => {
+  await installTauriFixture(page, { mutationCollision: true });
+  await page.goto("/");
+  const projects = page.getByRole("treeitem", { name: "Projects" });
+  await projects.click();
+  await projects.focus();
+  await page.keyboard.press("F2");
+  const rename = page.getByRole("textbox", { name: "Rename Projects" });
+  await rename.fill("Work");
+  await rename.press("Enter");
+
+  const work = page.getByRole("treeitem", { name: "Work 2" });
+  await expect(work).toHaveAttribute("aria-expanded", "true");
+  await expect(work).toHaveAttribute("aria-selected", "true");
+  await expect(work).toBeFocused();
+  await expect(page.getByRole("treeitem", { name: "Alpha.md" })).toBeVisible();
+});
+
+test("folder drop preserves the moved subtree interaction", async ({ page }) => {
+  const projects = page.getByRole("treeitem", { name: "Projects" });
+  await projects.click();
+  await projects.dragTo(page.getByRole("treeitem", { name: "Archive" }));
+
+  const moved = page.getByRole("treeitem", { name: "Projects" });
+  await expect(moved).toHaveAttribute("data-item-path", "Archive/Projects/");
+  await expect(moved).toHaveAttribute("aria-expanded", "true");
+  await expect(moved).toHaveAttribute("aria-selected", "true");
+  await expect(moved).toBeFocused();
+  await expect(page.getByRole("treeitem", { name: "Alpha.md" })).toHaveAttribute(
+    "data-item-path",
+    "Archive/Projects/Alpha.md",
+  );
+});
+
+test("new folder context action begins rename after projection arrives", async ({ page }) => {
+  await page.getByRole("treeitem", { name: "Archive" }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "New folder" }).click();
+
+  const rename = page.getByRole("textbox", { name: "Rename Archive / Untitled" });
+  await expect(rename).toBeVisible();
+  await rename.fill("Reference");
+  await rename.press("Enter");
+  await expect(page.getByRole("treeitem", { name: "Reference" })).toHaveAttribute(
+    "data-item-path",
+    "Archive/Reference/",
+  );
+});
+
 test("pinned folders own their subtree without duplicating the main tree", async ({
   page,
 }) => {

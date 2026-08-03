@@ -10,8 +10,8 @@ import { useEffect, useMemo, useRef } from "octane";
 import type { MenuItem } from "@/components/ui/ContextMenu";
 import {
   createTreesProjection,
-  diffTreesProjection,
   fromTreesPath,
+  planExternalTreesReconcile,
   type TreesProjection,
 } from "@/lib/trees-projection";
 import { parentDir } from "@/lib/utils";
@@ -43,7 +43,9 @@ const TREE_STYLES = `
 
 type Runtime = {
   model: TreesModel;
+  pendingRenamePath: string | null;
   projection: TreesProjection;
+  renameInteraction: InteractionSnapshot | null;
 };
 
 type InteractionSnapshot = {
@@ -123,7 +125,10 @@ export function TreesFileTree() {
             restoreCanonical(interaction);
             return;
           }
-          syncCanonicalProjection(runtime, persistedPath);
+          syncCanonicalProjection(
+            runtime,
+            remapInteraction(interaction, rel, persistedPath),
+          );
         });
     };
 
@@ -145,7 +150,8 @@ export function TreesFileTree() {
       renaming: {
         onError: (error) => toast.error(error),
         onRename: (event) => {
-          const interaction = captureInteraction(runtime);
+          const interaction = runtime.renameInteraction ?? captureInteraction(runtime);
+          runtime.renameInteraction = null;
           restoreCanonical(interaction);
           const destination = fromTreesPath(event.destinationPath);
           const name = destination.slice(destination.lastIndexOf("/") + 1);
@@ -157,7 +163,14 @@ export function TreesFileTree() {
                 restoreCanonical(interaction);
                 return;
               }
-              syncCanonicalProjection(runtime, persistedPath);
+              syncCanonicalProjection(
+                runtime,
+                remapInteraction(
+                  interaction,
+                  fromTreesPath(event.sourcePath),
+                  persistedPath,
+                ),
+              );
             });
         },
       },
@@ -175,7 +188,7 @@ export function TreesFileTree() {
             }
             return renderContextMenu(
               entryMenuItems(node, {
-                onRename: (path) => runtime.model.startRenaming(path),
+                onRename: (path) => requestRename(runtime, path),
                 pinMode: "toggle",
               }),
               context,
@@ -196,10 +209,18 @@ export function TreesFileTree() {
       overscan: 8,
       unsafeCSS: TREE_STYLES,
     });
-    runtime = { model, projection: initial };
+    runtime = {
+      model,
+      pendingRenamePath: null,
+      projection: initial,
+      renameInteraction: null,
+    };
     runtimeRef.current = runtime;
     model.render({ containerWrapper: host });
-    const unsubscribeExpansion = model.subscribe(() => syncExpandedState(runtime));
+    const unsubscribeExpansion = model.subscribe(() => {
+      syncExpandedState(runtime);
+      consumePendingRename(runtime);
+    });
     const treeContainer = model.getFileTreeContainer();
     if (treeContainer) {
       treeContainer.setAttribute("data-note-tree", "");
@@ -220,14 +241,20 @@ export function TreesFileTree() {
       if (item.isDirectory()) (item as FileTreeDirectoryHandle).toggle();
       else item.select();
     };
+    const onKeyDownCapture = (event: KeyboardEvent) => {
+      if (event.key === "F2") runtime.renameInteraction = captureInteraction(runtime);
+      else if (event.key === "Escape") runtime.renameInteraction = null;
+    };
     const onDragStart = () => {
       dragInteraction = captureInteraction(runtime);
     };
     treeContainer?.addEventListener("keydown", onKeyDown);
+    treeContainer?.addEventListener("keydown", onKeyDownCapture, true);
     treeContainer?.addEventListener("dragstart", onDragStart);
 
     return () => {
       treeContainer?.removeEventListener("keydown", onKeyDown);
+      treeContainer?.removeEventListener("keydown", onKeyDownCapture, true);
       treeContainer?.removeEventListener("dragstart", onDragStart);
       unsubscribeExpansion();
       runtimeRef.current = null;
@@ -333,10 +360,32 @@ function getExpandedPaths(runtime: Runtime): string[] {
 }
 
 function captureInteraction(runtime: Runtime): InteractionSnapshot {
+  const focusedPath = runtime.model.getFocusedPath();
   return {
     expandedPaths: getExpandedPaths(runtime),
-    focusedPath: runtime.model.getFocusedPath(),
-    selectedPaths: runtime.model.getSelectedPaths(),
+    focusedPath: focusedPath ? fromTreesPath(focusedPath) : null,
+    selectedPaths: runtime.model.getSelectedPaths().map(fromTreesPath),
+  };
+}
+
+function remapInteraction(
+  interaction: InteractionSnapshot,
+  source: string,
+  persistedPath: string,
+): InteractionSnapshot {
+  const remap = (path: string) =>
+    path === source || path.startsWith(`${source}/`)
+      ? persistedPath + path.slice(source.length)
+      : path;
+  const expandedPaths = new Set(interaction.expandedPaths.map(remap));
+  const parts = persistedPath.split("/");
+  for (let index = 1; index < parts.length; index += 1) {
+    expandedPaths.add(parts.slice(0, index).join("/"));
+  }
+  return {
+    expandedPaths: [...expandedPaths],
+    focusedPath: interaction.focusedPath ? remap(interaction.focusedPath) : null,
+    selectedPaths: interaction.selectedPaths.map(remap),
   };
 }
 
@@ -386,12 +435,10 @@ function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boole
   return true;
 }
 
-function syncCanonicalProjection(runtime: Runtime, revealPath: string): void {
-  const expandedPaths = new Set(useVault.getState().expanded);
-  const revealParts = revealPath.split("/");
-  for (let index = 1; index < revealParts.length; index += 1) {
-    expandedPaths.add(revealParts.slice(0, index).join("/"));
-  }
+function syncCanonicalProjection(
+  runtime: Runtime,
+  interaction: InteractionSnapshot,
+): void {
   const next = createTreesProjection(
     useVault.getState().tree,
     new Set(usePins.getState().pins),
@@ -404,24 +451,50 @@ function syncCanonicalProjection(runtime: Runtime, revealPath: string): void {
   runtime.projection = next;
   runtime.model.resetPaths({
     preparedInput: preparePresortedFileTreeInput(next.paths),
-    initialExpandedPaths: [...expandedPaths],
+    initialExpandedPaths: [...interaction.expandedPaths],
   });
-  for (const rel of expandedPaths) {
+  for (const rel of interaction.expandedPaths) {
     const item = runtime.model.getItem(rel);
     if (item?.isDirectory()) (item as FileTreeDirectoryHandle).expand();
   }
-  const view = useVault.getState().view;
-  if (view?.type === "note") {
-    runtime.model.getItem(view.rel)?.select();
-    runtime.model.focusNearestPath(view.rel);
-    focusTreeDomPath(runtime, view.rel);
+  for (const path of runtime.model.getSelectedPaths()) {
+    runtime.model.getItem(path)?.deselect();
+  }
+  for (const path of interaction.selectedPaths) {
+    runtime.model.getItem(path)?.select();
+  }
+  if (interaction.focusedPath) {
+    runtime.model.focusNearestPath(interaction.focusedPath);
+    focusTreeDomPath(runtime, interaction.focusedPath);
   }
 }
 
 function applyProjection(runtime: Runtime, next: TreesProjection): void {
-  const operations = diffTreesProjection(runtime.projection, next);
+  const reconcile = planExternalTreesReconcile(runtime.projection, next);
   runtime.projection = next;
-  if (operations.length > 0) runtime.model.batch(operations);
+  if (reconcile.kind === "batch") runtime.model.batch(reconcile.operations);
+  consumePendingRename(runtime);
+}
+
+function requestRename(runtime: Runtime, path: string): void {
+  const rel = fromTreesPath(path);
+  runtime.renameInteraction = captureInteraction(runtime);
+  if (runtime.model.getItem(rel) && runtime.model.startRenaming(rel)) {
+    runtime.pendingRenamePath = null;
+    return;
+  }
+  // createFolder resolves with disk truth before Octane's passive projection
+  // effect runs. Preserve the intent at the adapter seam and consume it when
+  // that canonical path is actually present; no timer guesses at render order.
+  runtime.pendingRenamePath = rel;
+}
+
+function consumePendingRename(runtime: Runtime): void {
+  const path = runtime.pendingRenamePath;
+  if (!path || !runtime.model.getItem(path)) return;
+  runtime.renameInteraction = captureInteraction(runtime);
+  runtime.pendingRenamePath = null;
+  if (!runtime.model.startRenaming(path)) runtime.pendingRenamePath = path;
 }
 
 function focusTreeDomPath(runtime: Runtime, path: string): void {

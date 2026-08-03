@@ -6,6 +6,10 @@ export type TreesProjection = {
   byRel: ReadonlyMap<string, TreeNode>;
 };
 
+export type ExternalTreesReconcile =
+  | { kind: "unchanged" }
+  | { kind: "batch"; operations: FileTreeBatchOperation[] };
+
 export function createTreesProjection(
   tree: readonly TreeNode[],
   hiddenRoots: ReadonlySet<string> = new Set<string>(),
@@ -48,6 +52,16 @@ export function diffTreesProjection(
     if (!previousPaths.has(path)) operations.push({ type: "add", path });
   }
   return operations;
+}
+
+export function planExternalTreesReconcile(
+  previous: TreesProjection,
+  next: TreesProjection,
+): ExternalTreesReconcile {
+  const operations = diffTreesProjection(previous, next);
+  return operations.length === 0
+    ? { kind: "unchanged" }
+    : { kind: "batch", operations };
 }
 
 export function fromTreesPath(path: string): string {
