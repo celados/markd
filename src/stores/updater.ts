@@ -1,15 +1,21 @@
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import { toast } from "@octanejs/sonner";
 import { create } from "@octanejs/zustand";
+import {
+  unwrapDesktopResult,
+  type DesktopUpdate,
+} from "@/lib/desktop";
 import { shouldShowReleaseNotes } from "@/lib/updateRelease";
 
 type Status = "idle" | "checking" | "available" | "downloading" | "ready" | "error";
 
+type PendingUpdate = DesktopUpdate & {
+  downloadAndInstall: () => Promise<void>;
+};
+
 interface UpdaterState {
   status: Status;
   version: string | null;
-  update: Update | null;
+  update: PendingUpdate | null;
   releaseNotesOpen: boolean;
   /** Look for an update. `silent` swallows "up to date"/failure noise. */
   check: (opts?: { silent?: boolean }) => Promise<void>;
@@ -33,7 +39,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
       releaseNotesOpen: false,
     });
     try {
-      const update = await check();
+      const update = await checkForUpdate();
       if (update) {
         set({
           status: "available",
@@ -81,7 +87,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
     try {
       await update.downloadAndInstall();
       set({ status: "ready" });
-      await relaunch();
+      await relaunchApp();
     } catch (err) {
       set({ status: "available" });
       toast.error(err instanceof Error ? err.message : "Update failed to install.");
@@ -94,3 +100,37 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
     }
   },
 }));
+
+async function checkForUpdate(): Promise<PendingUpdate | null> {
+  if (window.markd) {
+    const update = await unwrapDesktopResult(window.markd.updates.check());
+    if (!update) return null;
+    return {
+      ...update,
+      downloadAndInstall: async () => {
+        await unwrapDesktopResult(window.markd!.updates.install(update.id));
+      },
+    };
+  }
+
+  const { check } = await import("@tauri-apps/plugin-updater");
+  const update = await check();
+  if (!update) return null;
+  return {
+    id: update.version,
+    currentVersion: update.currentVersion,
+    version: update.version,
+    body: update.body,
+    rawJson: update.rawJson,
+    downloadAndInstall: () => update.downloadAndInstall(),
+  };
+}
+
+async function relaunchApp(): Promise<void> {
+  if (window.markd) {
+    await unwrapDesktopResult(window.markd.updates.relaunch());
+    return;
+  }
+  const { relaunch } = await import("@tauri-apps/plugin-process");
+  await relaunch();
+}

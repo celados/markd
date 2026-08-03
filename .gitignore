@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-electron
 dist-ssr
 playwright-report
 test-results
@@ -28,6 +29,7 @@ test-results
 !README.md
 !AGENTS.md
 !CLAUDE.md
+!CONTEXT.md
 !CONTRIBUTING.md
 !brand.md
 !NOTARIZATION.md

@@ -4,7 +4,7 @@
   "version": "0.1.9",
   "identifier": "app.usemarkd",
   "build": {
-    "beforeDevCommand": "pnpm run dev",
+    "beforeDevCommand": "pnpm run dev:web",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm run build",
     "frontendDist": "../dist"

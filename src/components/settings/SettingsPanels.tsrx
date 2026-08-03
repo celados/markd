@@ -497,12 +497,17 @@ type ReadonlyShortcutRowProps = {
 
 function ReadonlyShortcutRow(props: ReadonlyShortcutRowProps) @{
   const { label, keys } = props;
-  const keyEntries = keys.map((key, index) => ({ key, index }));
+  // Octane hoists @for key selectors, so close over all row identity here;
+  // a selector that captures the component-local label loses it at runtime.
+  const keyEntries = keys.map((key, index) => ({
+    key,
+    id: `${label}-${key}-${index}`,
+  }));
 
   <div className="flex min-h-10 items-center justify-between gap-4 border-t border-line-soft px-3.5 py-2 text-[12.5px] text-muted">
       <span>{label}</span>
       <span className="flex shrink-0 items-center gap-1 opacity-70">
-      @for (const entry of keyEntries; key `${label}-${entry.key}-${entry.index}`) {
+      @for (const entry of keyEntries; key entry.id) {
         <Kbd>{entry.key}</Kbd>
       }
       </span>

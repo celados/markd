@@ -14,6 +14,7 @@ import type {
   TreeNode,
   VaultSnapshot,
 } from "./types";
+import { unwrapDesktopResult } from "./desktop";
 
 interface ErrorPayload {
   kind: string;
@@ -41,7 +42,10 @@ async function call<T>(command: string, args?: Record<string, unknown>) {
 }
 
 export const ipc = {
-  startup: () => call<VaultSnapshot | null>("startup"),
+  startup: () =>
+    window.markd
+      ? unwrapDesktopResult(window.markd.vault.startup())
+      : call<VaultSnapshot | null>("startup"),
   chooseVault: () => call<VaultSnapshot | null>("choose_vault"),
   createVault: () => call<VaultSnapshot | null>("create_vault"),
   loadTree: () => call<TreeNode[]>("load_tree"),
@@ -67,14 +71,23 @@ export const ipc = {
     call<SearchHit[]>("search_notes", { query, limit }),
   backlinksFor: (rel: string) =>
     call<BacklinkMention[]>("backlinks_for", { rel }),
-  cloudAccountStatus: () => call<CloudAccountStatus>("cloud_account_status"),
+  cloudAccountStatus: () =>
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.accountStatus())
+      : call<CloudAccountStatus>("cloud_account_status"),
   cloudRequestOtp: (email: string) =>
     call<OtpChallenge>("cloud_request_otp", { email }),
   cloudVerifyOtp: (challengeId: string, code: string) =>
     call<CloudAccount>("cloud_verify_otp", { challengeId, code }),
   cloudSignOut: () => call<void>("cloud_sign_out"),
-  cloudPlansUrl: () => call<string>("cloud_plans_url"),
-  cloudBillingPortalUrl: () => call<string>("cloud_billing_portal_url"),
+  cloudPlansUrl: () =>
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.plansUrl())
+      : call<string>("cloud_plans_url"),
+  cloudBillingPortalUrl: () =>
+    window.markd?.cloud
+      ? unwrapDesktopResult(window.markd.cloud.billingPortalUrl())
+      : call<string>("cloud_billing_portal_url"),
   publishedNoteStatus: (
     rel: string,
     title: string,

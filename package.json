@@ -5,8 +5,10 @@
   "version": "0.1.9",
   "license": "MIT",
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite --mode web",
     "build": "pnpm run typecheck && vite build",
     "icons:generate": "sigil etch --output src/icons/icons.tsrx --jsx octane",
     "typecheck": "tsrx-tsc --noEmit",
@@ -18,6 +20,7 @@
     "update:generate": "node scripts/generate-latest-json.js",
     "test": "vitest run test tests",
     "test:browser": "pnpm run build && playwright test",
+    "test:electron": "pnpm run build && playwright test --config playwright.electron.config.ts",
     "update:test-server": "node scripts/test-update-server.cjs",
     "icon:generate": "bash scripts/generate-icns.sh",
     "create:dmg": "bash scripts/create-macos-dmg.sh",
@@ -92,6 +95,7 @@
     "octane": "^0.1.22",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.1.18",
+    "valibot": "^1.4.2",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
@@ -99,8 +103,10 @@
     "@tauri-apps/cli": "^2.11.4",
     "@tsrx/typescript-plugin": "^0.3.118",
     "@types/node": "^25.0.3",
+    "electron": "^43.2.0",
     "typescript": "5.9.3",
     "vite": "^8.1.5",
+    "vite-plugin-electron": "^1.1.0",
     "vitest": "^4.1.10"
   },
   "overrides": {

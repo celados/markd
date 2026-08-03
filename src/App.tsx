@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect } from "octane";
-import { listen } from "@tauri-apps/api/event";
 import { Toaster } from "@octanejs/sonner";
 import { closeTab } from "@/components/editor/TabBar.tsrx";
 import { Welcome } from "@/components/welcome/Welcome";
@@ -7,6 +6,7 @@ import { initSessionSync, restoreSession } from "@/lib/session";
 import { notifyBacklinksChanged } from "@/lib/backlinks";
 import { invalidatePublishStatus } from "@/lib/queryClient";
 import { matchesShortcut } from "@/lib/shortcuts";
+import { onNotesChanged } from "@/lib/desktop";
 import { isMac } from "@/lib/utils";
 import { activeDir, useVault } from "@/stores/vault";
 import { useTabs } from "@/stores/tabs";
@@ -77,7 +77,7 @@ export default function App() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
-    void listen("markd:notes-changed", () => {
+    void onNotesChanged(() => {
       void refreshTree();
       notifyBacklinksChanged();
     }).then((stop) => {

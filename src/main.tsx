@@ -3,9 +3,9 @@ import { QueryClientProvider } from "@octanejs/tanstack-query";
 import App from "./App";
 import { QuickCaptureWindow } from "./components/capture/QuickCaptureWindow";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles.css";
 import { queryClient } from "./lib/queryClient";
+import { getWindowKind } from "./lib/desktop";
 
 // Kill macOS autocorrect/autocapitalize/spellcheck in every text field.
 document.addEventListener("focusin", (event) => {
@@ -18,7 +18,7 @@ document.addEventListener("focusin", (event) => {
   }
 });
 
-const Root = getCurrentWindow().label === "quick-capture" ? QuickCaptureWindow : App;
+const Root = getWindowKind() === "quick-capture" ? QuickCaptureWindow : App;
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Markd requires a #root element");
