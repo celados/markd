@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as v from "valibot";
-import { bookmarkSchema, todoSchema } from "./bridge-contract";
+import { bookmarkSchema, collectionsSnapshotSchema, todoSchema } from "./bridge-contract";
 import {
   CollectionDomainError,
   addBookmark,
@@ -23,6 +23,7 @@ import {
 
 type Identity = () => string;
 type Clock = () => number;
+type AtomicCommit = (target: string, content: string) => Promise<void>;
 
 const storeSchemas = {
   todos: v.array(todoSchema),
@@ -31,12 +32,14 @@ const storeSchemas = {
   bookmarkTags: v.array(v.string()),
 };
 
-const storeFiles = {
+const legacyStoreFiles = {
   todos: "todos.json",
   todoTags: "todo_tags.json",
   bookmarks: "bookmarks.json",
   bookmarkTags: "bookmark_tags.json",
 } as const;
+
+const canonicalStoreFile = "collections.json";
 
 export class CollectionsEngineError extends Error {
   readonly kind: string;
@@ -53,12 +56,18 @@ export class CollectionsEngineError extends Error {
 export class CollectionsEngine {
   readonly #identity: Identity;
   readonly #clock: Clock;
+  readonly #commit: AtomicCommit;
   #root: string | null = null;
   #tail: Promise<void> = Promise.resolve();
 
-  constructor(identity: Identity = randomUUID, clock: Clock = Date.now) {
+  constructor(
+    identity: Identity = randomUUID,
+    clock: Clock = Date.now,
+    commit: AtomicCommit = atomicCommit,
+  ) {
     this.#identity = identity;
     this.#clock = clock;
+    this.#commit = commit;
   }
 
   open(root: string): Promise<void> {
@@ -167,10 +176,32 @@ export class CollectionsEngine {
 
   async #readSnapshot(root: string): Promise<CollectionsSnapshot> {
     const appData = join(root, ".markd");
+    const canonical = join(appData, canonicalStoreFile);
+    try {
+      const input: unknown = JSON.parse(await readFile(canonical, "utf8"));
+      const parsed = v.safeParse(collectionsSnapshotSchema, input);
+      if (!parsed.success) throw new Error("schema mismatch");
+      return parsed.output;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw new CollectionsEngineError(
+          "COLLECTION_STORE_INVALID",
+          `The Vault Collection store could not be read: ${canonicalStoreFile}`,
+          { file: canonicalStoreFile },
+        );
+      }
+    }
+
+    const snapshot = await this.#readLegacySnapshot(appData);
+    await this.#writeSnapshot(root, snapshot);
+    return snapshot;
+  }
+
+  async #readLegacySnapshot(appData: string): Promise<CollectionsSnapshot> {
     const empty = emptyCollections();
     const entries = await Promise.all(
-      (Object.keys(storeFiles) as Array<keyof CollectionsSnapshot>).map(async (key) => {
-        const path = join(appData, storeFiles[key]);
+      (Object.keys(legacyStoreFiles) as Array<keyof CollectionsSnapshot>).map(async (key) => {
+        const path = join(appData, legacyStoreFiles[key]);
         try {
           const input: unknown = JSON.parse(await readFile(path, "utf8"));
           const parsed = v.safeParse(storeSchemas[key], input);
@@ -182,8 +213,8 @@ export class CollectionsEngine {
           }
           throw new CollectionsEngineError(
             "COLLECTION_STORE_INVALID",
-            `The Vault Collection store could not be read: ${storeFiles[key]}`,
-            { file: storeFiles[key] },
+            `The Vault Collection store could not be read: ${legacyStoreFiles[key]}`,
+            { file: legacyStoreFiles[key] },
           );
         }
       }),
@@ -194,20 +225,28 @@ export class CollectionsEngine {
   async #writeSnapshot(root: string, snapshot: CollectionsSnapshot): Promise<void> {
     const appData = join(root, ".markd");
     await mkdir(appData, { recursive: true });
-    for (const key of Object.keys(storeFiles) as Array<keyof CollectionsSnapshot>) {
-      const target = join(appData, storeFiles[key]);
-      const temporary = `${target}.${process.pid}.tmp`;
-      try {
-        await writeFile(temporary, `${JSON.stringify(snapshot[key], null, 2)}\n`);
-        await rename(temporary, target);
-      } catch (error) {
-        throw new CollectionsEngineError(
-          "COLLECTION_STORE_WRITE_FAILED",
-          `The Vault Collection store could not be written: ${storeFiles[key]}`,
-          { file: storeFiles[key], cause: error instanceof Error ? error.message : String(error) },
-        );
-      }
+    const target = join(appData, canonicalStoreFile);
+    try {
+      await this.#commit(target, `${JSON.stringify(snapshot, null, 2)}\n`);
+    } catch (error) {
+      throw new CollectionsEngineError(
+        "COLLECTION_STORE_WRITE_FAILED",
+        `The Vault Collection store could not be written: ${canonicalStoreFile}`,
+        { file: canonicalStoreFile, cause: error instanceof Error ? error.message : String(error) },
+      );
     }
+  }
+}
+
+async function atomicCommit(target: string, content: string): Promise<void> {
+  const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+  let committed = false;
+  try {
+    await writeFile(temporary, content);
+    await rename(temporary, target);
+    committed = true;
+  } finally {
+    if (!committed) await rm(temporary, { force: true }).catch(() => undefined);
   }
 }
 

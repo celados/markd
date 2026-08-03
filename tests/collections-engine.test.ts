@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CollectionsEngine } from "../electron/collections-engine";
@@ -34,9 +34,11 @@ describe("Collections Engine", () => {
       ],
       bookmarkTags: ["later"],
     });
-    expect(JSON.parse(await readFile(join(root, ".markd", "todos.json"), "utf8"))).toEqual([
-      expect.objectContaining({ text: "Ship it", done: true }),
-    ]);
+    expect(JSON.parse(await readFile(join(root, ".markd", "collections.json"), "utf8")))
+      .toEqual(expect.objectContaining({
+        todos: [expect.objectContaining({ text: "Ship it", done: true })],
+        bookmarks: [expect.objectContaining({ title: "Example" })],
+      }));
   });
 
   test("switches Vault ownership and survives a utility-style restart", async () => {
@@ -83,6 +85,66 @@ describe("Collections Engine", () => {
       bookmarks: [expect.objectContaining({ image: null, favicon: null, metaFetched: false, tags: [] })],
       bookmarkTags: [],
     });
+    expect(JSON.parse(await readFile(join(root, ".markd", "collections.json"), "utf8")))
+      .toEqual(expect.objectContaining({
+        todos: [expect.objectContaining({ id: "old-todo" })],
+        bookmarks: [expect.objectContaining({ id: "old-bookmark" })],
+      }));
+  });
+
+  test("keeps the previous coherent snapshot when an atomic commit fails", async () => {
+    const root = await createVault();
+    const seed = new CollectionsEngine(() => "todo-1", () => 1);
+    await seed.open(root);
+    await seed.createTodo("Durable", ["kept"]);
+    const before = await readFile(join(root, ".markd", "collections.json"), "utf8");
+
+    const faulty = new CollectionsEngine(
+      () => "bookmark-1",
+      () => 2,
+      async (target, content) => {
+        await writeFile(`${target}.fault`, content);
+        throw new Error("injected commit failure");
+      },
+    );
+    await faulty.open(root);
+    await expect(faulty.createBookmark("example.com", ["new"]))
+      .rejects.toEqual(expect.objectContaining({ kind: "COLLECTION_STORE_WRITE_FAILED" }));
+
+    expect(await readFile(join(root, ".markd", "collections.json"), "utf8")).toBe(before);
+    expect(await faulty.snapshot()).toEqual({
+      todos: [expect.objectContaining({ text: "Durable", tags: ["kept"] })],
+      todoTags: ["kept"],
+      bookmarks: [],
+      bookmarkTags: [],
+    });
+  });
+
+  test("retries legacy migration after the canonical commit fails", async () => {
+    const root = await createVault();
+    const todos = [{ id: "legacy", text: "Retry me", done: false, createdAt: 1 }];
+    await writeFile(join(root, ".markd", "todos.json"), JSON.stringify(todos));
+    await writeFile(join(root, ".markd", "todo_tags.json"), JSON.stringify(["legacy"]));
+    const failing = new CollectionsEngine(
+      () => "unused",
+      () => 2,
+      async () => { throw new Error("injected migration failure"); },
+    );
+
+    await expect(failing.open(root)).rejects.toEqual(
+      expect.objectContaining({ kind: "COLLECTION_STORE_WRITE_FAILED" }),
+    );
+    await expect(access(join(root, ".markd", "collections.json"))).rejects.toBeDefined();
+    expect(JSON.parse(await readFile(join(root, ".markd", "todos.json"), "utf8"))).toEqual(todos);
+
+    const retry = new CollectionsEngine(() => "unused", () => 3, commitFile);
+    await retry.open(root);
+    expect(await retry.snapshot()).toEqual({
+      todos: [expect.objectContaining({ id: "legacy", tags: [] })],
+      todoTags: ["legacy"],
+      bookmarks: [],
+      bookmarkTags: [],
+    });
   });
 
   test("tags invalid stores instead of silently replacing them", async () => {
@@ -107,4 +169,10 @@ async function createVault(): Promise<string> {
   scratchPaths.push(root);
   await mkdir(join(root, ".markd"));
   return root;
+}
+
+async function commitFile(target: string, content: string): Promise<void> {
+  const temporary = `${target}.test.tmp`;
+  await writeFile(temporary, content);
+  await rename(temporary, target);
 }
