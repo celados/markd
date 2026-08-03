@@ -1,9 +1,30 @@
 import { describe, expect, test } from "vitest";
 import {
+  joinFrontmatter,
   parseFrontmatter,
   removeFrontmatterProperty,
+  splitFrontmatter,
   upsertFrontmatterProperty,
 } from "../src/lib/frontmatter";
+
+describe("note frontmatter boundary", () => {
+  test("round-trips the body byte for byte", () => {
+    const markdown =
+      "---\r\ntitle: Existing\r\n---\r\n# Body\r\n\r\nTrailing spaces  \r\n";
+    const note = splitFrontmatter(markdown);
+
+    expect(note.body).toBe("# Body\r\n\r\nTrailing spaces  \r\n");
+    expect(joinFrontmatter(note.frontmatter, note.body)).toBe(markdown);
+  });
+
+  test("leaves a document without frontmatter untouched", () => {
+    const markdown = "# Body\n\n---\nnot metadata\n";
+    const note = splitFrontmatter(markdown);
+
+    expect(note).toEqual({ frontmatter: "", body: markdown });
+    expect(joinFrontmatter(note.frontmatter, note.body)).toBe(markdown);
+  });
+});
 
 describe("frontmatter property editing", () => {
   test("creates frontmatter for a new scalar property", () => {
@@ -51,6 +72,18 @@ describe("frontmatter property editing", () => {
     expect(parseFrontmatter('---\ntitle: "A \\"quoted\\" note"\n---\n')).toEqual([
       { key: "title", value: 'A "quoted" note' },
     ]);
+  });
+
+  test("serializes a long field as a value rather than a block marker", () => {
+    const value =
+      "This field is deliberately longer than the YAML library's default folding width so the Properties UI must still show the value instead of a literal greater-than marker.";
+    const frontmatter = upsertFrontmatterProperty("", null, {
+      key: "summary",
+      value,
+    });
+
+    expect(frontmatter).not.toContain("summary: >");
+    expect(parseFrontmatter(frontmatter)).toEqual([{ key: "summary", value }]);
   });
 
   test("parses folded and literal YAML block scalars as their resolved values", () => {

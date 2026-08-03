@@ -16,6 +16,7 @@ import {
   type Property,
   upsertFrontmatterProperty,
 } from "@/lib/frontmatter";
+import { decideExternalNoteChange } from "@/lib/editor-conflict";
 import { hrefToRel, relToHref, wikiToMarkdown } from "@/lib/noteLinks";
 import {
   containsMdx,
@@ -91,7 +92,8 @@ function NoteEditorComponent(props: NoteEditorProps) @{
   // late (layout is gone), so the pane restores from this on re-activation.
   const savedScroll = useRef(0);
   const lastSaved = useRef("");
-  const pending = useRef<string | null | null>(null);
+  const pending = useRef<string | null>(null);
+  const savesInFlight = useRef(0);
   const loadedRel = useRef<string | null | null>(null);
   // True only while we're programmatically replacing the document, so the
   // resulting onUpdate doesn't mark the fresh content as an unsaved edit.
@@ -103,26 +105,36 @@ function NoteEditorComponent(props: NoteEditorProps) @{
 
   const persist = useCallback(
     async (markdown: string, targetRel: string) => {
-      if (relRef.current === targetRel) pending.current = null;
+      if (relRef.current === targetRel && pending.current === markdown) {
+        pending.current = null;
+      }
       // Re-attach the note's frontmatter (captured now, before any await, so a
       // concurrent note switch can't swap it out mid-save).
       const fullText = joinFrontmatter(frontmatter.current, markdown);
+      savesInFlight.current += 1;
       try {
         await ipc.writeNote(targetRel, fullText);
         invalidatePublishStatus();
         notifyBacklinksChanged();
         if (relRef.current === targetRel) {
           lastSaved.current = fullText;
-          setSaveState("idle");
+          if (pending.current === null) setSaveState("idle");
         }
         toast.dismiss(`save-${targetRel}`);
       } catch (err) {
+        if (relRef.current === targetRel && pending.current === null) {
+          // A failed write remains dirty so an external event cannot replace
+          // the unsaved editor and close/unmount can retry the same body.
+          pending.current = markdown;
+        }
         setSaveState("error");
         toast.error("Note could not be saved", {
           id: `save-${targetRel}`,
           description: err instanceof Error ? err.message : String(err),
           duration: Infinity,
         });
+      } finally {
+        savesInFlight.current -= 1;
       }
     },
     [setSaveState],
@@ -499,16 +511,21 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     };
   }, [debouncedPersist, persist]);
 
-  // If the file changed on disk while we were away and the editor is clean,
-  // reload it silently. Dirty editor wins. Only the active pane checks —
-  // hidden tabs catch up in the activation effect below.
+  // Clean editors follow the Vault. A pending or in-flight local edit wins a
+  // conflict so an external notification cannot erase text before persistence
+  // settles. Hidden tabs catch up when activated below.
   const reloadIfChanged = useCallback(async () => {
-    if (!editor || pending.current !== null) return;
+    if (!editor) return;
     const cur = relRef.current;
     try {
       const disk = await ipc.readNote(cur);
-      if (cur !== relRef.current || pending.current !== null) return;
-      if (disk !== lastSaved.current) {
+      if (cur !== relRef.current) return;
+      const decision = decideExternalNoteChange({
+        disk,
+        lastSaved: lastSaved.current,
+        dirty: pending.current !== null || savesInFlight.current > 0,
+      });
+      if (decision === "reload") {
         lastSaved.current = disk;
         setRawText(disk);
         const { frontmatter: fm, body } = splitFrontmatter(disk);

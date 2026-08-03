@@ -1,4 +1,4 @@
-import { isMap, isScalar, isSeq, parseDocument } from "yaml";
+import { isMap, isScalar, isSeq, parseDocument, stringify } from "yaml";
 
 /**
  * YAML frontmatter handling. Frontmatter stays outside the rich editor and is
@@ -98,19 +98,16 @@ export function isValidPropertyKey(key: string): boolean {
   return PROPERTY_KEY_RE.test(key.trim());
 }
 
-function propertyLines(property: Property): string[] {
+function serializeProperty(property: Property): string {
   const key = property.key.trim();
-  if (Array.isArray(property.value)) {
-    if (property.value.length === 0) return [`${key}: []`];
-    return [
-      `${key}:`,
-      ...property.value.map((item) => `  - ${JSON.stringify(item)}`),
-    ];
-  }
-  if (typeof property.value === "number" || typeof property.value === "boolean") {
-    return [`${key}: ${String(property.value)}`];
-  }
-  return [`${key}: ${JSON.stringify(property.value)}`];
+  return stringify(
+    { [key]: property.value },
+    {
+      lineWidth: 0,
+      defaultStringType: "QUOTE_DOUBLE",
+      defaultKeyType: "PLAIN",
+    },
+  ).trimEnd();
 }
 
 type FrontmatterBlock = {
@@ -166,13 +163,13 @@ export function upsertFrontmatterProperty(
   if (!isValidPropertyKey(next.key)) return frontmatter;
 
   if (!frontmatter) {
-    return ["---", ...propertyLines(next), "---", ""].join("\n");
+    return ["---", serializeProperty(next), "---", ""].join("\n");
   }
 
   const block = frontmatterBlock(frontmatter);
   if (!block) return frontmatter;
   const newline = block.opening.endsWith("\r\n") ? "\r\n" : "\n";
-  const replacement = propertyLines(next).join(newline);
+  const replacement = serializeProperty(next).replaceAll("\n", newline);
   const range = propertySourceRange(block.yaml, previousKey ?? next.key);
   let yaml: string;
   if (range) {

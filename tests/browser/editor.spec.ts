@@ -33,6 +33,108 @@ test("open tabs retain the same live editor across view switches", async ({
   ).toHaveAttribute("data-editor-identity", "readme");
 });
 
+test("the rich editor receives only the body and resolves long YAML values", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const fixture = (
+      window as Window & {
+        __MARKD_TEST__: { notes: Map<string, string> };
+      }
+    ).__MARKD_TEST__;
+    fixture.notes.set(
+      "README.md",
+      "---\nfixture: preserved\nsummary: >-\n  A long field value loaded through the semantic Electron bridge.\n---\n# README\n\nOctane + pnpm verification.",
+    );
+    window.dispatchEvent(new Event("focus"));
+  });
+
+  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
+  await expect(editor).toContainText("Octane + pnpm verification.");
+  await expect(editor).not.toContainText("fixture: preserved");
+  await expect(page.getByLabel("summary value")).toHaveValue(
+    "A long field value loaded through the semantic Electron bridge.",
+  );
+
+  const longValue =
+    "This replacement is deliberately longer than a normal YAML wrapping width and must remain a property value instead of turning into a visible greater-than marker.";
+  await page.getByLabel("summary value").fill(longValue);
+  await page.getByLabel("summary value").press("Enter");
+
+  await expect.poll(() => latestWrite(page, "README.md")).toContain(longValue);
+  await expect.poll(() => latestWrite(page, "README.md")).not.toContain(
+    "summary: >",
+  );
+});
+
+test("dirty editor wins an external-change conflict and selection survives tabs", async ({
+  page,
+}) => {
+  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" local draft");
+  await page.evaluate(() => {
+    const fixture = (
+      window as Window & {
+        __MARKD_TEST__: { notes: Map<string, string> };
+      }
+    ).__MARKD_TEST__;
+    fixture.notes.set("README.md", "# External replacement");
+    window.dispatchEvent(new Event("focus"));
+  });
+
+  await expect(editor).toContainText("local draft");
+  for (let index = 0; index < "draft".length; index += 1) {
+    await page.keyboard.press("Shift+ArrowLeft");
+  }
+  await page.getByRole("treeitem", { name: "Projects", exact: true }).click();
+  await page.getByRole("treeitem", { name: "Alpha.md", exact: true }).click();
+  await page.getByRole("tab", { name: /README/ }).click();
+  await editor.focus();
+  await page.keyboard.type("kept");
+  await expect(editor).toContainText("local kept");
+  await expect.poll(() => latestWrite(page, "README.md")).toContain("local kept");
+});
+
+test("clean editor reloads an external body without exposing its frontmatter", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const fixture = (
+      window as Window & {
+        __MARKD_TEST__: { notes: Map<string, string> };
+      }
+    ).__MARKD_TEST__;
+    fixture.notes.set(
+      "README.md",
+      "---\nsource: external\n---\n# Reloaded\n\nClean disk change.",
+    );
+    window.dispatchEvent(new Event("focus"));
+  });
+
+  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
+  await expect(editor).toContainText("Clean disk change.");
+  await expect(editor).not.toContainText("source: external");
+  await expect(page.getByLabel("source value")).toHaveValue("external");
+});
+
+test("rich body edits do not author frontmatter", async ({ page }) => {
+  await page.getByRole("treeitem", { name: "Projects", exact: true }).click();
+  await page.getByRole("treeitem", { name: "Alpha.md", exact: true }).click();
+  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
+  await editor.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" body only");
+
+  await expect
+    .poll(() => latestWrite(page, "Projects/Alpha.md"))
+    .toContain("body only");
+  await expect
+    .poll(() => latestWrite(page, "Projects/Alpha.md"))
+    .not.toMatch(/^---/);
+});
+
 test("tab context menu manages tabs, pins, and both path forms", async ({
   page,
 }) => {
@@ -110,7 +212,7 @@ test("markdown source and rich editor round-trip through one note model", async 
 
   await page.locator(".cm-line").last().click();
   await page.keyboard.press("End");
-  await page.keyboard.type("\n\nSource round trip", { delay: 25 });
+  await page.keyboard.insertText("\n\nSource round trip");
   await page.getByRole("button", { name: "Show rich editor" }).click();
 
   const rich = page.locator('[data-note-editor="active"] .ProseMirror');

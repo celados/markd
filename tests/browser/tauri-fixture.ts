@@ -15,7 +15,7 @@ export async function installTauriFixture(
       number,
       { callback: (data: unknown) => void; once: boolean }
     >();
-    const tree = [
+    let tree = [
       {
         name: "README.md",
         rel: "README.md",
@@ -75,6 +75,60 @@ export async function installTauriFixture(
       ["Projects/Alpha.md", "# Alpha\n\nSecond live editor."],
     ]);
     const commands: Array<{ command: string; args: Record<string, unknown> }> = [];
+    const success = <T>(value: T) => ({ ok: true as const, value });
+    const snapshot = () => ({
+      root: "/tmp/markd-browser-fixture",
+      name: "Fixture Vault",
+      tree,
+      theme: "system" as const,
+    });
+
+    // The renderer journey uses the same semantic Vault boundary as Electron.
+    // Legacy Tauri calls remain only for slices that have not migrated yet.
+    window.markd = {
+      app: {
+        windowKind: "main",
+        onNotesChanged: () => () => {},
+        onEngineLifecycle: () => () => {},
+      },
+      vault: {
+        startup: async () => success(snapshot()),
+        choose: async () => success(snapshot()),
+        create: async () => success(snapshot()),
+        snapshot: async () => success(snapshot()),
+        createNote: async (dir, title, content = "") => {
+          const base = dir ? `${dir}/` : "";
+          const rel = `${base}${title}.md`;
+          notes.set(rel, content);
+          tree = [
+            ...tree,
+            { name: `${title}.md`, rel, kind: "note", modifiedMs: Date.now() },
+          ];
+          return success({ rel, snapshot: snapshot() });
+        },
+        readNote: async (rel) => success(notes.get(rel) ?? ""),
+        writeNote: async (rel, content) => {
+          commands.push({ command: "write_note", args: { rel, content } });
+          notes.set(rel, content);
+          return success(null);
+        },
+        moveToTrash: async (rel) => {
+          notes.delete(rel);
+          tree = tree.filter((node) => node.rel !== rel);
+          return success({ snapshot: snapshot() });
+        },
+      },
+      cloud: {
+        accountStatus: async () => success({ account: null }),
+        plansUrl: async () => success("https://example.test/plans"),
+        billingPortalUrl: async () => success("https://example.test/billing"),
+      },
+      updates: {
+        check: async () => success(null),
+        install: async () => success(null),
+        relaunch: async () => success(null),
+      },
+    };
 
     // Browser journeys exercise the public UI seam; this bridge only replaces
     // the Tauri transport that is unavailable in system Chrome.
