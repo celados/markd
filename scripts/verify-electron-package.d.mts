@@ -11,4 +11,12 @@ export function inspectElectronPackage(
   platform?: NodeJS.Platform,
   arch?: string,
 ): ElectronPackageInventory;
-export function findPackagedApp(outputDir: string): string;
+export function findPackagedApp(
+  outputDir: string,
+  platform?: NodeJS.Platform,
+  arch?: string,
+): string;
+export function inspectUpdateManifest(
+  outputDir: string,
+  platform?: NodeJS.Platform,
+): { manifestPath: string; artifacts: string[] };

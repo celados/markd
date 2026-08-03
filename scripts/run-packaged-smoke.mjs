@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { findPackagedApp } from "./verify-electron-package.mjs";
 
-const appPath = findPackagedApp(join(process.cwd(), "release", "electron"));
+const appPath =
+  process.argv[2] ?? findPackagedApp(join(process.cwd(), "release", "electron"));
 const executablePath =
   process.platform === "darwin"
     ? join(appPath, "Contents", "MacOS", "Markd")

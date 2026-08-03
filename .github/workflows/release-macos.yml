@@ -42,8 +42,9 @@ jobs:
       - name: Prepare persistent workspace
         run: |
           git reset --hard --quiet "$GITHUB_SHA"
-          # Package outputs are isolated, while ignored dependency stores stay warm.
-          git clean -fdqx release/electron dist dist-electron test-results
+          git clean -fdq
+          # Retain the expensive dependency tree, but purge ignored env/config files that could alter the bundle.
+          git clean -fdqx -e /node_modules/
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
