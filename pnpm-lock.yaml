@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@celados/fff-node':
-        specifier: 0.10.2-nightly.0e97c3b
-        version: 0.10.2-nightly.0e97c3b
+        specifier: 0.10.2-nightly.dbc0f62
+        version: 0.10.2-nightly.dbc0f62
       '@codemirror/commands':
         specifier: ^6.10.4
         version: 6.10.4
@@ -35,6 +35,9 @@ importers:
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
+      '@lezer/markdown':
+        specifier: ^1.7.2
+        version: 1.7.2
       '@octanejs/base-ui':
         specifier: ^0.1.20
         version: 0.1.20(octane@0.1.22(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)))
@@ -249,18 +252,18 @@ packages:
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
 
-  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.0e97c3b':
-    resolution: {integrity: sha512-L0AFqzB06TdrQzcrHldcJ+WYwzFif7PExaU5kjj4YybAZUbhpEfaIESXLxQ464b0FmZf8Oo6Ua2MeObqXXH4CA==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-arm64/-/@celados/fff-bin-darwin-arm64-0.10.2-nightly.0e97c3b.tgz}
+  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.dbc0f62':
+    resolution: {integrity: sha512-rDjhh0B7KNzsmyvR8HFz2WbpY7ua0VEMX9TtNq1Q/zeJArzbs8sJt65CA3efWMGHmtd4DAcfN2s8t6i8Cc5EMg==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-arm64/-/@celados/fff-bin-darwin-arm64-0.10.2-nightly.dbc0f62.tgz}
     cpu: [arm64]
     os: [darwin]
 
-  '@celados/fff-bin-darwin-x64@0.10.2-nightly.0e97c3b':
-    resolution: {integrity: sha512-OO3aGOHJwqeZZh4X9vo2zxXqfqVKrScP4zGHvi/Pl+ITn7u3n2rgV7TTBLMEKRE9uCWqfA3HJEn+4HZsFUUWmw==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-x64/-/@celados/fff-bin-darwin-x64-0.10.2-nightly.0e97c3b.tgz}
+  '@celados/fff-bin-darwin-x64@0.10.2-nightly.dbc0f62':
+    resolution: {integrity: sha512-TWqkz/MBlklQnJH6bW+tb65bpo125G6doTM2Ne4950BCCNK9QEPXUyYmxsE46c6cNvjZYao2Einu+xnu3pJQ3Q==, tarball: https://npm.celados.com/@celados/fff-bin-darwin-x64/-/@celados/fff-bin-darwin-x64-0.10.2-nightly.dbc0f62.tgz}
     cpu: [x64]
     os: [darwin]
 
-  '@celados/fff-node@0.10.2-nightly.0e97c3b':
-    resolution: {integrity: sha512-z1i5GHzjle3Rv3RcH50GBU5xrP8mQN2edFAoiIbDfVit05lXIGjX/ynOBKJUT5XgnxMRXkhKAffyUIpBdvX6Tg==, tarball: https://npm.celados.com/@celados/fff-node/-/@celados/fff-node-0.10.2-nightly.0e97c3b.tgz}
+  '@celados/fff-node@0.10.2-nightly.dbc0f62':
+    resolution: {integrity: sha512-7ccM4XrsSvC7Id+tYhTRBJ/oTzEE/NAGfFtVKn7S3l6Y/LnBqpWyHGFN1xuOYMA7QycgSn+qYpldbdmWex3IzQ==, tarball: https://npm.celados.com/@celados/fff-node/-/@celados/fff-node-0.10.2-nightly.dbc0f62.tgz}
     engines: {node: '>=18.0.0'}
     cpu: [x64, arm64]
     os: [darwin]
@@ -2920,18 +2923,18 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.0e97c3b':
+  '@celados/fff-bin-darwin-arm64@0.10.2-nightly.dbc0f62':
     optional: true
 
-  '@celados/fff-bin-darwin-x64@0.10.2-nightly.0e97c3b':
+  '@celados/fff-bin-darwin-x64@0.10.2-nightly.dbc0f62':
     optional: true
 
-  '@celados/fff-node@0.10.2-nightly.0e97c3b':
+  '@celados/fff-node@0.10.2-nightly.dbc0f62':
     dependencies:
       ffi-rs: 1.3.4
     optionalDependencies:
-      '@celados/fff-bin-darwin-arm64': 0.10.2-nightly.0e97c3b
-      '@celados/fff-bin-darwin-x64': 0.10.2-nightly.0e97c3b
+      '@celados/fff-bin-darwin-arm64': 0.10.2-nightly.dbc0f62
+      '@celados/fff-bin-darwin-x64': 0.10.2-nightly.dbc0f62
 
   '@codemirror/autocomplete@6.20.3':
     dependencies:

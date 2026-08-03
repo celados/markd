@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   appendFile,
   mkdir,
@@ -73,7 +73,7 @@ export class VaultEngineError extends Error {
 
 export class VaultEngine {
   readonly #configFile: string;
-  readonly #frecencyDbPath: string;
+  readonly #frecencyDbRoot: string;
   readonly #native: NativeVaultOperations;
   readonly #commitConfig: ConfigCommit;
   readonly #collections = new CollectionsEngine();
@@ -97,7 +97,7 @@ export class VaultEngine {
     onFatal: (error: VaultEngineError) => void = () => {},
   ) {
     this.#configFile = join(configDir, "config.json");
-    this.#frecencyDbPath = join(configDir, "fff-frecency");
+    this.#frecencyDbRoot = join(configDir, "fff-frecency");
     this.#native = native;
     this.#commitConfig = commitConfig;
     this.#onIndexEvent = onIndexEvent;
@@ -125,8 +125,16 @@ export class VaultEngine {
     this.#assertOperational();
     if (create) await mkdir(root, { recursive: true });
     const canonical = await canonicalDirectory(root);
+    if (canonical === this.#root && this.#index) return this.#index.snapshot();
     const assetRoot = await canonicalAssetRoot(canonical);
     await this.#collections.validate(canonical);
+    await mkdir(this.#frecencyDbRoot, { recursive: true });
+    // fff keys frecency by Vault-relative paths. A stable root identity keeps
+    // restarts persistent while isolating the old and candidate switch indexes.
+    const frecencyDbPath = join(
+      this.#frecencyDbRoot,
+      createHash("sha256").update(canonical).digest("hex"),
+    );
     const queuedEvents: VaultIndexEvent[] = [];
     let activated = false;
     let candidateFailure: Error | null = null;
@@ -144,7 +152,7 @@ export class VaultEngine {
           if (!activated) candidateFailure = error;
           else this.#failIndex(error);
         },
-        frecencyDbPath: this.#frecencyDbPath,
+        frecencyDbPath,
       },
     );
     const previousRoot = this.#root;

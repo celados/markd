@@ -13,13 +13,13 @@ import { reconcileManagedIgnore } from "./managed-ignore";
 import { isAcceptedVaultRel } from "./vault-path-policy";
 
 const SCAN_TIMEOUT_MS = 15_000;
+const PERCENT_ESCAPE_PREFIXES = Array.from(
+  { length: 256 },
+  (_, value) => `%${value.toString(16).padStart(2, "0")}`,
+);
 // Watch delivery is normally immediate; a short grace period avoids a full
 // rescan on healthy writes without turning a missed event into a frozen UI.
 const MUTATION_OBSERVATION_TIMEOUT_MS = 250;
-
-type SearchableFinder = FileFinderApi & {
-  trackAccess(relativePath: string): { ok: true; value: undefined } | { ok: false; error: string };
-};
 
 export type VaultIndexEntry = {
   rel: string;
@@ -64,7 +64,7 @@ export type VaultIndexOptions = {
 export class VaultIndex {
   readonly #root: string;
   readonly #theme: Theme;
-  readonly #finder: SearchableFinder;
+  readonly #finder: FileFinderApi;
   readonly #listener: (event: VaultIndexEvent) => void;
   readonly #allocateEpoch: () => number;
   readonly #onFatal: (error: Error) => void;
@@ -87,9 +87,7 @@ export class VaultIndex {
   ) {
     this.#root = root;
     this.#theme = theme;
-    // The exact fff release is promoted with this slice; keeping its new method
-    // inside Vault Index prevents the native implementation type from escaping.
-    this.#finder = finder as SearchableFinder;
+    this.#finder = finder;
     this.#listener = options.listener ?? (() => {});
     let localEpoch = 0;
     this.#allocateEpoch = options.allocateEpoch ?? (() => ++localEpoch);
@@ -106,11 +104,11 @@ export class VaultIndex {
     await reconcileManagedIgnore(root);
     const created = options.createFinder?.(root) ?? FileFinder.create({
       basePath: root,
-        frecencyDbPath: options.frecencyDbPath,
-        disableMmapCache: true,
-        disableContentIndexing: false,
-        followSymlinks: false,
-      });
+      frecencyDbPath: options.frecencyDbPath,
+      disableMmapCache: true,
+      disableContentIndexing: false,
+      followSymlinks: false,
+    });
     if (!created.ok) throw new Error(`FFF initialization failed: ${created.error}`);
 
     const index = new VaultIndex(root, theme, created.value, options);
@@ -222,6 +220,7 @@ export class VaultIndex {
           this.#finder.multiGrep({
             patterns,
             constraints: "*.md",
+            smartCase: true,
             maxMatchesPerFile: 1,
             pageSize: 512,
             cursor,
@@ -518,12 +517,22 @@ function backlinkPatterns(targetRel: string): string[] {
   const withoutExtension = normalized.slice(0, -3);
   const basenameWithoutExtension = basename(withoutExtension);
   const encoded = normalized.split("/").map(encodeURIComponent).join("/");
+  const encodedWithoutExtension = encoded.slice(0, -3);
+  const fullyEncoded = encodeURIComponent(normalized);
+  const fullyEncodedWithoutExtension = fullyEncoded.slice(0, -3);
+  // fff smart-case only becomes insensitive when every pattern is lowercase.
+  // fff does not recall short `%` patterns. These fixed byte escapes are the
+  // bounded fallback for arbitrary `%HH`; parser validation remains authoritative.
   return [...new Set([
+    ...PERCENT_ESCAPE_PREFIXES,
     normalized,
     encoded,
     withoutExtension,
+    encodedWithoutExtension,
+    fullyEncoded,
+    fullyEncodedWithoutExtension,
     basenameWithoutExtension,
-  ])];
+  ].map((pattern) => pattern.toLowerCase()))];
 }
 
 function readAllEntries(finder: FileFinderApi): Map<string, VaultIndexEntry> {

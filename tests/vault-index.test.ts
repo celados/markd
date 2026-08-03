@@ -30,12 +30,7 @@ describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () 
     const root = join(scratch, "vault");
     await mkdir(root);
     const accessed: string[] = [];
-    const finder = fakeFinder(
-      ["Projects/Alpha.md", "README.md"],
-      () => {},
-    ) as FileFinderApi & {
-      trackAccess: (rel: string) => { ok: true; value: undefined };
-    };
+    const finder = fakeFinder(["Projects/Alpha.md", "README.md"], () => {});
     finder.fileSearch = () => ({
       ok: true,
       value: {
@@ -111,10 +106,39 @@ describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () 
       "Other.md",
     ]);
     expect(patterns[0]).toEqual(expect.arrayContaining([
-      "Projects/Target Note.md",
-      "Projects/Target%20Note.md",
-      "Target Note",
+      "projects/target note.md",
+      "projects/target%20note.md",
+      "projects/target%20note",
+      "target note",
     ]));
+  });
+
+  test("native candidate narrowing is a conservative superset of link parsing", async () => {
+    const scratch = await createScratch();
+    const root = join(scratch, "vault");
+    await mkdir(join(root, "Projects"), { recursive: true });
+    await writeFile(join(root, "Target.md"), "# Target");
+    await writeFile(join(root, "Projects", "Target Note.md"), "# Target Note");
+    await writeFile(join(root, "Case.md"), "[lowercase](target.md)");
+    await writeFile(join(root, "Encoded Letter.md"), "[letter](%54arget.md)");
+    await writeFile(
+      join(root, "Encoded.md"),
+      "[extensionless](Projects/Target%20Note)",
+    );
+    await writeFile(
+      join(root, "Encoded Separator.md"),
+      "[encoded separator](Projects%2FTarget%20Note)",
+    );
+
+    const index = await VaultIndex.open(root, "system");
+    indexes.push(index);
+
+    expect(index.backlinkCandidates("Target.md")).toEqual(
+      expect.arrayContaining(["Case.md", "Encoded Letter.md"]),
+    );
+    expect(index.backlinkCandidates("Projects/Target Note.md")).toEqual(
+      expect.arrayContaining(["Encoded.md", "Encoded Separator.md"]),
+    );
   });
   test("combines Vault ignore layers and enforces the hard policy", async () => {
     const scratch = await createScratch();
