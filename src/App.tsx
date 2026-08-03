@@ -6,7 +6,6 @@ import { initSessionSync, restoreSession } from "@/lib/session";
 import { notifyBacklinksChanged } from "@/lib/backlinks";
 import { invalidatePublishStatus } from "@/lib/queryClient";
 import { matchesShortcut } from "@/lib/shortcuts";
-import { onNotesChanged } from "@/lib/desktop";
 import { isMac } from "@/lib/utils";
 import { activeDir, useVault } from "@/stores/vault";
 import { useTabs } from "@/stores/tabs";
@@ -39,7 +38,6 @@ export default function App() {
   const status = useVault((s) => s.status);
   const root = useVault((s) => s.root);
   const startup = useVault((s) => s.startup);
-  const refreshTree = useVault((s) => s.refreshTree);
   const applyIndexEvent = useVault((s) => s.applyIndexEvent);
 
   useEffect(() => {
@@ -68,37 +66,20 @@ export default function App() {
   useEffect(() => {
     const onFocus = () => {
       invalidatePublishStatus();
-      // Tauri remains a comparison shell only; Electron receives live index events.
-      if (!window.markd) void refreshTree();
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [refreshTree]);
+  }, []);
 
   useEffect(() => {
-    if (window.markd) {
-      return window.markd.vault.onIndexEvent((event) => {
-        applyIndexEvent(event);
-        if (event.kind === "replacement" || event.changes.some((change) => change.kind === "removed")) {
-          void usePins.getState().load();
-        }
-        notifyBacklinksChanged();
-      });
-    }
-    let unlisten: (() => void) | undefined;
-    let disposed = false;
-    void onNotesChanged(() => {
-      void refreshTree();
+    return window.markd?.vault.onIndexEvent((event) => {
+      applyIndexEvent(event);
+      if (event.kind === "replacement" || event.changes.some((change) => change.kind === "removed")) {
+        void usePins.getState().load();
+      }
       notifyBacklinksChanged();
-    }).then((stop) => {
-      if (disposed) stop();
-      else unlisten = stop;
-    });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [applyIndexEvent, refreshTree]);
+    }) ?? (() => {});
+  }, [applyIndexEvent]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

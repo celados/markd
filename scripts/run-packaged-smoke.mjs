@@ -8,10 +8,16 @@ const executablePath =
   process.platform === "darwin"
     ? join(appPath, "Contents", "MacOS", "Markd")
     : join(appPath, "Markd");
+const playwrightPath = join(
+  process.cwd(),
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "playwright.cmd" : "playwright",
+);
 
 const child = spawn(
-  "pnpm",
-  ["exec", "playwright", "test", "--config", "playwright.packaged.config.ts"],
+  playwrightPath,
+  ["test", "--config", "playwright.packaged.config.ts"],
   {
     stdio: "inherit",
     env: {

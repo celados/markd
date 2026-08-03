@@ -1,6 +1,6 @@
 import { create } from "@octanejs/zustand";
 import { toast } from "@octanejs/sonner";
-import { ipc } from "@/lib/ipc";
+import { collectionsDesktop } from "@/lib/desktop-services";
 import type { Bookmark } from "@/lib/types";
 
 interface BookmarksState {
@@ -37,7 +37,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
 
   load: async () => {
     try {
-      const snapshot = await ipc.collectionsSnapshot();
+      const snapshot = await collectionsDesktop.snapshot();
       const bookmarks = snapshot.bookmarks;
       const tagRegistry = snapshot.bookmarkTags;
       set({ bookmarks, tagRegistry, loaded: true });
@@ -52,11 +52,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
 
   add: async (url, tags) => {
     try {
-      let bookmark = await ipc.bookmarkAdd(url);
-      if (tags && tags.length) {
-        // e.g. adding while a tag filter is active — inherit that tag
-        bookmark = await ipc.bookmarkSetTags(bookmark.id, tags);
-      }
+      const { item: bookmark } = await collectionsDesktop.bookmarks.create(url, tags);
       set({ bookmarks: [bookmark, ...get().bookmarks] });
       get().fetchMeta(bookmark.id);
     } catch (err) {
@@ -65,13 +61,10 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
   },
 
   fetchMeta: async (id) => {
-    // Metadata enrichment remains a legacy native capability; Electron CRUD
-    // must not invoke a Tauri command that cannot exist in the new shell.
-    if (window.markd) return;
     if (get().fetching.has(id)) return;
     set({ fetching: new Set(get().fetching).add(id) });
     try {
-      const updated = await ipc.bookmarkFetchMeta(id);
+      const { item: updated } = await collectionsDesktop.bookmarks.fetchMetadata(id);
       set({
         bookmarks: get().bookmarks.map((b) => (b.id === id ? updated : b)),
       });
@@ -86,7 +79,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
 
   updateTitle: async (id, title) => {
     try {
-      const updated = await ipc.bookmarkUpdateTitle(id, title);
+      const { item: updated } = await collectionsDesktop.bookmarks.change(id, { type: "title", title });
       set({
         bookmarks: get().bookmarks.map((b) => (b.id === id ? updated : b)),
       });
@@ -97,7 +90,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
 
   setTags: async (id, tags) => {
     try {
-      const updated = await ipc.bookmarkSetTags(id, tags);
+      const { item: updated } = await collectionsDesktop.bookmarks.change(id, { type: "tags", tags });
       // backend auto-registers any new tag names — merge them in
       const registry = new Set(get().tagRegistry);
       updated.tags.forEach((t) => registry.add(t));
@@ -112,7 +105,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
 
   createTag: async (name) => {
     try {
-      set({ tagRegistry: await ipc.bookmarkTagCreate(name) });
+      set({ tagRegistry: (await collectionsDesktop.tags.create("bookmarks", name)).bookmarkTags });
     } catch (err) {
       oops(err);
     }
@@ -120,7 +113,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
 
   deleteTag: async (name) => {
     try {
-      const tagRegistry = await ipc.bookmarkTagDelete(name);
+      const tagRegistry = (await collectionsDesktop.tags.remove("bookmarks", name)).bookmarkTags;
       set({
         tagRegistry,
         tagFilter: get().tagFilter === name ? null : get().tagFilter,
@@ -137,7 +130,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
   remove: async (id) => {
     set({ bookmarks: get().bookmarks.filter((b) => b.id !== id) });
     try {
-      await ipc.bookmarkDelete(id);
+      await collectionsDesktop.bookmarks.remove(id);
     } catch (err) {
       oops(err);
       get().load();
@@ -150,7 +143,7 @@ export const useBookmarks = create<BookmarksState>((set, get) => ({
       return;
     }
     try {
-      const path = await ipc.exportBookmarks();
+      const path = await collectionsDesktop.bookmarks.export();
       if (path) {
         toast("Bookmarks exported", { description: path });
       }

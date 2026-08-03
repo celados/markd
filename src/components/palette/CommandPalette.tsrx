@@ -12,7 +12,7 @@ import {
 
 import { Command } from "@octanejs/cmdk";
 import { useEffect, useMemo, useRef, useState } from "octane";
-import { ipc } from "@/lib/ipc";
+import { captureDesktop, vaultDesktop } from "@/lib/desktop-services";
 import { formatShortcutText } from "@/lib/shortcuts";
 import { flattenNotes } from "@/lib/tree";
 import type { SearchHit, TreeNode } from "@/lib/types";
@@ -112,8 +112,8 @@ export function CommandPalette() @{
     let disposed = false;
     setSearching(true);
     const timer = setTimeout(() => {
-      ipc
-        .searchNotes(trimmed, 12)
+      vaultDesktop.search
+        .query(trimmed, 12)
         .then((nextHits) => {
           if (!disposed) setHits(nextHits);
         })
@@ -159,7 +159,7 @@ export function CommandPalette() @{
         label: "Quick capture",
         hint: mac ? "⌃⇧Space" : "Ctrl+Shift+Space",
         icon: Feather,
-        run: () => void ipc.showQuickCapture(),
+        run: () => void captureDesktop.open(),
       },
       {
         id: "daily-note",
@@ -226,7 +226,7 @@ export function CommandPalette() @{
       run: () => {
         // Opening the Note must not wait on a secondary ranking signal, but a
         // failed access record stays observable instead of becoming silent success.
-        void ipc.recordSearchAccess(hit.rel).catch((error) => {
+        void vaultDesktop.search.recordAccess(hit.rel).catch((error) => {
           console.error("[markd] failed to record search access", error);
         });
         vault.expandTo(hit.rel);

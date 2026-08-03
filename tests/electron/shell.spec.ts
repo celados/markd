@@ -146,6 +146,28 @@ test("a pre-Vault index subscription activates on the first replacement", async 
       return events.map((event) => event.kind);
     })).toContain("replacement");
 
+    await application.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        process.env.MARKD_TEST_OPENED_WEB = url;
+      };
+      shell.showItemInFolder = (path) => {
+        process.env.MARKD_TEST_REVEALED_PATH = path;
+      };
+    });
+    expect(await page.evaluate(() => window.markd!.app.openWebUrl("https://example.com/docs")))
+      .toEqual({ ok: true, value: null });
+    expect(await page.evaluate(() => window.markd!.app.revealVaultEntry("Existing.md")))
+      .toEqual({ ok: true, value: null });
+    expect(await application.evaluate(() => ({
+      opened: process.env.MARKD_TEST_OPENED_WEB,
+      revealed: process.env.MARKD_TEST_REVEALED_PATH,
+    }))).toEqual({
+      opened: "https://example.com/docs",
+      revealed: join(await realpath(vault), "Existing.md"),
+    });
+    expect(await page.evaluate(() => window.markd!.app.revealVaultEntry("../Outside.md")))
+      .toEqual(expect.objectContaining({ ok: false, error: expect.objectContaining({ kind: "INVALID_PATH" }) }));
+
     await writeFile(join(vault, "Later.md"), "later");
     await expect(page.getByRole("treeitem", { name: "Later.md" })).toBeVisible();
     await rm(join(vault, "Later.md"));

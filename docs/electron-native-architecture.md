@@ -5,13 +5,17 @@ description: >
   用 Electron 原生进程模型替换 Tauri 基座，以隔离的 Vault Engine、fff 驱动的 Vault Index、
   @pierre/trees 文件树和窄 preload interface 重构 Markd，而不是逐项翻译旧 Tauri commands。
 status: accepted # draft | accepted | superseded
-version: 0.3
-generated: { by: codex/gpt-5.6, at: 2026-08-03T18:24:49+08:00 }
+version: 0.4
+implemented: 2026-08-04
+generated: { by: codex/gpt-5.6, at: 2026-08-04T01:00:00+08:00 }
 supersedes: ./port-plan.md#objective-and-boundary
 tags: [markd, electron, architecture, migration, fff, octane, reliability]
 ---
 
 # Decision
+
+> Implementation status: complete. This accepted proposal is the historical decision record; `AGENTS.md`,
+> `electron/`, and the executable tests are the current implementation truth.
 
 Markd 将从 Tauri 2 完全迁移到 Electron。迁移采用 Electron-native 架构，不把 56 个 Tauri
 command 机械翻译成 56 个 Electron IPC handler，也不长期维护 Tauri/Electron 双基座。

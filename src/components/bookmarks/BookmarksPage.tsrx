@@ -1,4 +1,3 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   LuGlobe as Globe,
   LuSearch as Search,
@@ -21,6 +20,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { EASE_OUT } from "@/lib/ease";
 import { cx, hostOf } from "@/lib/utils";
 import { useBookmarks } from "@/stores/bookmarks";
+import { openWebUrl } from "@/lib/desktop";
 
 const URL_RE = /^https?:\/\/\S+$/i;
 
@@ -182,7 +182,7 @@ function BookmarkRow(props: {
       transition={{ duration: 0.15, ease: "easeOut" }}
       className="group flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 transition-colors duration-100 hover:bg-hover"
       onClick={() => {
-        if (!editing) openUrl(bookmark.url);
+        if (!editing) void openWebUrl(bookmark.url);
       }}
     >
       <div className="relative h-10 w-14 shrink-0 overflow-hidden rounded-md border border-line-soft bg-hover">

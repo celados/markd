@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { findBacklinkMentions } from "../electron/backlink-links";
+import { findBacklinkMentions, rewriteMovedLinks } from "../electron/backlink-links";
 
 describe("Markdown backlink validation", () => {
   test("accepts real links while rejecting non-Markdown mentions", () => {
@@ -87,5 +87,28 @@ describe("Markdown backlink validation", () => {
         ["Source.md", "Target.md"],
       ),
     ).toHaveLength(1);
+  });
+
+  test("rewrites moved destinations without touching metadata, code, images, or external links", () => {
+    const markdown = [
+      "---",
+      "source: '[old](Projects/Target.md)'",
+      "---",
+      "[target](Projects/Target%20Note.md#part)",
+      "![image](Projects/Target Note.md)",
+      "`[code](Projects/Target Note.md)`",
+      "[[Projects/Target Note|wiki]]",
+      "[external](https://example.com/Projects/Target%20Note.md)",
+    ].join("\n");
+    expect(rewriteMovedLinks(markdown, "Projects", "Archive/Work")).toBe([
+      "---",
+      "source: '[old](Projects/Target.md)'",
+      "---",
+      "[target](Archive/Work/Target%20Note.md#part)",
+      "![image](Projects/Target Note.md)",
+      "`[code](Projects/Target Note.md)`",
+      "[[Archive/Work/Target Note|wiki]]",
+      "[external](https://example.com/Projects/Target%20Note.md)",
+    ].join("\n"));
   });
 });

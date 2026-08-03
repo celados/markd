@@ -1,9 +1,9 @@
 import { toast } from "@octanejs/sonner";
 import { create } from "@octanejs/zustand";
 import {
-  unwrapDesktopResult,
   type DesktopUpdate,
 } from "@/lib/desktop";
+import { updatesDesktop } from "@/lib/desktop-services";
 import { shouldShowReleaseNotes } from "@/lib/updateRelease";
 
 type Status = "idle" | "checking" | "available" | "downloading" | "ready" | "error";
@@ -102,19 +102,17 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
 }));
 
 async function checkForUpdate(): Promise<PendingUpdate | null> {
-  const desktop = window.markd;
-  if (!desktop) return null;
-  const update = await unwrapDesktopResult(desktop.updates.check());
+  if (!window.markd) return null;
+  const update = await updatesDesktop.check();
   if (!update) return null;
   return {
     ...update,
     downloadAndInstall: async () => {
-      await unwrapDesktopResult(desktop.updates.install(update.id));
+      await updatesDesktop.install(update.id);
     },
   };
 }
 
 async function relaunchApp(): Promise<void> {
-  if (!window.markd) throw new Error("Electron updater is unavailable.");
-  await unwrapDesktopResult(window.markd.updates.relaunch());
+  await updatesDesktop.relaunch();
 }

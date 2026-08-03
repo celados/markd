@@ -7,20 +7,15 @@ import { motion } from "@octanejs/motion";
 import { useCallback, useEffect, useRef, useState } from "octane";
 import { toast, Toaster } from "@octanejs/sonner";
 import { Button } from "@/components/ui/Button";
-import { ipc } from "@/lib/ipc";
-import { onQuickCaptureOpen, unwrapDesktopResult } from "@/lib/desktop";
+import { captureDesktop, vaultDesktop } from "@/lib/desktop-services";
+import { onQuickCaptureOpen } from "@/lib/desktop";
 import { EASE_OUT } from "@/lib/ease";
 import { applyTheme } from "@/lib/theme";
 
 type CaptureMode = "create" | "append";
 
 async function syncCaptureTheme(): Promise<void> {
-  if (window.markd) {
-    const result = await window.markd.vault.snapshot();
-    applyTheme(result.ok ? result.value.theme : "system");
-    return;
-  }
-  applyTheme(await ipc.getTheme());
+  applyTheme(await vaultDesktop.theme.get());
 }
 
 export function QuickCaptureWindow() {
@@ -49,7 +44,7 @@ export function QuickCaptureWindow() {
   const close = useCallback(async () => {
     if (savingRef.current) return;
     try {
-      await ipc.closeQuickCapture();
+      await captureDesktop.close();
       setTitle("");
       setValue("");
       setMode("create");
@@ -83,14 +78,10 @@ export function QuickCaptureWindow() {
     setSaving(true);
     setFailure(null);
     try {
-      if (!window.markd) {
-        await ipc.createNoteWithContent("", noteTitle || "Quick note", markdown);
-      } else if (mode === "create") {
-        await unwrapDesktopResult(
-          window.markd.capture.create(noteTitle || "Quick note", markdown),
-        );
+      if (mode === "create") {
+        await captureDesktop.create(noteTitle || "Quick note", markdown);
       } else {
-        await unwrapDesktopResult(window.markd.capture.append(noteTitle, markdown));
+        await captureDesktop.append(noteTitle, markdown);
       }
     } catch (error) {
       savingRef.current = false;
@@ -107,7 +98,7 @@ export function QuickCaptureWindow() {
     setValue("");
     setMode("create");
     try {
-      await ipc.closeQuickCapture();
+      await captureDesktop.close();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setFailure(`The Note was saved, but Quick Capture could not close: ${message}`);

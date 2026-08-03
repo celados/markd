@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { installTauriFixture } from "./tauri-fixture";
+import { installDesktopFixture } from "./desktop-fixture";
 
 test("account and Published Share lifecycle use the semantic Cloud bridge", async ({ page }) => {
-  await installTauriFixture(page, { cloudLifecycle: true });
+  await installDesktopFixture(page, { cloudLifecycle: true });
   await page.goto("/");
 
   await page.keyboard.press("ControlOrMeta+,");
@@ -34,7 +34,7 @@ test("account and Published Share lifecycle use the semantic Cloud bridge", asyn
 });
 
 test("remote sign-out failure does not leave the renderer signed in", async ({ page }) => {
-  await installTauriFixture(page, {
+  await installDesktopFixture(page, {
     cloudLifecycle: true,
     cloudSignOutFailure: true,
   });

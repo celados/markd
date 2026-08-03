@@ -1,7 +1,7 @@
 # Markd — agent guide
 
-Local-first markdown notes app for macOS. Electron is the default shell; the legacy Tauri tree remains only for
-unmigrated runtime comparison until #14 removes it. The UI uses Octane + Vite + Tailwind v4 + Tiptap 3.
+Local-first markdown notes app for macOS. Electron is the only desktop shell and release path. The UI uses
+Octane + Vite + Tailwind v4 + Tiptap 3.
 
 ## Fork provenance
 
@@ -35,11 +35,8 @@ root pnpm workspace.
 
 ## Commands
 
-- `pnpm run dev` — run the Electron + Vite desktop shell; Phase 2 currently supports Vault choose/create/reopen,
-  coherent bootstrap snapshots, Note create/read/write, native Trash, Pins, tabs, Collections CRUD, and Quick
-  Capture, while later domain slices remain on Tauri
+- `pnpm run dev` — run the complete Electron + Vite desktop app
 - `pnpm run dev:web` — renderer-only diagnostic surface in system browser; it is not the desktop product
-- `pnpm tauri dev` — legacy Tauri implementation for migration comparison only; do not extend its command surface
 - `pnpm run build` — strict app typecheck + Vite production build
 - `pnpm run typecheck` — strict TSRX typecheck；不保留 dependency diagnostic allowlist
 - `pnpm run icons:generate` — 从根 `icons.json` 用 Sigil 生成 Octane-native `src/icons/icons.tsrx`；
@@ -49,7 +46,6 @@ root pnpm workspace.
   do not invoke Playwright directly against a potentially stale `dist/`
 - `pnpm run test:electron` — rebuild, then launch the installed Electron runtime for secure-shell and real
   utility/native smoke tests in background mode; it neither activates the app nor downloads a Playwright browser
-- `cd src-tauri && cargo test` — Rust unit tests
 - `pnpm run package:test` — build an unsigned macOS arm64 Electron package, verify its exact native/updater
   payload, then run the packaged smoke in background mode
 - `.github/workflows/release-macos.yml` — tag-only signed/notarized macOS arm64 release; local package commands do
@@ -57,15 +53,14 @@ root pnpm workspace.
 
 ## Architecture
 
-The frontend is UI + state only. Migrated Electron filesystem work belongs to the utility-owned Vault Engine;
-legacy slices still use typed Tauri commands (`src/lib/ipc.ts` is the only file that touches `invoke`).
+The renderer is UI + state only. Filesystem, index, Collections, Cloud, and capture persistence belong to the
+utility-owned engines under `electron/`; OS-authority operations belong to Electron main. The isolated preload
+exposes the typed, semantic `window.markd` bridge. Renderer modules consume the domain-shaped services in
+`src/lib/desktop-services.ts`; there is no transport compatibility layer.
 
-The default development shell is now Electron, with main/preload/utility entries under `electron/`; the first
-complete Vault slice has crossed the new bridge. Remaining application capabilities still belong to the legacy
-Tauri implementation until each vertical slice migrates. The Electron-native replacement
-architecture and migration gates are frozen in
+The Electron-native architecture and migration gates are recorded in
 [`docs/electron-native-architecture.md`](docs/electron-native-architecture.md); new migration work must follow that
-proposal instead of extending the Tauri command surface.
+accepted proposal and the current implementation.
 
 ### Vault model
 
@@ -77,25 +72,19 @@ User picks any folder as a vault:
   Collection store is absent.
 - Vault path + theme persist in the app config dir (`config.json`).
 
-Notes are addressed by path relative to the vault root (e.g. `projects/app.md`), never by ID. Deletes go to OS trash. External edits are picked up on window focus (dirty editor wins).
+Notes are addressed by path relative to the vault root (e.g. `projects/app.md`), never by ID. Deletes go to OS trash. The live Vault Index projects external edits; a dirty editor keeps its local draft until the explicit write conflict is resolved.
 
-### Rust (`src-tauri/src/`)
+### Electron (`electron/`)
 
-One module per concern, each with unit tests; keep files under ~300 lines:
+- `main.ts` — secure windows, dialogs, Trash, Finder reveal, trusted external navigation, asset protocol, updater
+- `preload.ts` / `bridge-contract.ts` — narrow validated `window.markd` interface; never expose `ipcRenderer`
+- `engine.ts` / `vault-engine.ts` — utility-owned Vault operations and coherent snapshots
+- `vault-index.ts` — the single ignore-aware fff index shared by tree, search, backlinks, and live changes
+- `collections-engine.ts` / `cloud-engine.ts` — Vault App Data and remote publishing owners
+- `link-metadata.ts` — bounded bookmark metadata fetch and mature HTML parsing
 
-- `error.rs` — `AppError`/`AppResult`, serialized as `{kind, message}` to the frontend
-- `note_scan.rs` — the single ignore-aware vault walker shared by tree, search, and backlinks;
-  the `ignore` crate owns Git user excludes and nested `.gitignore` semantics, while Markd adds a
-  small built-in generated/dependency directory set
-- `vault.rs` — layout, tree scan, rel-path resolution (rejects traversal)
-- `notes.rs` — CRUD, rename/move with collision suffixing ("name 2")
-- `search.rs` — case-insensitive title+content search, title hits ranked first
-- `todos.rs` / `bookmarks.rs` — JSON stores in `.markd/`
-- `link_meta.rs` — fetch page title / og:image / favicon (reqwest + scraper)
-- `assets.rs` — save pasted images into `.markd/assets/`
-- `commands.rs` — thin `#[tauri::command]` wrappers only; `lib.rs` — wiring only
-
-Blocking dialogs (`blocking_pick_folder`) must run in async commands via `spawn_blocking` — on the main thread they deadlock the app.
+Main must not perform recursive scans, Markdown parsing, or synchronous Vault IO. The renderer must not import
+Node, Electron, or native libraries.
 
 ### Frontend (`src/`)
 

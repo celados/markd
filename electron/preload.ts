@@ -457,7 +457,7 @@ async function requestControl<T>(requestInput: unknown): Promise<DesktopResult<T
 
 function controlRequestInput(
   method: ControlRequest["method"],
-  params: null | { id: string } | { url: string },
+  params: null | { id: string } | { url: string } | { rel: string },
 ): unknown {
   return {
     type: "request",
@@ -478,6 +478,10 @@ async function openFromDialog(create: boolean): Promise<DesktopResult<unknown>> 
 contextBridge.exposeInMainWorld("markd", {
   app: {
     windowKind,
+    openWebUrl: (url: string) =>
+      requestControl(controlRequestInput("external.openWeb", { url })),
+    revealVaultEntry: (rel: string) =>
+      requestControl(controlRequestInput("external.revealVaultEntry", { rel })),
     onEngineLifecycle: (listener: (event: EngineState) => void) => {
       lifecycleListeners.add(listener);
       if (currentState) queueMicrotask(() => listener(currentState!));
@@ -542,11 +546,21 @@ contextBridge.exposeInMainWorld("markd", {
     },
     createNote: (dir: string, title: string, content = "") =>
       requestEngine("vault.note.create", { dir, title, content }),
+    openDailyNote: (date: string) => requestEngine("vault.daily.open", { date }),
+    createFolder: (dir: string, name: string) =>
+      requestEngine("vault.folder.create", { dir, name }),
+    renameEntry: (rel: string, name: string) =>
+      requestEngine("vault.entry.rename", { rel, name }),
+    moveEntry: (rel: string, dir: string) =>
+      requestEngine("vault.entry.move", { rel, dir }),
     readNote: (rel: string) => requestEngine("vault.note.read", { rel }),
     writeNote: (rel: string, content: string, expectedContent: string) =>
       requestEngine("vault.note.write", { rel, content, expectedContent }),
     moveToTrash: (rel: string) => requestEngine("vault.trash", { rel }),
     resolveNotePath: (rel: string) => requestEngine("vault.note.path", { rel }),
+    getTheme: () => requestEngine("vault.theme.get", null),
+    setTheme: (theme: "system" | "light" | "dark") =>
+      requestEngine("vault.theme.set", { theme }),
     search: (query: string, limit = 12) =>
       requestEngine("vault.search", { query, limit }),
     recordSearchAccess: (rel: string) =>
@@ -584,6 +598,8 @@ contextBridge.exposeInMainWorld("markd", {
         requestEngine("collections.bookmarks.create", { url, tags }),
       change: (id: string, change: unknown) =>
         requestEngine("collections.bookmarks.change", { id, change }),
+      fetchMetadata: (id: string) =>
+        requestEngine("collections.bookmarks.fetchMetadata", { id }),
       remove: (id: string) => requestEngine("collections.bookmarks.remove", { id }),
       ...(windowKind === "main"
         ? { export: () => requestEngine("collections.bookmarks.export", null) }
@@ -625,7 +641,7 @@ contextBridge.exposeInMainWorld("markd", {
           revokePublishedNote: (rel: string) =>
             requestEngine("cloud.publish.revoke", { rel }),
           openExternal: (url: string) =>
-            requestControl(controlRequestInput("external.open", { url })),
+            requestControl(controlRequestInput("external.openCloud", { url })),
         },
         updates: {
           check: () => requestControl(controlRequestInput("updates.check", null)),

@@ -7,9 +7,6 @@ status: active
 
 # Deferred work
 
-- Todos 与 Bookmarks CRUD 已由 utility-owned Collections interface 接管；Bookmark 的远程 metadata
-  enrichment 仍是 legacy Tauri capability，不属于 #9 的 CRUD seam。迁移这个 effect
-  时应继续通过 semantic bridge 进入 utility/native owner，不能恢复 renderer-side fetch 或 raw invoke。
 - updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。Cloud Engine 已迁移
   现有协议，但 production ownership gate 在源码层保持关闭；只有 tests 可用 loopback origins 启用。
   在启用 production publishing 或部署 fork site 前，必须裁决产品域名与 Cloud API ownership，并把

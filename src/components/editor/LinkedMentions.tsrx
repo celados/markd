@@ -5,7 +5,7 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from "octane";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { BACKLINKS_CHANGED } from "@/lib/backlinks";
-import { ipc } from "@/lib/ipc";
+import { vaultDesktop } from "@/lib/desktop-services";
 import type { BacklinkMention } from "@/lib/types";
 import { useTabs } from "@/stores/tabs";
 import { useVault } from "@/stores/vault";
@@ -27,7 +27,7 @@ function LinkedMentionsComponent(props: LinkedMentionsProps) @{
     const request = ++requestId.current;
     setLoading(true);
     try {
-      const next = await ipc.backlinksFor(rel);
+      const next = await vaultDesktop.search.backlinks(rel);
       if (request === requestId.current) setMentions(next);
     } catch {
       if (request === requestId.current) setMentions([]);

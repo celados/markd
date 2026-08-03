@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { parse } from "yaml";
 import {
   inspectElectronPackage,
+  inspectElectronOnlySource,
   inspectUpdateManifest,
 } from "../scripts/verify-electron-package.mjs";
 import { electronArtifactNames } from "../scripts/electron-artifacts.mjs";
@@ -52,6 +53,34 @@ test("artifact inspection accepts complete Electron and native inventories", asy
       "node_modules/@yuuang/ffi-rs-darwin-arm64/ffi-rs.darwin-arm64.node",
     ],
   });
+});
+
+test("source inventory rejects every retired desktop path and dependency", async () => {
+  expect(inspectElectronOnlySource()).toMatchObject({ retiredPaths: [] });
+  const root = await mkdtemp(join(tmpdir(), "markd-electron-only-test-"));
+  scratch.push(root);
+  await mkdir(join(root, "src-tauri"));
+  for (const path of [
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/release-macos.yml",
+    "electron-builder.yml",
+  ]) {
+    await mkdir(join(root, path, ".."), { recursive: true });
+    await writeFile(join(root, path), "{}");
+  }
+  expect(() => inspectElectronOnlySource(root)).toThrow(/Retired desktop source/u);
+});
+
+test("artifact inspection rejects retired desktop dependencies", async () => {
+  const fixture = await packageFixture({
+    includeFff: true,
+    includeFfi: true,
+    extraArchivedFiles: ["node_modules/@tauri-apps/api/package.json"],
+  });
+  expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(/retired desktop dependencies/u);
 });
 
 test("arm64 packaging excludes foreign native packages without weakening inventory", async () => {
@@ -182,6 +211,7 @@ async function packageFixture(options: {
   arch?: "arm64" | "x64";
   extraNativeFiles?: string[];
   archivedOnlyNativeFiles?: string[];
+  extraArchivedFiles?: string[];
 }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "markd-package-test-"));
   scratch.push(root);
@@ -215,6 +245,10 @@ async function packageFixture(options: {
   for (const path of [...(options.extraNativeFiles ?? []), ...(options.archivedOnlyNativeFiles ?? [])]) {
     await mkdir(join(source, path, ".."), { recursive: true });
     await writeFile(join(source, path), "native");
+  }
+  for (const path of options.extraArchivedFiles ?? []) {
+    await mkdir(join(source, path, ".."), { recursive: true });
+    await writeFile(join(source, path), "fixture");
   }
   await mkdir(resources, { recursive: true });
   await createPackageWithOptions(source, join(resources, "app.asar"), {

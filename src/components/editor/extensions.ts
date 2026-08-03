@@ -1,4 +1,3 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -44,9 +43,7 @@ const VaultImage = (vaultRoot: string) =>
       const vaultSrc = HTMLAttributes.vaultSrc ?? HTMLAttributes.src;
       const src =
         vaultRoot && vaultSrc && !isRemoteSource(vaultSrc)
-          ? window.markd
-            ? window.markd.vault.assets.url(vaultSrc) ?? ""
-            : convertFileSrc(`${vaultRoot.replace(/\/$/, "")}/${vaultSrc}`)
+          ? window.markd?.vault.assets.url(vaultSrc) ?? ""
           : HTMLAttributes.src;
       return ["img", { ...HTMLAttributes, src, "data-vault-src": vaultSrc }];
     },
@@ -75,7 +72,7 @@ export function createExtensions(vaultRoot: string) {
       protocols: ["http", "https", "mailto"],
       // Keep relative hrefs (our internal page links, e.g. "projects/app.md").
       // Without this the default sanitizer resolves them against the app's
-      // tauri:// origin and strips them. External URLs still get validated.
+      // desktop origin and strips them. External URLs still get validated.
       isAllowedUri: (uri, ctx) => {
         if (!/^[a-z][a-z0-9+.-]*:/i.test(uri) && !uri.startsWith("//")) {
           return true;

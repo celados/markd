@@ -1,6 +1,6 @@
 import { create } from "@octanejs/zustand";
 import { toast } from "@octanejs/sonner";
-import { ipc } from "@/lib/ipc";
+import { vaultDesktop } from "@/lib/desktop-services";
 
 type PinsState = {
   pins: string[];
@@ -24,7 +24,7 @@ export const usePins = create<PinsState>((set, get) => ({
   load: async () => {
     set({ loading: true });
     try {
-      set(await ipc.pinsList());
+      set(await vaultDesktop.pins.list());
     } catch (error) {
       showError(error);
     } finally {
@@ -34,7 +34,7 @@ export const usePins = create<PinsState>((set, get) => ({
 
   pin: async (rel) => {
     try {
-      set(await ipc.pinNote(rel));
+      set(await vaultDesktop.pins.add(rel));
     } catch (error) {
       showError(error);
     }
@@ -42,7 +42,7 @@ export const usePins = create<PinsState>((set, get) => ({
 
   unpin: async (rel) => {
     try {
-      set(await ipc.unpinNote(rel));
+      set(await vaultDesktop.pins.remove(rel));
     } catch (error) {
       showError(error);
     }

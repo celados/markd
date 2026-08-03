@@ -221,6 +221,30 @@ export const engineRequestSchema = v.variant("method", [
   v.object({
     type: v.literal("request"),
     id: operationIdSchema,
+    method: v.literal("vault.daily.open"),
+    params: v.object({ date: v.pipe(v.string(), v.regex(/^\d{4}-\d{2}-\d{2}$/)) }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.folder.create"),
+    params: v.object({ dir: relSchema, name: v.string() }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.entry.rename"),
+    params: v.object({ rel: entryRelSchema, name: v.string() }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.entry.move"),
+    params: v.object({ rel: entryRelSchema, dir: relSchema }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
     method: v.literal("vault.note.read"),
     params: v.object({ rel: relSchema }),
   }),
@@ -245,6 +269,18 @@ export const engineRequestSchema = v.variant("method", [
     id: operationIdSchema,
     method: v.literal("vault.note.path"),
     params: v.object({ rel: entryRelSchema }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.theme.get"),
+    params: v.null(),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("vault.theme.set"),
+    params: v.object({ theme: v.picklist(["system", "light", "dark"]) }),
   }),
   v.object({
     type: v.literal("request"),
@@ -345,6 +381,12 @@ export const engineRequestSchema = v.variant("method", [
   v.object({
     type: v.literal("request"),
     id: operationIdSchema,
+    method: v.literal("collections.bookmarks.fetchMetadata"),
+    params: v.object({ id: idSchema }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
     method: v.literal("collections.bookmarks.remove"),
     params: v.object({ id: idSchema }),
   }),
@@ -437,8 +479,20 @@ export const controlRequestSchema = v.variant("method", [
   v.object({
     type: v.literal("request"),
     id: operationIdSchema,
-    method: v.literal("external.open"),
+    method: v.literal("external.openCloud"),
     params: v.object({ url: v.pipe(v.string(), v.url()) }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("external.openWeb"),
+    params: v.object({ url: v.pipe(v.string(), v.url()) }),
+  }),
+  v.object({
+    type: v.literal("request"),
+    id: operationIdSchema,
+    method: v.literal("external.revealVaultEntry"),
+    params: v.object({ rel: relSchema }),
   }),
 ]);
 
@@ -602,7 +656,13 @@ export function validateResponseValue(
     case "vault.index.synchronize":
       return v.safeParse(v.nullable(vaultIndexEventSchema), value).success;
     case "vault.note.create":
+    case "vault.daily.open":
       return v.safeParse(v.object({ rel: relSchema, snapshot: vaultSnapshotSchema }), value)
+        .success;
+    case "vault.folder.create":
+    case "vault.entry.rename":
+    case "vault.entry.move":
+      return v.safeParse(v.object({ rel: entryRelSchema, snapshot: vaultSnapshotSchema }), value)
         .success;
     case "vault.note.read":
       return v.safeParse(v.string(), value).success;
@@ -612,6 +672,10 @@ export function validateResponseValue(
       return v.safeParse(v.object({ snapshot: vaultSnapshotSchema }), value).success;
     case "vault.note.path":
       return v.safeParse(v.pipe(v.string(), v.minLength(1)), value).success;
+    case "vault.theme.get":
+      return v.safeParse(v.picklist(["system", "light", "dark"]), value).success;
+    case "vault.theme.set":
+      return v.safeParse(v.null(), value).success;
     case "vault.search":
       return v.safeParse(v.array(searchHitSchema), value).success;
     case "vault.search.recordAccess":
@@ -640,6 +704,7 @@ export function validateResponseValue(
         .success;
     case "collections.bookmarks.create":
     case "collections.bookmarks.change":
+    case "collections.bookmarks.fetchMetadata":
       return v.safeParse(
         v.object({ snapshot: collectionsSnapshotSchema, item: bookmarkSchema }),
         value,
@@ -675,7 +740,9 @@ export function validateResponseValue(
     case "app.relaunch":
     case "capture.open":
     case "capture.close":
-    case "external.open":
+    case "external.openCloud":
+    case "external.openWeb":
+    case "external.revealVaultEntry":
       return v.safeParse(v.null(), value).success;
   }
 }

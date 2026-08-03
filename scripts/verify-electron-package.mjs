@@ -19,6 +19,12 @@ export function inspectElectronPackage(
   }
 
   const archived = listPackage(asarPath).map(normalizeArchivePath);
+  const forbiddenArchiveEntries = archived.filter((path) =>
+    path.startsWith("node_modules/@tauri-apps/") || path.startsWith("node_modules/@octanejs/tauri/"),
+  );
+  if (forbiddenArchiveEntries.length > 0) {
+    throw new Error(`Packaged ASAR contains retired desktop dependencies: ${forbiddenArchiveEntries.join(", ")}.`);
+  }
   for (const required of [
     "dist/index.html",
     "dist-electron/main.js",
@@ -71,6 +77,61 @@ export function inspectElectronPackage(
     throw new Error("Packaged updater provider must target celados/markd GitHub releases.");
   }
   return { appPath, asarPath, fffLibrary, ffiAddon, nativeFiles, updateConfig };
+}
+
+export function inspectElectronOnlySource(root = process.cwd()) {
+  const retiredPaths = ["src-tauri", "Cargo.toml", "Cargo.lock"]
+    .filter((path) => existsSync(join(root, path)));
+  if (retiredPaths.length > 0) {
+    throw new Error(`Retired desktop source remains: ${retiredPaths.join(", ")}.`);
+  }
+  const forbidden = /@tauri-apps|@octanejs\/tauri|src-tauri|\bcargo\s+test\b/u;
+  const checkedFiles = [
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/release-macos.yml",
+    "electron-builder.yml",
+  ];
+  const contaminated = checkedFiles.filter((path) =>
+    forbidden.test(readFileSync(join(root, path), "utf8")),
+  );
+  if (contaminated.length > 0) {
+    throw new Error(`Retired desktop inventory remains in: ${contaminated.join(", ")}.`);
+  }
+  const classifiedChecks = [
+    {
+      name: "runtime",
+      files: [...sourceFiles(join(root, "src")), ...sourceFiles(join(root, "electron"))],
+      forbidden: /@tauri-apps|@octanejs\/tauri|__TAURI|src\/lib\/ipc/u,
+    },
+    {
+      name: "tests",
+      files: [...sourceFiles(join(root, "test")), ...sourceFiles(join(root, "tests"))]
+        .filter((path) => !path.endsWith("tests/electron-package.test.ts")),
+      forbidden: /__TAURI|tauri-fixture|record_search_access|move_entry|write_note|create_folder|rename_entry/u,
+    },
+    {
+      name: "current docs",
+      files: ["AGENTS.md", "README.md", "CONTRIBUTING.md", ".agents/backlog.md"]
+        .map((path) => join(root, path)),
+      forbidden: /legacy Tauri tree|pnpm tauri|src-tauri|cargo test|Rust owns|lib\/ipc/u,
+    },
+  ];
+  for (const check of classifiedChecks) {
+    const failures = check.files.filter((path) => check.forbidden.test(readFileSync(path, "utf8")));
+    if (failures.length > 0) {
+      throw new Error(`${check.name} still contains retired desktop seams: ${failures.join(", ")}.`);
+    }
+  }
+  return {
+    checkedFiles,
+    retiredPaths: [],
+    classifiedChecks: Object.fromEntries(
+      classifiedChecks.map((check) => [check.name, check.files.length]),
+    ),
+  };
 }
 
 export function inspectUpdateManifest(outputDir, expectedVersion, arch = "arm64") {
@@ -195,6 +256,20 @@ function listNativeFiles(root) {
   return files.sort();
 }
 
+function sourceFiles(root) {
+  if (!existsSync(root)) return [];
+  const files = [];
+  const visit = (folder) => {
+    for (const entry of readdirSync(folder, { withFileTypes: true })) {
+      const path = join(folder, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile() && /\.(?:js|mjs|ts|tsx|tsrx)$/u.test(entry.name)) files.push(path);
+    }
+  };
+  visit(root);
+  return files;
+}
+
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
 if (
   invokedPath &&
@@ -205,7 +280,8 @@ if (
   const appPath = process.argv[2] ?? findPackagedApp(outputDir);
   const arch = process.argv[3] ?? process.arch;
   const expectedVersion = process.argv[4] ?? JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")).version;
+  const source = inspectElectronOnlySource();
   const inventory = inspectElectronPackage(appPath, arch);
   const manifest = inspectUpdateManifest(outputDir, expectedVersion, arch);
-  console.log(JSON.stringify({ inventory, manifest }, null, 2));
+  console.log(JSON.stringify({ source, inventory, manifest }, null, 2));
 }

@@ -195,6 +195,20 @@ async function handleRequest(
       return vault.synchronizeIndex();
     case "vault.note.create":
       return vault.createNote(request.params.dir, request.params.title, request.params.content);
+    case "vault.daily.open":
+      return vault.openDailyNote(request.params.date);
+    case "vault.folder.create":
+      return vault.createFolder(request.params.dir, request.params.name);
+    case "vault.entry.rename": {
+      const result = await vault.renameEntry(request.params.rel, request.params.name);
+      await cloud.remapEntry(request.params.rel, result.rel);
+      return result;
+    }
+    case "vault.entry.move": {
+      const result = await vault.moveEntry(request.params.rel, request.params.dir);
+      await cloud.remapEntry(request.params.rel, result.rel);
+      return result;
+    }
     case "vault.note.read":
       return vault.readNote(request.params.rel);
     case "vault.note.write":
@@ -207,6 +221,11 @@ async function handleRequest(
       return vault.moveToTrash(request.params.rel);
     case "vault.note.path":
       return vault.resolveNotePath(request.params.rel);
+    case "vault.theme.get":
+      return vault.getTheme();
+    case "vault.theme.set":
+      await vault.setTheme(request.params.theme);
+      return null;
     case "vault.search":
       return vault.searchNotes(request.params.query, request.params.limit);
     case "vault.search.recordAccess":
@@ -239,6 +258,8 @@ async function handleRequest(
       return vault.createBookmark(request.params.url, request.params.tags);
     case "collections.bookmarks.change":
       return vault.changeBookmark(request.params.id, request.params.change);
+    case "collections.bookmarks.fetchMetadata":
+      return vault.fetchBookmarkMetadata(request.params.id);
     case "collections.bookmarks.remove":
       return vault.removeBookmark(request.params.id);
     case "collections.tags.create":
