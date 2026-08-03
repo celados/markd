@@ -83,12 +83,33 @@ export const enginePortMetadataSchema = v.object({ epoch: epochSchema });
 
 export const engineControlSchema = v.object({ epoch: epochSchema });
 
+export const engineChannelFailureSchema = v.object({
+  reason: v.literal("invalid-channel"),
+});
+
+export const engineStateSchema = v.variant("state", [
+  v.object({
+    state: v.literal("starting"),
+    epoch: epochSchema,
+  }),
+  v.object({
+    state: v.literal("ready"),
+    epoch: epochSchema,
+  }),
+  v.object({
+    state: v.literal("unavailable"),
+    epoch: epochSchema,
+    error: desktopErrorSchema,
+  }),
+]);
+
 export type DesktopErrorData = v.InferOutput<typeof desktopErrorSchema>;
 export type EngineRequest = v.InferOutput<typeof engineRequestSchema>;
 export type ControlRequest = v.InferOutput<typeof controlRequestSchema>;
 export type EngineMessage = v.InferOutput<typeof engineMessageSchema>;
 export type EngineResponse = v.InferOutput<typeof engineResponseSchema>;
 export type ControlResponse = v.InferOutput<typeof controlResponseSchema>;
+export type EngineState = v.InferOutput<typeof engineStateSchema>;
 
 export function validateResponseValue(
   method: EngineRequest["method"] | ControlRequest["method"],

@@ -14,9 +14,14 @@ import * as v from "valibot";
 import {
   controlRequestSchema,
   controlResponseSchema,
+  engineChannelFailureSchema,
   engineControlSchema,
+  engineStateSchema,
   type ControlResponse,
+  type DesktopErrorData,
+  type EngineState,
 } from "./bridge-contract";
+import { createEngineGenerationTerminal } from "./engine-generation";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const development =
@@ -26,6 +31,7 @@ let engine: UtilityProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let engineEpoch = 0;
 let restartAvailable = true;
+let engineState: EngineState | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -87,20 +93,74 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
+function publishEngineState(state: EngineState): void {
+  engineState = v.parse(engineStateSchema, state);
+  const window = mainWindow;
+  if (window && !window.isDestroyed()) {
+    window.webContents.send("markd:engine-state", engineState);
+  }
+}
+
+function unavailableError(message: string): DesktopErrorData {
+  return { kind: "ENGINE_UNAVAILABLE", message };
+}
+
 function connectEngine(window: BrowserWindow): UtilityProcess {
   const epoch = ++engineEpoch;
+  publishEngineState({ state: "starting", epoch });
   const child = utilityProcess.fork(join(moduleDir, "engine.js"), [], {
     serviceName: "Markd Engine",
     stdio: "pipe",
+    env: {
+      ...process.env,
+      MARKD_ENGINE_TEST_ABORT_DELAY_MS:
+        process.env.MARKD_TEST_ABORT_ENGINE_EPOCH === String(epoch)
+          ? process.env.MARKD_TEST_ABORT_DELAY_MS ?? "500"
+          : "",
+    },
   });
   const { port1, port2 } = new MessageChannelMain();
   let childReady = false;
   let rendererReady = !window.webContents.isLoadingMainFrame();
+  let transferred = false;
+  let transferTimer: ReturnType<typeof setTimeout> | null = null;
+  const terminal = createEngineGenerationTerminal((message) => {
+    if (transferTimer) clearTimeout(transferTimer);
+    publishEngineState({
+      state: "unavailable",
+      epoch,
+      error: unavailableError(message),
+    });
+    if (engine === child) engine = null;
+    if (mainWindow !== window || window.isDestroyed() || !restartAvailable) return;
+    restartAvailable = false;
+    console.log(`[markd-main] restarting engine after epoch=${epoch}`);
+    engine = connectEngine(window);
+  });
 
-  const transfer = () => {
-    if (!childReady || !rendererReady || window.isDestroyed()) return;
+  const performTransfer = () => {
+    transferTimer = null;
+    if (
+      transferred ||
+      terminal.isTerminal() ||
+      !childReady ||
+      !rendererReady ||
+      window.isDestroyed()
+    ) {
+      return;
+    }
+    transferred = true;
     child.postMessage({ type: "connect", epoch }, [port1]);
     window.webContents.postMessage("markd:engine-port", { epoch }, [port2]);
+  };
+  const transfer = () => {
+    if (!childReady || !rendererReady || transferred || terminal.isTerminal()) return;
+    const delay = Number(process.env.MARKD_TEST_ENGINE_TRANSFER_DELAY_MS ?? 0);
+    if (Number.isFinite(delay) && delay > 0) {
+      if (!transferTimer) transferTimer = setTimeout(performTransfer, delay);
+      return;
+    }
+    performTransfer();
   };
   child.once("spawn", () => {
     childReady = true;
@@ -115,11 +175,7 @@ function connectEngine(window: BrowserWindow): UtilityProcess {
   }
   child.on("exit", (code) => {
     console.error(`[markd-main] engine exited epoch=${epoch} code=${code}`);
-    if (engine === child) engine = null;
-    if (mainWindow !== window || window.isDestroyed() || !restartAvailable) return;
-    restartAvailable = false;
-    console.log(`[markd-main] restarting engine after epoch=${epoch}`);
-    engine = connectEngine(window);
+    terminal.terminate("Markd Engine exited unexpectedly.");
   });
   child.on("error", (type, location, report) => {
     console.error("[markd-main] engine fatal error", {
@@ -128,6 +184,8 @@ function connectEngine(window: BrowserWindow): UtilityProcess {
       location,
       report,
     });
+    terminal.terminate("Markd Engine encountered a fatal error.");
+    child.kill();
   });
   child.stdout?.pipe(process.stdout);
   child.stderr?.pipe(process.stderr);
@@ -189,10 +247,18 @@ ipcMain.handle("markd:control", (event, input: unknown): ControlResponse => {
   });
 });
 
+ipcMain.handle("markd:engine-state", (event): EngineState => {
+  if (event.sender !== mainWindow?.webContents || !engineState) {
+    throw new Error("Markd Desktop rejected an invalid engine state request.");
+  }
+  return v.parse(engineStateSchema, engineState);
+});
+
 ipcMain.on("markd:engine-ready", (event, input: unknown) => {
   const epoch = acceptEngineControl(event, input);
   if (epoch === null) return;
   restartAvailable = true;
+  publishEngineState({ state: "ready", epoch });
   console.log(`[markd-main] engine ready epoch=${epoch}`);
 });
 
@@ -200,6 +266,13 @@ ipcMain.on("markd:engine-protocol-error", (event, input: unknown) => {
   const epoch = acceptEngineControl(event, input);
   if (epoch === null) return;
   console.error(`[markd-main] engine protocol failure epoch=${epoch}`);
+  engine?.kill();
+});
+
+ipcMain.on("markd:engine-channel-error", (event, input: unknown) => {
+  const failure = v.safeParse(engineChannelFailureSchema, input);
+  if (!failure.success || event.sender !== mainWindow?.webContents) return;
+  console.error(`[markd-main] invalid engine channel epoch=${engineEpoch}`);
   engine?.kill();
 });
 

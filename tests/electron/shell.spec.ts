@@ -128,6 +128,47 @@ test("utility crash rejects outstanding calls and spends one restart", async () 
   }
 });
 
+test("pre-port generation failure resolves startup and restarts only once", async () => {
+  test.setTimeout(15_000);
+  const application = await electron.launch({
+    args: ["."],
+    env: {
+      ...process.env,
+      MARKD_TEST_ABORT_ENGINE_EPOCH: "1",
+      MARKD_TEST_ABORT_DELAY_MS: "1000",
+      MARKD_TEST_ENGINE_TRANSFER_DELAY_MS: "2000",
+    },
+  });
+  const diagnostics: string[] = [];
+  application.process().stdout?.on("data", (chunk) => {
+    diagnostics.push(String(chunk));
+  });
+  application.process().stderr?.on("data", (chunk) => {
+    diagnostics.push(String(chunk));
+  });
+  try {
+    const page = await application.firstWindow();
+    const result = await page.evaluate(() => window.markd!.vault.startup());
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: "ENGINE_UNAVAILABLE",
+        message: "Markd Engine exited unexpectedly.",
+      },
+    });
+
+    await expect
+      .poll(() => diagnostics.join(""), { timeout: 8_000 })
+      .toContain("[markd-main] engine ready epoch=2");
+    const output = diagnostics.join("");
+    expect(output.match(/restarting engine after epoch=1/g)).toHaveLength(1);
+    expect(output.match(/engine spawned epoch=/g)).toHaveLength(2);
+    expect(output).not.toContain("engine spawned epoch=3");
+  } finally {
+    await application.close();
+  }
+});
+
 test("development shortcut opens Chromium DevTools", async () => {
   const application = await electron.launch({
     args: ["."],

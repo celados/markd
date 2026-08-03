@@ -11,6 +11,11 @@ if (!parentPort) {
   throw new Error("Markd Engine requires an Electron utility-process parent port");
 }
 
+const abortDelay = Number(process.env.MARKD_ENGINE_TEST_ABORT_DELAY_MS ?? 0);
+if (Number.isFinite(abortDelay) && abortDelay > 0) {
+  setTimeout(() => process.abort(), abortDelay);
+}
+
 parentPort.once("message", (event) => {
   const port = event.ports[0];
   const epoch =

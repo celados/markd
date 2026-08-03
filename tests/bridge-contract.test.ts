@@ -8,6 +8,7 @@ import {
   validateResponseValue,
 } from "../electron/bridge-contract";
 import { DesktopError, unwrapDesktopResult } from "../src/lib/desktop";
+import { createEngineGenerationTerminal } from "../electron/engine-generation";
 
 describe("Electron bridge contract", () => {
   test("accepts only the empty engine startup operation", () => {
@@ -88,5 +89,17 @@ describe("Electron bridge contract", () => {
     await unwrapDesktopResult(Promise.resolve({ ok: false, error: data })).catch(
       (error: unknown) => expect(error).toBeInstanceOf(DesktopError),
     );
+  });
+
+  test("an engine generation reaches its terminal transition only once", () => {
+    const restarts: string[] = [];
+    const terminal = createEngineGenerationTerminal((message) => {
+      restarts.push(message);
+    });
+
+    expect(terminal.terminate("fatal error")).toBe(true);
+    expect(terminal.terminate("exit after fatal error")).toBe(false);
+    expect(terminal.isTerminal()).toBe(true);
+    expect(restarts).toEqual(["fatal error"]);
   });
 });
