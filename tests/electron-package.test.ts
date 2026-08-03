@@ -219,6 +219,30 @@ test("artifact names share one canonical macOS arm64 contract", () => {
   expect(() => electronArtifactNames("1.2.3", "x64")).toThrow(/arm64/u);
 });
 
+test("release workflow removes every exact draft transaction readback target", async () => {
+  const workflow = await readFile(
+    join(process.cwd(), ".github", "workflows", "release-macos.yml"),
+    "utf8",
+  );
+  expect(workflow).toContain(
+    'existing_root="$RUNNER_TEMP/markd-draft-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"',
+  );
+  expect(workflow).toContain('existing="$existing_root/$name"');
+  const cleanup = workflow.slice(workflow.indexOf("- name: Remove isolated release roots"));
+  expect(cleanup).not.toMatch(/rm -rf [^\n]*\*/u);
+  expect(cleanup).toContain('rm -rf "$path"');
+  for (const target of [
+    "markd-draft-existing-$run_key",
+    "markd-draft-readback-$run_key",
+    "markd-draft-before-$run_key.json",
+    "markd-draft-assets-$run_key.json",
+    "markd-draft-final-$run_key.json",
+  ]) {
+    expect(cleanup).toContain(`"$RUNNER_TEMP/${target}"`);
+  }
+  expect(workflow).not.toContain("markd-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$name");
+});
+
 async function packageFixture(options: {
   includeFff: boolean;
   includeFfi: boolean;

@@ -164,32 +164,256 @@ jobs:
           codesign --verify --strict --verbose=2 \
             "$unpacked/@yuuang/ffi-rs-darwin-arm64/ffi-rs.darwin-arm64.node"
 
-      - name: Run packaged utility smoke in background
-        run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
+      - name: Install canonical DMG in isolated Applications
+        run: |
+          run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          install_parent="$RUNNER_TEMP/markd-installed-$run_key"
+          install_root="$install_parent/Applications"
+          mount_point="$(mktemp -d "$RUNNER_TEMP/markd-dmg.XXXXXX")"
+          test ! -e "$install_parent"
+          mkdir -p "$install_root"
+          hdiutil attach "release/electron/$ELECTRON_DMG" \
+            -nobrowse -readonly -mountpoint "$mount_point"
+          trap 'hdiutil detach "$mount_point" -force >/dev/null 2>&1 || true' EXIT
+          test -d "$mount_point/Markd.app"
+          ditto "$mount_point/Markd.app" "$install_root/Markd.app"
+          hdiutil detach "$mount_point"
+          trap - EXIT
+          {
+            echo "INSTALLED_APP=$install_root/Markd.app"
+            echo "INSTALLED_EXECUTABLE=$install_root/Markd.app/Contents/MacOS/Markd"
+          } >> "$GITHUB_ENV"
 
-      - name: Keep verified workflow artifacts
+      - name: Verify installed app signing and notarization
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$INSTALLED_APP"
+          spctl --assess --type execute --verbose=2 "$INSTALLED_APP"
+          xcrun stapler validate "$INSTALLED_APP"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALLED_APP/Contents/Info.plist")" = "app.usemarkd"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INSTALLED_APP/Contents/Info.plist")" = "$VERSION"
+
+      - name: Run installed packaged journeys in background
+        run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged -- "$INSTALLED_APP"
+
+      - name: Build signed same-base Electron updater baseline
+        env:
+          CSC_LINK: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          baseline_version="0.1.10"
+          run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          baseline_output="$RUNNER_TEMP/markd-baseline-$run_key"
+          test ! -e "$baseline_output"
+          pnpm exec electron-builder --mac zip --arm64 --publish never \
+            -c.directories.output="$baseline_output" \
+            -c.extraMetadata.version="$baseline_version" \
+            -c.forceCodeSigning=true
+          baseline_app="$baseline_output/mac-arm64/Markd.app"
+          test -d "$baseline_app"
+          test -f "$baseline_app/Contents/Resources/app-update.yml"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$baseline_app/Contents/Info.plist")" = "$baseline_version"
+          codesign --verify --deep --strict --verbose=2 "$baseline_app"
+          spctl --assess --type execute --verbose=2 "$baseline_app"
+          xcrun stapler validate "$baseline_app"
+          target_requirement="$(codesign -d -r- "$INSTALLED_APP" 2>&1 | sed -n 's/^designated => //p')"
+          baseline_requirement="$(codesign -d -r- "$baseline_app" 2>&1 | sed -n 's/^designated => //p')"
+          test -n "$target_requirement"
+          test "$baseline_requirement" = "$target_requirement"
+
+          local_root="$RUNNER_TEMP/markd-release-e2e-local-$run_key"
+          public_root="$RUNNER_TEMP/markd-release-e2e-public-$run_key"
+          test ! -e "$local_root"
+          test ! -e "$public_root"
+          mkdir -p "$local_root" "$public_root"
+          ditto "$baseline_app" "$local_root/Markd.app"
+          ditto "$baseline_app" "$public_root/Markd.app"
+          {
+            echo "BASELINE_VERSION=$baseline_version"
+            echo "LOCAL_BASELINE_APP=$local_root/Markd.app"
+            echo "PUBLIC_BASELINE_APP=$public_root/Markd.app"
+          } >> "$GITHUB_ENV"
+
+      # PRE-PUBLISH GATE: exact final ZIP must replace the signed same-base app through Squirrel/ShipIt.
+      - name: Isolate local updater state
+        run: |
+          state_root="$(dirname "$LOCAL_BASELINE_APP")"
+          backup_root="$RUNNER_TEMP/markd-updater-backup-local-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          node scripts/updater-hygiene.mjs prepare "$LOCAL_BASELINE_APP" "$state_root" "$backup_root"
+          echo "LOCAL_HYGIENE_BACKUP=$backup_root" >> "$GITHUB_ENV"
+
+      - name: Verify local signed updater install and relaunch
+        run: |
+          MARKD_BASELINE_EXECUTABLE="$LOCAL_BASELINE_APP/Contents/MacOS/Markd" \
+          MARKD_INSTALLED_APP="$LOCAL_BASELINE_APP" \
+          MARKD_TARGET_VERSION="$VERSION" \
+          MARKD_BASELINE_VERSION="$BASELINE_VERSION" \
+          MARKD_ALLOWED_TEMP_ROOT="$RUNNER_TEMP" \
+          MARKD_UPDATE_CHANNEL_DIR="$GITHUB_WORKSPACE/release/electron" \
+            pnpm run test:updater
+
+      - name: Restore local updater state
+        if: always() && env.LOCAL_HYGIENE_BACKUP != ''
+        run: node scripts/updater-hygiene.mjs restore "$LOCAL_HYGIENE_BACKUP"
+
+      - name: Keep compact verification metadata
         uses: actions/upload-artifact@v7
         with:
           name: markd-electron-macos-${{ env.VERSION }}
           path: |
-            release/electron/${{ env.ELECTRON_DMG }}
-            release/electron/${{ env.ELECTRON_ZIP }}
             release/electron/${{ env.ELECTRON_ZIP_BLOCKMAP }}
             release/electron/${{ env.ELECTRON_MANIFEST }}
           if-no-files-found: error
 
-      - name: Upload to GitHub release
+      - name: Create or resume canonical draft release
         if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: v${{ env.VERSION }}
         run: |
-          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
-            gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "Markd $VERSION" || \
-            gh release view "$RELEASE_TAG" >/dev/null
-          gh release upload "$RELEASE_TAG" \
-            "release/electron/$ELECTRON_DMG" \
-            "release/electron/$ELECTRON_ZIP" \
-            "release/electron/$ELECTRON_ZIP_BLOCKMAP" \
-            "release/electron/$ELECTRON_MANIFEST" \
-            --clobber
+          metadata="$RUNNER_TEMP/markd-draft-before-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$metadata" 2>/dev/null; then
+            test "$(jq -r '[.draft, .prerelease] | @tsv' "$metadata")" = $'true\tfalse' || {
+              echo "Release $RELEASE_TAG must be a non-prerelease draft before resume." >&2
+              exit 1
+            }
+          else
+            gh release create "$RELEASE_TAG" \
+              --draft \
+              --latest=false \
+              --verify-tag \
+              --notes-file RELEASE_NOTES.md \
+              --title "Markd $VERSION"
+          fi
+          gh release edit "$RELEASE_TAG" \
+            --draft \
+            --latest=false \
+            --prerelease=false \
+            --verify-tag \
+            --notes-file RELEASE_NOTES.md \
+            --title "Markd $VERSION"
+
+      - name: Upload canonical draft assets without clobbering
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ env.VERSION }}
+        run: |
+          metadata="$RUNNER_TEMP/markd-draft-assets-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          existing_root="$RUNNER_TEMP/markd-draft-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$existing_root"
+          mkdir "$existing_root"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$metadata"
+          expected="$(printf '%s\n' "$ELECTRON_DMG" "$ELECTRON_ZIP" "$ELECTRON_ZIP_BLOCKMAP" "$ELECTRON_MANIFEST" | sort)"
+          actual="$(jq -r '.assets[].name' "$metadata" | sort)"
+          unexpected="$(comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual"))"
+          test -z "$unexpected" || {
+            echo "Draft contains unexpected stale assets:" >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          }
+          for name in "$ELECTRON_DMG" "$ELECTRON_ZIP" "$ELECTRON_ZIP_BLOCKMAP" "$ELECTRON_MANIFEST"; do
+            local_path="release/electron/$name"
+            asset_id="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .id' "$metadata")"
+            if [ -n "$asset_id" ]; then
+              existing="$existing_root/$name"
+              gh api -H "Accept: application/octet-stream" \
+                "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" > "$existing"
+              cmp "$local_path" "$existing" || {
+                echo "Existing draft asset differs and will not be clobbered: $name" >&2
+                exit 1
+              }
+            else
+              gh release upload "$RELEASE_TAG" "$local_path"
+            fi
+          done
+
+      - name: Verify authenticated draft readback
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ env.VERSION }}
+        run: |
+          readback="$RUNNER_TEMP/markd-draft-readback-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          metadata="$RUNNER_TEMP/markd-draft-final-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          test ! -e "$readback"
+          mkdir "$readback"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$metadata"
+          for name in "$ELECTRON_DMG" "$ELECTRON_ZIP" "$ELECTRON_ZIP_BLOCKMAP" "$ELECTRON_MANIFEST"; do
+            asset_id="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .id' "$metadata")"
+            test -n "$asset_id"
+            gh api -H "Accept: application/octet-stream" \
+              "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" > "$readback/$name"
+          done
+          node scripts/verify-draft-release.mjs "$VERSION" release/electron "$readback" "$metadata"
+
+      - name: Publish canonical release as latest
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ env.VERSION }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest
+
+      # POST-PUBLISH EVIDENCE: production GitHubProvider resolves stable updates through /latest.
+      - name: Verify anonymous public release assets and digests
+        if: env.PUBLISH == 'true'
+        env:
+          # No token is passed: this proves the stable channel is anonymously readable.
+          GH_TOKEN: ''
+        run: node scripts/verify-remote-release.mjs "$VERSION"
+
+      - name: Isolate production updater state
+        if: env.PUBLISH == 'true'
+        run: |
+          state_root="$(dirname "$PUBLIC_BASELINE_APP")"
+          backup_root="$RUNNER_TEMP/markd-updater-backup-public-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          node scripts/updater-hygiene.mjs prepare "$PUBLIC_BASELINE_APP" "$state_root" "$backup_root"
+          echo "PUBLIC_HYGIENE_BACKUP=$backup_root" >> "$GITHUB_ENV"
+
+      - name: Verify production GitHub updater relaunch
+        if: env.PUBLISH == 'true'
+        run: |
+          MARKD_BASELINE_EXECUTABLE="$PUBLIC_BASELINE_APP/Contents/MacOS/Markd" \
+          MARKD_INSTALLED_APP="$PUBLIC_BASELINE_APP" \
+          MARKD_TARGET_VERSION="$VERSION" \
+          MARKD_BASELINE_VERSION="$BASELINE_VERSION" \
+          MARKD_ALLOWED_TEMP_ROOT="$RUNNER_TEMP" \
+            pnpm run test:updater
+
+      - name: Restore production updater state
+        if: always() && env.PUBLIC_HYGIENE_BACKUP != ''
+        run: node scripts/updater-hygiene.mjs restore "$PUBLIC_HYGIENE_BACKUP"
+
+      - name: Remove isolated release roots
+        if: always()
+        run: |
+          run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          for path in \
+            "$RUNNER_TEMP/markd-installed-$run_key" \
+            "$RUNNER_TEMP/markd-baseline-$run_key" \
+            "$RUNNER_TEMP/markd-release-e2e-local-$run_key" \
+            "$RUNNER_TEMP/markd-release-e2e-public-$run_key" \
+            "$RUNNER_TEMP/markd-draft-existing-$run_key" \
+            "$RUNNER_TEMP/markd-draft-readback-$run_key" \
+            "$RUNNER_TEMP/markd-draft-before-$run_key.json" \
+            "$RUNNER_TEMP/markd-draft-assets-$run_key.json" \
+            "$RUNNER_TEMP/markd-draft-final-$run_key.json"; do
+            test "$(dirname "$path")" = "$RUNNER_TEMP" || {
+              echo "Refusing to clean release path outside RUNNER_TEMP: $path" >&2
+              exit 1
+            }
+            case "$(basename "$path")" in
+              "markd-installed-$run_key" | \
+              "markd-baseline-$run_key" | \
+              "markd-release-e2e-local-$run_key" | \
+              "markd-release-e2e-public-$run_key" | \
+              "markd-draft-existing-$run_key" | \
+              "markd-draft-readback-$run_key" | \
+              "markd-draft-before-$run_key.json" | \
+              "markd-draft-assets-$run_key.json" | \
+              "markd-draft-final-$run_key.json") rm -rf "$path" ;;
+              *) echo "Refusing to clean unexpected release path: $path" >&2; exit 1 ;;
+            esac
+          done

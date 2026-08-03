@@ -31,6 +31,6 @@ status: active
 - `@celados/fff-node` 通过 `ffi-rs` 加载平台 `@celados/fff-bin-darwin-*` cdylib。#13 已对 unsigned local
   artifact 验证 ASAR header、exact unpacked native payload、updater metadata 与 packaged utility smoke；
   Developer ID 签名、公证和 Gatekeeper 验证只能由 tag release workflow 使用真实 Apple credentials 闭环。
-- 网站当前必须继续链接已发布的 `v0.1.9` legacy DMG `Markd_0.1.9_aarch64.dmg`。#15 在真实上传首个
-  `Markd-<version>-mac-arm64.dmg` 后，必须在同一发布闭环原子切换 `site/lib/config.ts` 的版本与 URL；
-  #13 不能提前指向不存在的 canonical asset。
+- 网站下载入口仍属于 #15 的发布闭环，但不能在实现 PR 中提前切换。`v0.2.0` canonical assets 通过匿名
+  readback 与 production updater smoke 后，必须用 follow-up commit/PR 更新 `site/lib/config.ts` 和
+  changelog，并验证公开下载按钮；在此之前继续链接已发布的 `v0.1.9` legacy DMG。
