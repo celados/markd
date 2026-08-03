@@ -198,12 +198,14 @@ test("quick-capture preload does not expose main-window export capabilities", as
       await quickPage.evaluate(() => ({
         windowKind: window.markd?.app.windowKind,
         cloud: typeof window.markd?.cloud,
+        updates: typeof window.markd?.updates,
         noteExport: typeof window.markd?.vault.exportNote,
         bookmarkExport: typeof window.markd?.collections.bookmarks.export,
       })),
     ).toEqual({
       windowKind: "quick-capture",
       cloud: "undefined",
+      updates: "undefined",
       noteExport: "undefined",
       bookmarkExport: "undefined",
     });

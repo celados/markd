@@ -5,8 +5,8 @@ description: >
   用 Electron 原生进程模型替换 Tauri 基座，以隔离的 Vault Engine、fff 驱动的 Vault Index、
   @pierre/trees 文件树和窄 preload interface 重构 Markd，而不是逐项翻译旧 Tauri commands。
 status: accepted # draft | accepted | superseded
-version: 0.2
-generated: { by: codex/gpt-5, at: 2026-08-02T00:15:46+08:00 }
+version: 0.3
+generated: { by: codex/gpt-5.6, at: 2026-08-03T18:24:49+08:00 }
 supersedes: ./port-plan.md#objective-and-boundary
 tags: [markd, electron, architecture, migration, fff, octane, reliability]
 ---
@@ -421,7 +421,7 @@ Exit: every user-visible capability has an Electron owner and executable evidenc
 
 ## Phase 5 — Packaged release closure
 
-- build macOS arm64/x64 and supported Linux artifacts;
+- build the supported macOS artifacts;
 - verify fff native binaries outside development mode;
 - verify code signing, notarization, updater manifests and install/upgrade behavior;
 - run packaged native smoke tests and inspect artifact contents.
@@ -445,7 +445,7 @@ These are entry gates, not accepted silent workarounds:
    rescan before fff owns production Vaults; tests cover hidden paths, `.git/info/exclude`, global/root/nested rules,
    negation, marker corruption, and hard-policy defense.
 2. **fff packaging** — the `@celados/fff-node` `ffi-rs` loader and selected `@celados/fff-bin-*` cdylib must survive
-   pnpm install, ASAR unpacking, macOS/Linux packaging, signing, notarization, and runtime smoke.
+   pnpm install, ASAR unpacking, macOS packaging, signing, notarization, and runtime smoke.
 3. **Trees packaging** — Vanilla entry must not introduce React/ReactDOM; beta behavior must be pinned by journeys.
 4. **Cloud ownership** — fork domain/API ownership must be resolved before enabling production publishing.
 5. **Updater trust** — Electron signing keys, provider URLs and rollback behavior need release-environment proof.

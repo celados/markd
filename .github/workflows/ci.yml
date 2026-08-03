@@ -74,3 +74,73 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+  package-macos:
+    name: Package Electron macOS arm64
+    needs: checks
+    # Fork PR code never crosses the persistent host authority boundary.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          clean: false
+
+      - name: Prepare persistent workspace
+        run: |
+          git reset --hard --quiet "$GITHUB_SHA"
+          git clean -fdq
+          # Retain the expensive dependency tree, but purge ignored env/config files that could alter the bundle.
+          git clean -fdqx -e /node_modules/
+          # Native build output has no automatic GC on this shared 16 GB desktop runner.
+          node_modules_gib="$(du -sg node_modules 2>/dev/null | cut -f1 || echo 0)"
+          if [ "${node_modules_gib:-0}" -gt 20 ]; then
+            rm -rf node_modules
+          fi
+          rm -rf release/electron
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.celados.com
+          scope: '@celados'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve canonical artifact names
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          node scripts/electron-artifacts.mjs "$version" arm64 --github-env >> "$GITHUB_ENV"
+
+      - name: Build installable Electron artifacts
+        run: pnpm run package:artifact
+
+      - name: Inspect native and updater payloads
+        run: pnpm run package:verify
+
+      - name: Run packaged utility smoke in background
+        run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
+
+      - name: Keep Electron test artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: markd-electron-macos-arm64
+          path: |
+            release/electron/${{ env.ELECTRON_DMG }}
+            release/electron/${{ env.ELECTRON_ZIP }}
+            release/electron/${{ env.ELECTRON_ZIP_BLOCKMAP }}
+            release/electron/${{ env.ELECTRON_MANIFEST }}
+          if-no-files-found: error

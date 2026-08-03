@@ -10,10 +10,9 @@ status: active
 - Todos 与 Bookmarks CRUD 已由 utility-owned Collections interface 接管；Bookmark 的远程 metadata
   enrichment 仍是 legacy Tauri capability，不属于 #9 的 CRUD seam。迁移这个 effect
   时应继续通过 semantic bridge 进入 utility/native owner，不能恢复 renderer-side fetch 或 raw invoke。
-- pasted assets、Note/Bookmark export 与 `markd-asset` protocol 已覆盖真实 hidden Electron smoke；但仓库在
-  #13 落地 `electron-builder` 前没有 packaged app artifact，因此 #11 的 packaged asset/export/rejection
-  smoke 不能执行。#13 必须复用同一组 semantic bridge journeys 对安装产物运行，不能把 dev Electron
-  smoke 当作 packaged evidence。
+- pasted assets、Note/Bookmark export 与 `markd-asset` protocol 已覆盖真实 hidden Electron smoke。#13
+  已建立可验证的 packaged app artifact，但当前 packaged smoke 只覆盖 utility/fff 查询；#11 的
+  asset/export/rejection journeys 仍需对安装产物复跑，不能把 dev Electron smoke 当作 packaged evidence。
 - updater signing key、release URL 与 updater endpoint 已切到 `celados/markd`。Cloud Engine 已迁移
   现有协议，但 production ownership gate 在源码层保持关闭；只有 tests 可用 loopback origins 启用。
   在启用 production publishing 或部署 fork site 前，必须裁决产品域名与 Cloud API ownership，并把
@@ -32,7 +31,9 @@ status: active
 - `@pierre/trees` 当前仍是 `1.0.0-beta`，且 package metadata 声明 React peers。采用 Vanilla runtime
   前必须证明不会安装或加载 React，并以 browser journeys 锁住 focus、keyboard、rename、drag/drop
   和 context-menu 行为。
-- `@celados/fff-node` 通过 `ffi-rs` 加载平台 `@celados/fff-bin-darwin-*` cdylib。本阶段已覆盖 clean install
-  和真实 Electron runtime smoke，但仓库在 #13 落地 `electron-builder` 前仍没有 packaged app artifact；
-  #13 必须对 selected darwin package 验证 ASAR unpack、macOS 签名/公证与安装产物运行，不能把 dev
-  Electron smoke 当作 packaged evidence。
+- `@celados/fff-node` 通过 `ffi-rs` 加载平台 `@celados/fff-bin-darwin-*` cdylib。#13 已对 unsigned local
+  artifact 验证 ASAR header、exact unpacked native payload、updater metadata 与 packaged utility smoke；
+  Developer ID 签名、公证和 Gatekeeper 验证只能由 tag release workflow 使用真实 Apple credentials 闭环。
+- 网站当前必须继续链接已发布的 `v0.1.9` legacy DMG `Markd_0.1.9_aarch64.dmg`。#15 在真实上传首个
+  `Markd-<version>-mac-arm64.dmg` 后，必须在同一发布闭环原子切换 `site/lib/config.ts` 的版本与 URL；
+  #13 不能提前指向不存在的 canonical asset。

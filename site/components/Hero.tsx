@@ -80,7 +80,7 @@ export function Hero() {
           {...rise(0.24)}
           className="mt-5 font-mono text-[11.5px] uppercase tracking-[0.14em] text-faint"
         >
-          Free &amp; open source · macOS 12+ · Linux x86_64 · v{VERSION}
+          Free &amp; open source · macOS 12+ · v{VERSION}
         </motion.p>
       </div>
 

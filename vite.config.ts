@@ -20,9 +20,9 @@ export default defineConfig(async ({ mode }) => ({
               vite: {
                 build: {
                   rolldownOptions: {
-                    // ffi-rs loads platform binaries at runtime; bundling its
-                    // native package would turn the binary into invalid JS.
-                    external: ["@celados/fff-node"],
+                    // Runtime packages read builder metadata and load native
+                    // files, so their package boundaries must survive bundling.
+                    external: ["electron-updater", "@celados/fff-node"],
                   },
                 },
               },

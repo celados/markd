@@ -1,0 +1,37 @@
+appId: app.usemarkd
+productName: Markd
+directories:
+  output: release/electron
+  buildResources: src-tauri/icons
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+asar: true
+asarUnpack:
+  # fff passes its dylib path to ffi-rs, so both native layers must be real
+  # files. The packaged smoke rejects an ASAR-only or missing native payload.
+  - node_modules/@celados/fff-bin-darwin-arm64/**/*
+  - node_modules/@yuuang/ffi-rs-darwin-arm64/**/*
+npmRebuild: false
+publish:
+  provider: github
+  owner: celados
+  repo: markd
+mac:
+  category: public.app-category.productivity
+  icon: src-tauri/icons/icon.icns
+  hardenedRuntime: true
+  notarize: true
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+artifactName: Markd-${version}-${os}-${arch}.${ext}
+dmg:
+  # The notarized DMG is an installer, not an updater payload. Stapling changes
+  # its bytes, so publishing pre-staple update metadata would be incorrect.
+  writeUpdateInfo: false

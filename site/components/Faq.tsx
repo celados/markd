@@ -23,7 +23,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Which platforms are supported?",
-    a: "Markd is available for Apple Silicon Macs and x86_64 Linux systems. Linux downloads are provided as AppImage and Debian packages. Windows support may follow.",
+    a: "Markd is available for Apple Silicon Macs running macOS 12 or newer. Windows support may follow.",
   },
   {
     q: "What's the AI agent?",

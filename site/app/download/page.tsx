@@ -4,21 +4,18 @@ import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
 import { DownloadLink } from "@/components/download/DownloadLink";
 import { PlatformCard } from "@/components/download/PlatformCard";
-import { LinuxIcon } from "@/components/download/PlatformIcons";
 import { AnalyticsEvent } from "@/components/analytics/AnalyticsEvent";
-import { DMG, LINUX_APPIMAGE, LINUX_DEB, VERSION } from "@/lib/config";
+import { DMG, VERSION } from "@/lib/config";
 
 export const metadata: Metadata = {
-  title: "Download for macOS and Linux",
-  description:
-    "Download Markd for Apple Silicon Macs or x86_64 GNU/Linux systems.",
+  title: "Download for macOS",
+  description: "Download Markd for Apple Silicon Macs.",
   alternates: {
     canonical: "/download",
   },
   openGraph: {
-    title: "Download Markd for macOS and Linux",
-    description:
-      "Download the signed macOS app or an x86_64 Linux AppImage or Debian package.",
+    title: "Download Markd for macOS",
+    description: "Download the signed and notarized macOS app.",
     url: "/download",
   },
 };
@@ -34,17 +31,16 @@ export default function DownloadPage() {
             Markd {VERSION}
           </p>
           <h1 className="mx-auto mt-3 max-w-3xl text-balance font-serif text-[44px] leading-[0.98] tracking-[-0.035em] text-foreground sm:text-[56px]">
-            Choose your build.
+            Download Markd.
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-pretty text-[14px] leading-6 text-muted-foreground">
-            The same quiet, local-first writing experience. Pick the package
-            that fits your system.
+            A quiet, local-first writing experience for Apple Silicon Macs.
           </p>
         </section>
 
         <section
           aria-label="Available Markd downloads"
-          className="mx-auto mt-8 grid w-full max-w-5xl gap-4 md:grid-cols-2 sm:mt-10"
+          className="mx-auto mt-8 grid w-full max-w-xl gap-4 sm:mt-10"
         >
           <PlatformCard
             index="01"
@@ -67,32 +63,6 @@ export default function DownloadPage() {
             />
           </PlatformCard>
 
-          <PlatformCard
-            index="02"
-            icon={<LinuxIcon className="size-[18px]" />}
-            platform="GNU/Linux"
-            architecture="x86_64"
-            description="Use the portable AppImage on most distributions, or install the Debian package on a compatible system."
-            details={[
-              "Portable AppImage",
-              "Debian and Ubuntu package",
-              "Signed automatic updates",
-            ]}
-          >
-            <DownloadLink
-              href={LINUX_APPIMAGE}
-              label="Download AppImage"
-              platform="linux"
-              format="appimage"
-              primary
-            />
-            <DownloadLink
-              href={LINUX_DEB}
-              label="Download .deb"
-              platform="linux"
-              format="deb"
-            />
-          </PlatformCard>
         </section>
 
         <p className="mx-auto mt-4 max-w-5xl text-center font-mono text-[10.5px] tracking-[0.08em] text-faint">
