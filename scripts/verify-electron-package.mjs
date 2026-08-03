@@ -7,10 +7,9 @@ import { parse } from "yaml";
 
 export function inspectElectronPackage(
   appPath,
-  platform = process.platform,
   arch = process.arch,
 ) {
-  const resources = resolveResources(appPath, platform);
+  const resources = resolveResources(appPath);
   const asarPath = join(resources, "app.asar");
   const unpackedPath = `${asarPath}.unpacked`;
   if (!existsSync(asarPath)) throw new Error(`Packaged ASAR is missing: ${asarPath}`);
@@ -29,7 +28,7 @@ export function inspectElectronPackage(
     if (!archived.includes(required)) throw new Error(`Packaged entry is missing: ${required}`);
   }
 
-  const expected = nativeLayout(platform, arch);
+  const expected = nativeLayout(arch);
   const fffLibrary = join("node_modules", "@celados", expected.fffPackage, expected.fffFile);
   if (!existsSync(join(unpackedPath, fffLibrary))) {
     throw new Error(`Packaged fff dynamic library is missing: ${fffLibrary}`);
@@ -52,9 +51,8 @@ export function inspectElectronPackage(
   return { appPath, asarPath, fffLibrary, ffiAddon, updateConfig };
 }
 
-export function inspectUpdateManifest(outputDir, platform = process.platform) {
-  const manifestName = platform === "darwin" ? "latest-mac.yml" : "latest-linux.yml";
-  const manifestPath = join(outputDir, manifestName);
+export function inspectUpdateManifest(outputDir) {
+  const manifestPath = join(outputDir, "latest-mac.yml");
   if (!existsSync(manifestPath)) throw new Error(`Updater manifest is missing: ${manifestPath}`);
   const manifest = parse(readFileSync(manifestPath, "utf8"));
   if (!manifest || !Array.isArray(manifest.files) || manifest.files.length === 0) {
@@ -97,60 +95,29 @@ export function inspectUpdateManifest(outputDir, platform = process.platform) {
   return { manifestPath, artifacts: verified };
 }
 
-function nativeLayout(platform, arch) {
+function nativeLayout(arch) {
   if (!new Set(["arm64", "x64"]).has(arch)) {
     throw new Error(`Unsupported packaged architecture: ${arch}`);
   }
-  if (platform === "darwin") {
-    return {
-      fffPackage: `fff-bin-darwin-${arch}`,
-      fffFile: "libfff_c.dylib",
-      ffiPackage: `ffi-rs-darwin-${arch}`,
-      ffiFile: `ffi-rs.darwin-${arch}.node`,
-    };
-  }
-  if (platform === "linux") {
-    const libc = runtimeLibc();
-    return {
-      fffPackage: `fff-bin-linux-${arch}-${libc}`,
-      fffFile: "libfff_c.so",
-      ffiPackage: `ffi-rs-linux-${arch}-${libc}`,
-      ffiFile: `ffi-rs.linux-${arch}-${libc}.node`,
-    };
-  }
-  if (platform === "win32") {
-    return {
-      fffPackage: `fff-bin-win32-${arch}`,
-      fffFile: "fff_c.dll",
-      ffiPackage: `ffi-rs-win32-${arch}-msvc`,
-      ffiFile: `ffi-rs.win32-${arch}-msvc.node`,
-    };
-  }
-  throw new Error(`Unsupported packaged platform: ${platform}`);
-}
-
-function runtimeLibc() {
-  const report = process.report?.getReport();
-  return report && "glibcVersionRuntime" in report.header ? "gnu" : "musl";
+  return {
+    fffPackage: `fff-bin-darwin-${arch}`,
+    fffFile: "libfff_c.dylib",
+    ffiPackage: `ffi-rs-darwin-${arch}`,
+    ffiFile: `ffi-rs.darwin-${arch}.node`,
+  };
 }
 
 export function findPackagedApp(
   outputDir,
-  platform = process.platform,
   arch = process.arch,
 ) {
-  const appPath =
-    platform === "darwin"
-      ? join(outputDir, arch === "arm64" ? "mac-arm64" : "mac", "Markd.app")
-      : join(outputDir, arch === "x64" ? "linux-unpacked" : `linux-${arch}-unpacked`);
+  const appPath = join(outputDir, arch === "arm64" ? "mac-arm64" : "mac", "Markd.app");
   if (!existsSync(appPath)) throw new Error(`Packaged app is missing: ${appPath}`);
   return appPath;
 }
 
-function resolveResources(appPath, platform) {
-  return platform === "darwin"
-    ? join(appPath, "Contents", "Resources")
-    : join(appPath, "resources");
+function resolveResources(appPath) {
+  return join(appPath, "Contents", "Resources");
 }
 
 function normalizeArchivePath(path) {
@@ -165,9 +132,8 @@ if (
 ) {
   const outputDir = join(process.cwd(), "release", "electron");
   const appPath = process.argv[2] ?? findPackagedApp(outputDir);
-  const platform = process.argv[3] ?? process.platform;
-  const arch = process.argv[4] ?? process.arch;
-  const inventory = inspectElectronPackage(appPath, platform, arch);
-  const manifest = inspectUpdateManifest(outputDir, platform);
+  const arch = process.argv[3] ?? process.arch;
+  const inventory = inspectElectronPackage(appPath, arch);
+  const manifest = inspectUpdateManifest(outputDir);
   console.log(JSON.stringify({ inventory, manifest }, null, 2));
 }

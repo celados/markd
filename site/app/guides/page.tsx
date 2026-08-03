@@ -8,7 +8,7 @@ import { absoluteUrl, jsonLd } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Markdown notes guides",
   description:
-    "Practical guides to local-first notes, plain-text Markdown, Markd on macOS and Linux, and working with an existing vault.",
+    "Practical guides to local-first notes, plain-text Markdown, Markd on macOS, and working with an existing vault.",
   alternates: { canonical: "/guides" },
   openGraph: {
     title: "Markdown notes guides | Markd",

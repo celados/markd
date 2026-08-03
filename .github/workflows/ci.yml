@@ -82,6 +82,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
     env:
+      CARGO_BUILD_JOBS: "4"
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
     steps:
@@ -96,6 +97,11 @@ jobs:
           git clean -fdq
           # Retain the expensive dependency tree, but purge ignored env/config files that could alter the bundle.
           git clean -fdqx -e /node_modules/
+          # Native build output has no automatic GC on this shared 16 GB desktop runner.
+          node_modules_gib="$(du -sg node_modules 2>/dev/null | cut -f1 || echo 0)"
+          if [ "${node_modules_gib:-0}" -gt 20 ]; then
+            rm -rf node_modules
+          fi
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -127,46 +133,4 @@ jobs:
             release/electron/Markd-*.zip
             release/electron/Markd-*.zip.blockmap
             release/electron/latest-mac.yml
-          if-no-files-found: error
-
-  package-linux:
-    name: Package Electron Linux x64
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build installable Electron artifacts
-        run: pnpm run package:artifact
-
-      - name: Inspect native and updater payloads
-        run: pnpm run package:verify
-
-      - name: Run packaged utility smoke in background
-        run: xvfb-run --auto-servernum env MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
-
-      - name: Keep Electron test artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: markd-electron-linux-x64
-          path: |
-            release/electron/Markd-*.AppImage
-            release/electron/Markd-*.AppImage.blockmap
-            release/electron/Markd-*.deb
-            release/electron/latest-linux.yml
           if-no-files-found: error

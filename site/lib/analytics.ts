@@ -6,8 +6,8 @@ export type AnalyticsEventMap = {
   download_page_viewed: AnalyticsProperties;
   download_started: {
     version: string;
-    platform: "macos" | "linux";
-    format: "dmg" | "appimage" | "deb";
+    platform: "macos";
+    format: "dmg";
   };
   pricing_page_viewed: { source: "app" | "website" };
   pricing_interval_changed: { interval: "monthly" | "yearly" };

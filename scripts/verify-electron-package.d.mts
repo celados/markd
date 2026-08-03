@@ -8,15 +8,12 @@ export type ElectronPackageInventory = {
 
 export function inspectElectronPackage(
   appPath: string,
-  platform?: NodeJS.Platform,
   arch?: string,
 ): ElectronPackageInventory;
 export function findPackagedApp(
   outputDir: string,
-  platform?: NodeJS.Platform,
   arch?: string,
 ): string;
 export function inspectUpdateManifest(
   outputDir: string,
-  platform?: NodeJS.Platform,
 ): { manifestPath: string; artifacts: string[] };

@@ -1,6 +1,6 @@
 # Markd — agent guide
 
-Local-first markdown notes app for macOS and GNU/Linux. Tauri 2 (Rust) + Octane + Vite + Tailwind v4 + Tiptap 3.
+Local-first markdown notes app for macOS. Electron + Octane + Vite + Tailwind v4 + Tiptap 3.
 
 ## Fork provenance
 
@@ -49,8 +49,7 @@ root pnpm workspace.
 - `pnpm run test:electron` — rebuild, then launch the installed Electron runtime for secure-shell and real
   utility/native smoke tests in background mode; it neither activates the app nor downloads a Playwright browser
 - `cd src-tauri && cargo test` — Rust unit tests
-- `pnpm run release`: full signed and notarized macOS release (scripts/release.sh)
-- `.github/workflows/release-linux.yml`: signed x86_64 AppImage and Debian release
+- `pnpm run release` — build, sign, notarize, and verify the macOS Electron artifacts
 
 ## Architecture
 

@@ -38,7 +38,6 @@ export const metadata: Metadata = {
   keywords: [
     "markdown notes app",
     "notes app for macOS",
-    "notes app for Linux",
     "local-first notes",
     "markdown editor mac",
     "Obsidian alternative",

@@ -168,56 +168,6 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
-    slug: "markdown-notes-linux",
-    title: "A Markdown notes app for Linux",
-    shortTitle: "Markdown notes for Linux",
-    description:
-      "Download Markd for x86_64 Linux as an AppImage or Debian package and keep notes in portable Markdown files and real folders.",
-    eyebrow: "Markd for Linux",
-    publishedAt: "2026-07-19",
-    updatedAt: "2026-07-19",
-    takeaways: [
-      "x86_64 AppImage for a portable installation.",
-      "Debian package for compatible Debian and Ubuntu systems.",
-      "The same folder-based Markdown vault used on macOS.",
-    ],
-    sections: [
-      {
-        heading: "Choose a portable or installed package",
-        paragraphs: [
-          "Markd publishes two x86_64 Linux formats. The AppImage is the portable option for many distributions; make it executable and run it without a traditional package installation. The .deb package integrates with compatible Debian and Ubuntu systems through their normal package tools.",
-          "Both packages run the same Markd interface and use the same vault format. The packaging choice does not change how notes are stored.",
-        ],
-      },
-      {
-        heading: "Markdown fits Linux workflows",
-        paragraphs: [
-          "A Markd vault can participate in existing Linux workflows because its notes are regular files. Use grep or ripgrep, version the folder with git, back it up with rsync, or open individual notes in another editor. Markd adds a rich writing interface without closing off those tools.",
-          "Real folders, standard Markdown links, and preserved YAML frontmatter also make the vault suitable for scripts and static-site pipelines.",
-        ],
-      },
-      {
-        heading: "Current Linux support",
-        paragraphs: [
-          "The published Linux packages target x86_64 systems. ARM Linux packages are not currently listed. Desktop integration can vary between distributions, so the AppImage is usually the clearest first option when a distribution is not Debian-based.",
-          "Signed update metadata is published alongside releases so compatible installations can verify available updates.",
-        ],
-      },
-    ],
-    faqs: [
-      {
-        question: "Which Linux package should I download?",
-        answer:
-          "Use the AppImage for a portable option across many x86_64 distributions. Use the .deb package on a compatible Debian or Ubuntu system when you prefer a system installation.",
-      },
-      {
-        question: "Is there an ARM Linux build?",
-        answer:
-          "The current download page lists x86_64 Linux packages only.",
-      },
-    ],
-  },
-  {
     slug: "obsidian-compatible-markdown-editor",
     title: "Use Markd with an existing Obsidian vault",
     shortTitle: "Markd and Obsidian vaults",

@@ -28,11 +28,4 @@ mac:
   target:
     - dmg
     - zip
-linux:
-  category: Office
-  executableName: Markd
-  icon: src-tauri/icons
-  target:
-    - AppImage
-    - deb
 artifactName: Markd-${version}-${os}-${arch}.${ext}

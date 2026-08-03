@@ -2,9 +2,9 @@ import { GITHUB, VERSION } from "@/lib/config";
 
 export const SITE_URL = "https://usemarkd.app";
 export const SITE_NAME = "Markd";
-export const SITE_TITLE = "Markd: local-first Markdown notes for macOS and Linux";
+export const SITE_TITLE = "Markd: local-first Markdown notes for macOS";
 export const SITE_DESCRIPTION =
-  "A fast, local-first Markdown notes app for macOS and Linux. Keep plain .md files in folders you own, with rich editing, backlinks, search, and optional publishing.";
+  "A fast, local-first Markdown notes app for macOS. Keep plain .md files in folders you own, with rich editing, backlinks, search, and optional publishing.";
 
 export function absoluteUrl(path = "/"): string {
   return new URL(path, SITE_URL).toString();
@@ -42,7 +42,7 @@ export const PRODUCT_JSON_LD = {
       description: SITE_DESCRIPTION,
       applicationCategory: "BusinessApplication",
       applicationSubCategory: "Markdown editor and notes app",
-      operatingSystem: "macOS 12 or newer; GNU/Linux x86_64",
+      operatingSystem: "macOS 12 or newer",
       softwareVersion: VERSION,
       downloadUrl: absoluteUrl("/download"),
       releaseNotes: absoluteUrl("/changelog"),

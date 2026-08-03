@@ -91,11 +91,6 @@ const windowsSigPath = join(
   "nsis",
   `${APP_NAME}_${version}_x64-setup.nsis.zip.sig`
 );
-const linuxSigPath = join(
-  buildDir,
-  "appimage",
-  `${APP_NAME}_${version}_amd64.AppImage.sig`
-);
 
 // Also try alternative paths (Tauri v2 might use different structure)
 const macosSigPathAlt = join(
@@ -133,7 +128,6 @@ if (requireArg) {
 }
 
 const windowsSig = readSignature(windowsSigPath);
-const linuxSig = readSignature(linuxSigPath);
 
 // Build the latest.json structure
 const latestJson = {
@@ -165,17 +159,6 @@ if (windowsSig) {
   console.log("✓ Added Windows platform");
 } else {
   console.warn("⚠ Skipping Windows (signature file not found)");
-}
-
-// Add Linux platform
-if (linuxSig) {
-  latestJson.platforms["linux-x86_64"] = {
-    signature: linuxSig,
-    url: `${releaseUrl}/${APP_NAME}_${version}_amd64.AppImage`,
-  };
-  console.log("✓ Added Linux platform");
-} else {
-  console.warn("⚠ Skipping Linux (signature file not found)");
 }
 
 // Write the file

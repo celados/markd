@@ -17,7 +17,7 @@ Markd ${VERSION} is a local-first desktop notes application. Notes are stored as
 ## Canonical pages
 
 - [Home](${SITE_URL}/): Product overview and features
-- [Download](${SITE_URL}/download): Supported macOS and Linux packages
+- [Download](${SITE_URL}/download): Supported macOS package
 - [Cloud pricing](${SITE_URL}/pricing): Current publishing subscription prices
 - [Changelog](${SITE_URL}/changelog): Versioned release history
 - [Source code](${GITHUB}): Public repository and license
@@ -29,8 +29,7 @@ ${guides}
 ## Verified product facts
 
 - Storage: plain .md files and real folders selected by the user
-- Desktop platforms: Apple Silicon macOS 12 or newer; GNU/Linux x86_64
-- Linux formats: AppImage and Debian package
+- Desktop platform: Apple Silicon macOS 12 or newer
 - Editing: rich-text Markdown editor and editable Markdown source mode
 - Organization: search, tabs, backlinks, note links, properties, todos, bookmarks, and pinned items
 - Publishing: optional Markd Cloud subscription; local editing does not require an account

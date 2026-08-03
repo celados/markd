@@ -27,12 +27,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 90
     env:
-      GH_TOKEN: ${{ github.token }}
-      CSC_LINK: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
-      CSC_KEY_PASSWORD: ${{ secrets.P12_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      CARGO_BUILD_JOBS: "4"
 
     steps:
       - name: Check out release source
@@ -40,6 +35,7 @@ jobs:
         with:
           clean: false
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Prepare persistent workspace
         run: |
@@ -47,6 +43,11 @@ jobs:
           git clean -fdq
           # Retain the expensive dependency tree, but purge ignored env/config files that could alter the bundle.
           git clean -fdqx -e /node_modules/
+          # Native build output has no automatic GC on this shared 16 GB desktop runner.
+          node_modules_gib="$(du -sg node_modules 2>/dev/null | cut -f1 || echo 0)"
+          if [ "${node_modules_gib:-0}" -gt 20 ]; then
+            rm -rf node_modules
+          fi
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -60,26 +61,24 @@ jobs:
         env:
           INPUT_PUBLISH: ${{ inputs.publish }}
         run: |
-          for value in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            test -n "${!value:-}" || {
-              echo "$value is not configured" >&2
-              exit 1
-            }
-          done
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          tag_commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          test "$(git rev-parse HEAD)" = "$tag_commit" || {
+            echo "Checked-out source does not match $GITHUB_REF_NAME" >&2
+            exit 1
+          }
+          git merge-base --is-ancestor "$tag_commit" origin/main || {
+            echo "Tag $GITHUB_REF_NAME is not reachable from origin/main" >&2
+            exit 1
+          }
           version="$(node -p "require('./package.json').version")"
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            test "$GITHUB_REF_NAME" = "v$version" || {
-              echo "Tag $GITHUB_REF_NAME does not match package version $version" >&2
-              exit 1
-            }
-          fi
+          test "$GITHUB_REF_NAME" = "v$version" || {
+            echo "Tag $GITHUB_REF_NAME does not match package version $version" >&2
+            exit 1
+          }
           publish=false
           if [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$INPUT_PUBLISH" = "true" ]; then
             publish=true
-          fi
-          if [ "$publish" = "true" ] && [ "$GITHUB_REF_TYPE" != "tag" ]; then
-            echo "Publishing requires a tag ref." >&2
-            exit 1
           fi
           {
             echo "VERSION=$version"
@@ -106,6 +105,12 @@ jobs:
           pnpm run build
 
       - name: Build, sign, and notarize Electron artifacts
+        env:
+          CSC_LINK: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm exec electron-builder --mac dmg zip --publish never -c.forceCodeSigning=true
 
       - name: Inspect native and updater payloads
@@ -141,6 +146,7 @@ jobs:
       - name: Upload to GitHub release
         if: env.PUBLISH == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: v${{ env.VERSION }}
         run: |
           gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \

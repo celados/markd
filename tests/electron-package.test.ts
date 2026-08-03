@@ -17,7 +17,7 @@ afterEach(async () => {
 
 test("artifact inspection fails closed when fff is absent", async () => {
   const fixture = await packageFixture({ includeFff: false, includeFfi: true });
-  expect(() => inspectElectronPackage(fixture, "darwin", "arm64")).toThrow(
+  expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(
     /fff dynamic library is missing/u,
   );
 });
@@ -28,21 +28,21 @@ test("artifact inspection rejects a native library in the wrong package", async 
     includeFfi: true,
     fffPackage: "fff-bin-darwin-x64",
   });
-  expect(() => inspectElectronPackage(fixture, "darwin", "arm64")).toThrow(
+  expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(
     /fff-bin-darwin-arm64/u,
   );
 });
 
 test("artifact inspection fails closed when the ffi addon is absent", async () => {
   const fixture = await packageFixture({ includeFff: true, includeFfi: false });
-  expect(() => inspectElectronPackage(fixture, "darwin", "arm64")).toThrow(
+  expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(
     /ffi-rs native addon is missing/u,
   );
 });
 
 test("artifact inspection accepts complete Electron and native inventories", async () => {
   const fixture = await packageFixture({ includeFff: true, includeFfi: true });
-  expect(inspectElectronPackage(fixture, "darwin", "arm64")).toMatchObject({
+  expect(inspectElectronPackage(fixture, "arm64")).toMatchObject({
     fffLibrary: expect.stringMatching(/libfff_c\.dylib$/u),
     ffiAddon: expect.stringMatching(/\.node$/u),
   });
@@ -54,40 +54,27 @@ test("artifact inspection rejects updater metadata for another repository", asyn
     includeFfi: true,
     updateRepo: "upstream/markd",
   });
-  expect(() => inspectElectronPackage(fixture, "darwin", "arm64")).toThrow(
+  expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(
     /target celados\/markd/u,
   );
 });
 
-test("artifact inspection covers the Linux resource and native package layout", async () => {
-  const fixture = await packageFixture({
-    includeFff: true,
-    includeFfi: true,
-    platform: "linux",
-    arch: "x64",
-  });
-  expect(inspectElectronPackage(fixture, "linux", "x64")).toMatchObject({
-    fffLibrary: expect.stringContaining("fff-bin-linux-x64-"),
-    ffiAddon: expect.stringContaining("ffi-rs-linux-x64-"),
-  });
-});
-
 test("updater manifest verifies every artifact size and SHA-512", async () => {
   const output = await manifestFixture();
-  expect(inspectUpdateManifest(output, "darwin")).toMatchObject({
+  expect(inspectUpdateManifest(output)).toMatchObject({
     artifacts: ["Markd-1.0.0-mac-arm64.zip"],
   });
 });
 
 test("updater manifest rejects a missing artifact and wrong digest", async () => {
   const missing = await manifestFixture({ artifactName: "missing.zip" });
-  expect(() => inspectUpdateManifest(missing, "darwin")).toThrow(/artifact is missing/u);
+  expect(() => inspectUpdateManifest(missing)).toThrow(/artifact is missing/u);
 
   const wrongDigest = await manifestFixture({ sha512: "invalid" });
-  expect(() => inspectUpdateManifest(wrongDigest, "darwin")).toThrow(/SHA-512/u);
+  expect(() => inspectUpdateManifest(wrongDigest)).toThrow(/SHA-512/u);
 
   const missingBlockmap = await manifestFixture({ includeBlockmap: false });
-  expect(() => inspectUpdateManifest(missingBlockmap, "darwin")).toThrow(/blockmap is missing/u);
+  expect(() => inspectUpdateManifest(missingBlockmap)).toThrow(/blockmap is missing/u);
 });
 
 async function packageFixture(options: {
@@ -95,16 +82,13 @@ async function packageFixture(options: {
   includeFfi: boolean;
   fffPackage?: string;
   updateRepo?: string;
-  platform?: "darwin" | "linux";
   arch?: "arm64" | "x64";
 }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "markd-package-test-"));
   scratch.push(root);
-  const platform = options.platform ?? "darwin";
   const arch = options.arch ?? "arm64";
-  const app = platform === "darwin" ? join(root, "Markd.app") : join(root, "markd-unpacked");
-  const resources =
-    platform === "darwin" ? join(app, "Contents", "Resources") : join(app, "resources");
+  const app = join(root, "Markd.app");
+  const resources = join(app, "Contents", "Resources");
   const source = join(root, "asar-source");
   for (const path of [
     "dist/index.html",
@@ -124,22 +108,16 @@ async function packageFixture(options: {
     `provider: github\nowner: ${owner}\nrepo: ${repo}\n`,
   );
   const nativeRoot = join(resources, "app.asar.unpacked", "node_modules");
-  const libc = process.report?.getReport().header.glibcVersionRuntime ? "gnu" : "musl";
-  const ffiPackage =
-    platform === "darwin" ? `ffi-rs-darwin-${arch}` : `ffi-rs-linux-${arch}-${libc}`;
-  const ffiFile =
-    platform === "darwin"
-      ? `ffi-rs.darwin-${arch}.node`
-      : `ffi-rs.linux-${arch}-${libc}.node`;
+  const ffiPackage = `ffi-rs-darwin-${arch}`;
+  const ffiFile = `ffi-rs.darwin-${arch}.node`;
   if (options.includeFfi) {
     await mkdir(join(nativeRoot, "@yuuang", ffiPackage), { recursive: true });
     await writeFile(join(nativeRoot, "@yuuang", ffiPackage, ffiFile), "native");
   }
   if (options.includeFff) {
     const packageName =
-      options.fffPackage ??
-      (platform === "darwin" ? `fff-bin-darwin-${arch}` : `fff-bin-linux-${arch}-${libc}`);
-    const library = platform === "darwin" ? "libfff_c.dylib" : "libfff_c.so";
+      options.fffPackage ?? `fff-bin-darwin-${arch}`;
+    const library = "libfff_c.dylib";
     await mkdir(join(nativeRoot, "@celados", packageName), { recursive: true });
     await writeFile(join(nativeRoot, "@celados", packageName, library), "native");
   }

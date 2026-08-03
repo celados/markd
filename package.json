@@ -12,8 +12,8 @@
     "dev": "vite",
     "dev:web": "vite --mode web",
     "build": "pnpm run typecheck && vite build",
-    "package:dir": "pnpm run build && electron-builder --dir --publish never",
-    "package:artifact": "pnpm run build && electron-builder --publish never",
+    "package:dir": "pnpm run build && electron-builder --mac --dir --publish never",
+    "package:artifact": "pnpm run build && electron-builder --mac dmg zip --publish never",
     "package:verify": "node scripts/verify-electron-package.mjs",
     "test:packaged": "node scripts/run-packaged-smoke.mjs",
     "package:test": "pnpm run package:artifact && pnpm run package:verify && pnpm run test:packaged",
@@ -35,7 +35,7 @@
     "prepare:dmg": "bash scripts/prepare-dmg.sh",
     "release:verify-artifacts": "pnpm run package:verify",
     "release:check": "bash scripts/check-macos-release.sh",
-    "release": "pnpm run build && electron-builder --publish never -c.forceCodeSigning=true && pnpm run package:verify"
+    "release": "pnpm run build && electron-builder --mac dmg zip --publish never -c.forceCodeSigning=true && pnpm run package:verify"
   },
   "dependencies": {
     "@celados/fff-node": "0.10.2-nightly.8a9a970",

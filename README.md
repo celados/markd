@@ -9,7 +9,7 @@
 > cloud service, signed binaries, and update channel; this repository is the source for Celados'
 > independent fixes and customization.
 
-Markd is a fast notes app for macOS and Linux, built for people who care about speed, privacy, and ownership.
+Markd is a fast notes app for macOS, built for people who care about speed, privacy, and ownership.
 
 No accounts.
 No cloud.
@@ -24,25 +24,6 @@ Your notes live on your disk as plain `.md` files. Markd simply makes writing an
 Download the latest `.dmg` from [usemarkd.app](https://usemarkd.app) and drag Markd to Applications.
 
 Markd releases are Developer ID signed and notarized by Apple before distribution.
-
----
-
-## Installing on Linux
-
-Download the latest AppImage or Debian package from the [GitHub releases](https://github.com/starc007/markd/releases/latest) page.
-
-Run the AppImage:
-
-```bash
-chmod +x Markd_*_amd64.AppImage
-./Markd_*_amd64.AppImage
-```
-
-Or install the Debian package:
-
-```bash
-sudo apt install ./Markd_*_amd64.deb
-```
 
 ---
 
@@ -76,17 +57,17 @@ Notes are addressed by path, never by ID. Deletes go to the OS trash. Edit notes
 
 ## Getting started
 
-Requirements: [pnpm](https://pnpm.io), [Rust](https://rustup.rs), and the platform dependencies listed in the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+Requirements: [pnpm](https://pnpm.io) and macOS.
 
 ```bash
 pnpm install
-pnpm tauri dev      # run the app
+pnpm run dev
 ```
 
 Build a release bundle:
 
 ```bash
-pnpm tauri build
+pnpm run package:artifact
 ```
 
 Maintainers can follow [NOTARIZATION.md](./NOTARIZATION.md) to configure Developer ID signing and Apple notarization for releases.
@@ -99,7 +80,7 @@ See [AGENTS.md](./AGENTS.md) for architecture details, or [CONTRIBUTING.md](./CO
 
 - Notes are stored locally as user-owned files
 - No analytics, tracking, accounts, or note-content uploads
-- Markd connects to `usemarkd.app` on macOS or GitHub Releases on Linux to check for application updates
+- Packaged builds check the Celados GitHub Releases channel for application updates
 - Saving a bookmark fetches that page's title, preview image, and favicon
 - Export your notes anytime because they are already just files
 

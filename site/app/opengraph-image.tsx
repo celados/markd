@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Markd: local-first Markdown notes for macOS and Linux";
+export const alt = "Markd: local-first Markdown notes for macOS";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -58,7 +58,7 @@ export default function Image() {
               maxWidth: 860,
             }}
           >
-            Local-first Markdown for macOS and Linux, with plain files you own.
+            Local-first Markdown for macOS, with plain files you own.
           </div>
         </div>
 
@@ -73,7 +73,7 @@ export default function Image() {
           }}
         >
           <div style={{ display: "flex" }}>usemarkd.app</div>
-          <div style={{ display: "flex" }}>Free · macOS · Linux</div>
+          <div style={{ display: "flex" }}>Free · macOS</div>
         </div>
       </div>
     ),
