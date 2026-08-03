@@ -68,7 +68,7 @@ export type MarkdDesktop = {
     ) => Promise<DesktopResult<string>>;
     moveToTrash: (rel: string) => Promise<DesktopResult<{ snapshot: VaultSnapshot }>>;
     resolveNotePath: (rel: string) => Promise<DesktopResult<string>>;
-    exportNote: (rel: string, content: string) => Promise<DesktopResult<string | null>>;
+    exportNote?: (rel: string, content: string) => Promise<DesktopResult<string | null>>;
     assets: {
       save: (data: string, extension: string) => Promise<DesktopResult<string>>;
       url: (rel: string) => string | null;
@@ -103,7 +103,7 @@ export type MarkdDesktop = {
         change: BookmarkChange,
       ) => Promise<DesktopResult<{ snapshot: CollectionsSnapshot; item: Bookmark }>>;
       remove: (id: string) => Promise<DesktopResult<CollectionsSnapshot>>;
-      export: () => Promise<DesktopResult<string | null>>;
+      export?: () => Promise<DesktopResult<string | null>>;
     };
     tags: {
       create: (

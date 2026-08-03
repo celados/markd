@@ -13,6 +13,7 @@ import {
   type WebContents,
 } from "electron";
 import { realpath } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
@@ -64,6 +65,7 @@ if (process.platform === "linux") {
   app.commandLine.appendSwitch("enable-features", "GlobalShortcutsPortal");
 }
 let activeAssetRoot: string | null = null;
+const stagedAssetRoots = new Map<string, string>();
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -121,6 +123,7 @@ function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: ["--markd-window-kind=main"],
     },
   });
 
@@ -212,6 +215,7 @@ function connectEngine(): UtilityProcess {
   // A replacement utility must explicitly re-authorize its Vault before the
   // protocol can expose files from the previous generation.
   activeAssetRoot = null;
+  stagedAssetRoots.clear();
   publishEngineState({ state: "starting", epoch });
   const child = utilityProcess.fork(join(moduleDir, "engine.js"), [], {
     serviceName: "Markd Engine",
@@ -298,6 +302,10 @@ function attachRendererToEngine(window: BrowserWindow): void {
     return;
   }
   attachedWebContents.add(webContents.id);
+  const windowKind = windowKinds.get(webContents.id);
+  if (!windowKind) {
+    throw new Error("Markd Desktop cannot attach an unowned renderer window.");
+  }
   const { port1, port2 } = new MessageChannelMain();
   const transfer = () => {
     if (engine !== child || window.isDestroyed()) {
@@ -309,8 +317,13 @@ function attachRendererToEngine(window: BrowserWindow): void {
       type: "connect",
       epoch: engineEpoch,
       configDir: process.env.MARKD_TEST_CONFIG_DIR ?? app.getPath("userData"),
+      windowKind,
     }, [port1]);
-    webContents.postMessage("markd:engine-port", { epoch: engineEpoch }, [port2]);
+    webContents.postMessage(
+      "markd:engine-port",
+      { epoch: engineEpoch, windowKind },
+      [port2],
+    );
   };
   const delay = Number(process.env.MARKD_TEST_ENGINE_TRANSFER_DELAY_MS ?? 0);
   if (Number.isFinite(delay) && delay > 0) setTimeout(transfer, delay);
@@ -320,15 +333,41 @@ function attachRendererToEngine(window: BrowserWindow): void {
 async function performNativeRequest(
   request: NativeRequest,
 ): Promise<unknown> {
-  if (request.method === "asset-root.activate") {
-    activeAssetRoot = await validateAssetRoot(request.root, request.assetRoot);
+  if (request.method === "asset-root.stage") {
+    const stageId = randomUUID();
+    stagedAssetRoots.set(
+      stageId,
+      await validateAssetRoot(request.root, request.assetRoot),
+    );
+    return stageId;
+  }
+  if (request.method === "asset-root.commit") {
+    const stagedRoot = stagedAssetRoots.get(request.stageId);
+    if (!stagedRoot) {
+      throw new NativeContentError("INVALID_INPUT", "Asset-root stage does not exist.");
+    }
+    // Assignment is the native commit point: there is no awaited work after
+    // the protocol root changes, so a reported failure cannot be half-applied.
+    activeAssetRoot = stagedRoot;
+    stagedAssetRoots.delete(request.stageId);
+    return null;
+  }
+  if (request.method === "asset-root.rollback") {
+    stagedAssetRoots.delete(request.stageId);
     return null;
   }
   if (request.method === "export.save") {
+    const owner = mainWindow;
+    if (request.windowKind !== "main" || !owner || owner.isDestroyed()) {
+      throw new NativeContentError(
+        "INVALID_INPUT",
+        "Export is only available from the live main window.",
+      );
+    }
     if (process.env.MARKD_TEST_EXPORT_FAILURE === "1") {
       throw new Error("The operating system rejected the export operation.");
     }
-    const result = await dialog.showSaveDialog(mainWindow!, {
+    const result = await dialog.showSaveDialog(owner, {
       title: "Export Markdown",
       defaultPath: request.suggestedName,
       buttonLabel: "Export",

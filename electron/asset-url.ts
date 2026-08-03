@@ -5,7 +5,6 @@ export const assetTypes = {
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
   ".png": "image/png",
-  ".svg": "image/svg+xml",
   ".webp": "image/webp",
 } as const;
 

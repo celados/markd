@@ -25,14 +25,32 @@ export function emptyCollections(): CollectionsSnapshot {
 
 export function bookmarksToMarkdown(bookmarks: Bookmark[]): string {
   const lines = bookmarks.map((bookmark) => {
-    const title = bookmark.title.trim() || bookmark.url;
+    const title = escapeMarkdownText(bookmark.title.trim() || bookmark.url);
+    const destination = escapeMarkdownDestination(bookmark.url);
     const tags =
       bookmark.tags.length > 0
-        ? ` — ${bookmark.tags.map((tag) => `#${tag}`).join(" ")}`
+        ? ` — ${bookmark.tags.map(formatMarkdownTag).join(" ")}`
         : "";
-    return `- [${title}](${bookmark.url})${tags}`;
+    return `- [${title}](${destination})${tags}`;
   });
   return `# Bookmarks\n\n${lines.length > 0 ? `${lines.join("\n")}\n` : ""}`;
+}
+
+function escapeMarkdownText(value: string): string {
+  return value.replace(/([\\\[\]])/g, "\\$1");
+}
+
+function escapeMarkdownDestination(value: string): string {
+  return value.replace(/([\\()])/g, "\\$1");
+}
+
+function formatMarkdownTag(tag: string): string {
+  const value = `#${tag}`;
+  if (/^#[\p{L}\p{N}_-]+$/u.test(value)) return value;
+  const longestFence = Math.max(0, ...Array.from(value.matchAll(/`+/g), (match) => match[0].length));
+  const fence = "`".repeat(longestFence + 1);
+  const padded = value.startsWith("`") || value.endsWith("`") ? ` ${value} ` : value;
+  return `${fence}${padded}${fence}`;
 }
 
 export function addTodo(

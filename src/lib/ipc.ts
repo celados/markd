@@ -32,6 +32,13 @@ export class IpcError extends Error {
   }
 }
 
+function mainWindowCapabilityError(): IpcError {
+  return new IpcError({
+    kind: "INVALID_WINDOW",
+    message: "Export is only available from the main window.",
+  });
+}
+
 async function call<T>(command: string, args?: Record<string, unknown>) {
   try {
     return await invoke<T>(command, args);
@@ -234,14 +241,18 @@ export const ipc = {
       ? unwrapDesktopResult(window.markd.collections.bookmarks.remove(id)).then(() => undefined)
       : call<void>("bookmark_delete", { id }),
   bookmarkFetchMeta: (id: string) => call<Bookmark>("bookmark_fetch_meta", { id }),
-  exportBookmarks: () =>
-    window.markd
-      ? unwrapDesktopResult(window.markd.collections.bookmarks.export())
-      : call<string | null>("export_bookmarks"),
-  exportNote: (rel: string, content: string) =>
-    window.markd
-      ? unwrapDesktopResult(window.markd.vault.exportNote(rel, content))
-      : call<string | null>("export_note", { rel, content }),
+  exportBookmarks: () => {
+    if (!window.markd) return call<string | null>("export_bookmarks");
+    const exportBookmarks = window.markd.collections.bookmarks.export;
+    if (!exportBookmarks) return Promise.reject(mainWindowCapabilityError());
+    return unwrapDesktopResult(exportBookmarks());
+  },
+  exportNote: (rel: string, content: string) => {
+    if (!window.markd) return call<string | null>("export_note", { rel, content });
+    const exportNote = window.markd.vault.exportNote;
+    if (!exportNote) return Promise.reject(mainWindowCapabilityError());
+    return unwrapDesktopResult(exportNote(rel, content));
+  },
 
   saveImageAsset: (data: string, extension: string) =>
     window.markd

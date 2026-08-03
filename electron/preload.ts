@@ -276,7 +276,7 @@ ipcRenderer.on("markd:engine-state", (_event, input: unknown) => {
 ipcRenderer.on("markd:engine-port", (event, data: unknown) => {
   const metadata = v.safeParse(enginePortMetadataSchema, data);
   const nextPort = event.ports[0];
-  if (!metadata.success || !nextPort) {
+  if (!metadata.success || metadata.output.windowKind !== windowKind || !nextPort) {
     void rejectInvalidChannel(nextPort);
     return;
   }
@@ -452,8 +452,12 @@ contextBridge.exposeInMainWorld("markd", {
       requestEngine("vault.note.write", { rel, content, expectedContent }),
     moveToTrash: (rel: string) => requestEngine("vault.trash", { rel }),
     resolveNotePath: (rel: string) => requestEngine("vault.note.path", { rel }),
-    exportNote: (rel: string, content: string) =>
-      requestEngine("vault.note.export", { rel, content }),
+    ...(windowKind === "main"
+      ? {
+          exportNote: (rel: string, content: string) =>
+            requestEngine("vault.note.export", { rel, content }),
+        }
+      : {}),
     assets: {
       save: (data: string, extension: string) =>
         requestEngine("vault.asset.save", { data, extension }),
@@ -481,7 +485,9 @@ contextBridge.exposeInMainWorld("markd", {
       change: (id: string, change: unknown) =>
         requestEngine("collections.bookmarks.change", { id, change }),
       remove: (id: string) => requestEngine("collections.bookmarks.remove", { id }),
-      export: () => requestEngine("collections.bookmarks.export", null),
+      ...(windowKind === "main"
+        ? { export: () => requestEngine("collections.bookmarks.export", null) }
+        : {}),
     },
     tags: {
       create: (collection: "todos" | "bookmarks", name: string) =>

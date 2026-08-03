@@ -125,7 +125,9 @@ describe("Vault Engine Pins", () => {
     await mkdir(root);
     const engine = new VaultEngine(join(scratch, "config"), {
       moveToTrash: async (_root, path) => rm(path, { recursive: true }),
-      activateAssetRoot: async () => undefined,
+      stageAssetRoot: async () => "stage",
+      commitAssetRoot: async () => undefined,
+      rollbackAssetRoot: async () => undefined,
       saveExport: async () => null,
     });
     await engine.open(root, false);
@@ -148,7 +150,9 @@ describe("Vault Engine Pins", () => {
     await symlink(root, alias);
     const engine = new VaultEngine(join(scratch, "config"), {
       moveToTrash: async () => undefined,
-      activateAssetRoot: async () => undefined,
+      stageAssetRoot: async () => "stage",
+      commitAssetRoot: async () => undefined,
+      rollbackAssetRoot: async () => undefined,
       saveExport: async () => null,
     });
     await engine.open(alias, false);
@@ -354,7 +358,9 @@ async function setupEngine(trashCalls: string[] = []) {
     moveToTrash: async (_vaultRoot, path) => {
       trashCalls.push(path);
     },
-    activateAssetRoot: async () => undefined,
+    stageAssetRoot: async () => "stage",
+    commitAssetRoot: async () => undefined,
+    rollbackAssetRoot: async () => undefined,
     saveExport: async () => null,
   });
   await engine.open(root, false);

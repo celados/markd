@@ -81,7 +81,7 @@ export class CollectionsEngine {
     });
   }
 
-  activate(root: string): Promise<void> {
+  activate(root: string | null): Promise<void> {
     return this.#run(async () => {
       // Validation and config persistence happen first, so this assignment is
       // the no-fail commit point shared with VaultEngine's active root.

@@ -11,6 +11,7 @@ const exportNameSchema = v.pipe(
   v.string(),
   v.regex(/^[^/\\]+\.md$/),
 );
+export const windowKindSchema = v.picklist(["main", "quick-capture"]);
 
 export const todoChangeSchema = v.variant("type", [
   v.object({ type: v.literal("toggle") }),
@@ -333,7 +334,10 @@ export const controlResponseSchema = v.variant("ok", [
   }),
 ]);
 
-export const enginePortMetadataSchema = v.object({ epoch: epochSchema });
+export const enginePortMetadataSchema = v.object({
+  epoch: epochSchema,
+  windowKind: windowKindSchema,
+});
 
 export const engineControlSchema = v.object({ epoch: epochSchema });
 
@@ -341,9 +345,8 @@ export const engineConnectSchema = v.object({
   type: v.literal("connect"),
   epoch: epochSchema,
   configDir: v.pipe(v.string(), v.minLength(1)),
+  windowKind: windowKindSchema,
 });
-
-export const windowKindSchema = v.picklist(["main", "quick-capture"]);
 
 export const nativeRequestSchema = v.variant("method", [
   v.object({
@@ -358,7 +361,7 @@ export const nativeRequestSchema = v.variant("method", [
     type: v.literal("native-request"),
     id: operationIdSchema,
     epoch: epochSchema,
-    method: v.literal("asset-root.activate"),
+    method: v.literal("asset-root.stage"),
     root: v.pipe(v.string(), v.minLength(1)),
     assetRoot: v.pipe(v.string(), v.minLength(1)),
   }),
@@ -366,7 +369,22 @@ export const nativeRequestSchema = v.variant("method", [
     type: v.literal("native-request"),
     id: operationIdSchema,
     epoch: epochSchema,
+    method: v.literal("asset-root.commit"),
+    stageId: operationIdSchema,
+  }),
+  v.object({
+    type: v.literal("native-request"),
+    id: operationIdSchema,
+    epoch: epochSchema,
+    method: v.literal("asset-root.rollback"),
+    stageId: operationIdSchema,
+  }),
+  v.object({
+    type: v.literal("native-request"),
+    id: operationIdSchema,
+    epoch: epochSchema,
     method: v.literal("export.save"),
+    windowKind: v.literal("main"),
     suggestedName: exportNameSchema,
     content: v.string(),
   }),

@@ -64,6 +64,33 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
   }
 });
 
+test("quick-capture preload does not expose main-window export capabilities", async () => {
+  const application = await launchMarkd();
+  try {
+    await application.firstWindow();
+    await expect.poll(() => application.windows().length).toBe(2);
+    const pages = application.windows();
+    const kinds = await Promise.all(
+      pages.map((page) => page.evaluate(() => window.markd?.app.windowKind)),
+    );
+    const quickPage = pages[kinds.indexOf("quick-capture")];
+    if (!quickPage) throw new Error("Quick Capture window was not created");
+    expect(
+      await quickPage.evaluate(() => ({
+        windowKind: window.markd?.app.windowKind,
+        noteExport: typeof window.markd?.vault.exportNote,
+        bookmarkExport: typeof window.markd?.collections.bookmarks.export,
+      })),
+    ).toEqual({
+      windowKind: "quick-capture",
+      noteExport: "undefined",
+      bookmarkExport: "undefined",
+    });
+  } finally {
+    await application.close();
+  }
+});
+
 test("real Vault Engine and native shell complete the first Vault slice", async () => {
   const scratch = await mkdtemp(join(tmpdir(), "markd-electron-vault-"));
   const configDir = join(scratch, "config");

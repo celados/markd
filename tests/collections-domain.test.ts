@@ -4,6 +4,7 @@ import {
   addTodo,
   changeBookmark,
   changeTodo,
+  bookmarksToMarkdown,
   deleteCollectionTag,
   emptyCollections,
 } from "../electron/collections-domain";
@@ -75,5 +76,24 @@ describe("Collections domain", () => {
     expect(() =>
       addBookmark(emptyCollections(), "ftp://example.com", [], { id: "x", now: 1 }),
     ).toThrowError(expect.objectContaining({ kind: "INVALID_INPUT" }));
+  });
+
+  test("escapes Bookmark markdown labels, destinations, and non-token tags", () => {
+    expect(
+      bookmarksToMarkdown([
+        {
+          id: "bookmark-1",
+          title: String.raw`Read \\ [this]`,
+          url: String.raw`https://example.com/a_(b)\\c`,
+          image: null,
+          favicon: null,
+          metaFetched: true,
+          tags: ["read", "deep work"],
+          createdAt: 1,
+        },
+      ]),
+    ).toBe(
+      "# Bookmarks\n\n- [Read \\\\\\\\ \\[this\\]](https://example.com/a_\\(b\\)\\\\\\\\c) — #read `#deep work`\n",
+    );
   });
 });

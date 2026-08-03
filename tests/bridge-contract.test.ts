@@ -4,6 +4,7 @@ import {
   controlRequestSchema,
   desktopErrorSchema,
   engineMessageSchema,
+  engineConnectSchema,
   engineRequestSchema,
   nativeRequestSchema,
   nativeResponseSchema,
@@ -130,9 +131,27 @@ describe("Electron bridge contract", () => {
         type: "native-request",
         id: "native-asset-root",
         epoch: 1,
-        method: "asset-root.activate",
+        method: "asset-root.stage",
         root: "/vault",
         assetRoot: "/vault/.markd/assets",
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(nativeRequestSchema, {
+        type: "native-request",
+        id: "native-asset-rollback",
+        epoch: 1,
+        method: "asset-root.rollback",
+        stageId: "stage-1",
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(nativeRequestSchema, {
+        type: "native-request",
+        id: "native-asset-commit",
+        epoch: 1,
+        method: "asset-root.commit",
+        stageId: "stage-1",
       }).success,
     ).toBe(true);
     expect(
@@ -141,6 +160,7 @@ describe("Electron bridge contract", () => {
         id: "native-export",
         epoch: 1,
         method: "export.save",
+        windowKind: "main",
         suggestedName: "Note.md",
         content: "body",
       }).success,
@@ -148,9 +168,21 @@ describe("Electron bridge contract", () => {
     expect(
       v.safeParse(nativeRequestSchema, {
         type: "native-request",
+        id: "native-export-quick",
+        epoch: 1,
+        method: "export.save",
+        windowKind: "quick-capture",
+        suggestedName: "Note.md",
+        content: "body",
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(nativeRequestSchema, {
+        type: "native-request",
         id: "native-export-invalid",
         epoch: 1,
         method: "export.save",
+        windowKind: "main",
         suggestedName: "../Outside.md",
         content: "body",
       }).success,
@@ -164,6 +196,24 @@ describe("Electron bridge contract", () => {
         value: "/tmp/Note.md",
       }).success,
     ).toBe(true);
+  });
+
+  test("binds every utility port to a desktop window kind", () => {
+    expect(
+      v.safeParse(engineConnectSchema, {
+        type: "connect",
+        epoch: 1,
+        configDir: "/tmp/config",
+        windowKind: "main",
+      }).success,
+    ).toBe(true);
+    expect(
+      v.safeParse(engineConnectSchema, {
+        type: "connect",
+        epoch: 1,
+        configDir: "/tmp/config",
+      }).success,
+    ).toBe(false);
   });
 
   test("validates native control parameters by semantic method", () => {

@@ -1,5 +1,15 @@
-import { appendFile, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import type { DesktopErrorData } from "./bridge-contract";
 import { CollectionsEngine } from "./collections-engine";
@@ -10,6 +20,11 @@ import {
   type TodoChange,
 } from "./collections-domain";
 import type { PinSnapshot, Theme, TreeNode, VaultSnapshot } from "../src/lib/types";
+import {
+  atomicWriteText,
+  NativeContentError,
+  validateAssetContent,
+} from "./native-content";
 
 export type ExportPreparation = {
   suggestedName: string;
@@ -18,7 +33,9 @@ export type ExportPreparation = {
 
 export type NativeVaultOperations = {
   moveToTrash: (root: string, path: string) => Promise<void>;
-  activateAssetRoot: (root: string, assetRoot: string) => Promise<void>;
+  stageAssetRoot: (root: string, assetRoot: string) => Promise<string>;
+  commitAssetRoot: (stageId: string) => Promise<void>;
+  rollbackAssetRoot: (stageId: string) => Promise<void>;
   saveExport: (preparation: ExportPreparation) => Promise<string | null>;
 };
 
@@ -85,15 +102,44 @@ export class VaultEngine {
     const assetRoot = await canonicalAssetRoot(canonical);
     const snapshot = await buildSnapshot(canonical, this.#theme);
     await this.#collections.validate(canonical);
-    await this.#writeConfig({ vaultPath: canonical, theme: this.#theme });
-    await this.#collections.activate(canonical);
-    // Provenance is scoped to one activated Vault. Relative paths may name a
-    // different file after a root switch, even when their text happens to match.
-    this.#captureAppends.clear();
-    await this.#native.activateAssetRoot(canonical, assetRoot);
-    this.#root = canonical;
-    this.#assetRoot = assetRoot;
-    return snapshot;
+    const previousRoot = this.#root;
+    const previousAssetRoot = this.#assetRoot;
+    const previousConfig = await this.#readConfigText();
+    let stageId: string;
+    try {
+      // Main validates and stages first, but keeps serving the old root until
+      // the utility has committed its config and in-memory state.
+      stageId = await this.#native.stageAssetRoot(canonical, assetRoot);
+    } catch (error) {
+      throw nativeOperationError(error);
+    }
+
+    try {
+      await this.#writeConfig({ vaultPath: canonical, theme: this.#theme });
+      await this.#collections.activate(canonical);
+      this.#root = canonical;
+      this.#assetRoot = assetRoot;
+      await this.#native.commitAssetRoot(stageId);
+      // Provenance is scoped to one activated Vault. Clear only after every
+      // participant commits so a failed switch preserves expectedContent state.
+      this.#captureAppends.clear();
+      return snapshot;
+    } catch (error) {
+      this.#root = previousRoot;
+      this.#assetRoot = previousAssetRoot;
+      await Promise.allSettled([
+        this.#collections.activate(previousRoot),
+        this.#restoreConfig(previousConfig),
+        this.#native.rollbackAssetRoot(stageId),
+      ]).then((results) => {
+        for (const result of results) {
+          if (result.status === "rejected") {
+            console.error("[markd-engine] Vault activation rollback failed", result.reason);
+          }
+        }
+      });
+      throw nativeOperationError(error);
+    }
   }
 
   async snapshot(): Promise<VaultSnapshot> {
@@ -239,10 +285,17 @@ export class VaultEngine {
     this.#requireRoot();
     const assetRoot = this.#assetRoot;
     if (!assetRoot) throw domainError("NO_ACTIVE_VAULT", "No Vault is open.");
-    const normalizedExtension = normalizeImageExtension(extension);
-    const bytes = decodeImageData(data);
-    const fileName = `${randomUUID()}.${normalizedExtension}`;
-    await writeFile(join(assetRoot, fileName), bytes, { flag: "wx" });
+    let validated: Awaited<ReturnType<typeof validateAssetContent>>;
+    try {
+      validated = await validateAssetContent(data, extension);
+    } catch (error) {
+      if (error instanceof NativeContentError) {
+        throw domainError(error.kind, error.message);
+      }
+      throw error;
+    }
+    const fileName = `${randomUUID()}.${validated.extension}`;
+    await writeFile(join(assetRoot, fileName), validated.bytes, { flag: "wx" });
     return `.markd/assets/${fileName}`;
   }
 
@@ -417,7 +470,24 @@ export class VaultEngine {
 
   async #writeConfig(config: AppConfig): Promise<void> {
     await mkdir(dirname(this.#configFile), { recursive: true });
-    await writeFile(this.#configFile, `${JSON.stringify(config, null, 2)}\n`);
+    await atomicWriteText(this.#configFile, `${JSON.stringify(config, null, 2)}\n`);
+  }
+
+  async #readConfigText(): Promise<string | null> {
+    try {
+      return await readFile(this.#configFile, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
+  async #restoreConfig(content: string | null): Promise<void> {
+    if (content === null) {
+      await rm(this.#configFile, { force: true });
+      return;
+    }
+    await atomicWriteText(this.#configFile, content);
   }
 }
 
@@ -452,44 +522,6 @@ async function canonicalAssetRoot(root: string): Promise<string> {
   }
   assertInside(root, canonical, ".markd/assets");
   return canonical;
-}
-
-function normalizeImageExtension(extension: string): string {
-  const normalized = extension.trim().replace(/^\./, "").toLowerCase();
-  const aliases: Record<string, string> = { jpeg: "jpg", "svg+xml": "svg" };
-  const value = aliases[normalized] ?? normalized;
-  if (!["png", "jpg", "gif", "webp", "svg"].includes(value)) {
-    throw domainError("INVALID_INPUT", `Unsupported image type: ${normalized}`);
-  }
-  return value;
-}
-
-function decodeImageData(input: string): Buffer {
-  const separator = input.indexOf(",");
-  const payload = input.startsWith("data:") ? input.slice(separator + 1) : input;
-  if ((input.startsWith("data:") && separator < 0) || !isCanonicalBase64(payload)) {
-    throw domainError("INVALID_INPUT", "Image data is not valid base64.");
-  }
-  const bytes = Buffer.from(payload.replace(/\s/g, ""), "base64");
-  // Asset data crosses two serialized process seams, so reject oversized
-  // payloads before they can become persistent memory pressure.
-  if (bytes.byteLength === 0 || bytes.byteLength > 25 * 1024 * 1024) {
-    throw domainError("INVALID_INPUT", "Image data must be between 1 byte and 25 MiB.");
-  }
-  return bytes;
-}
-
-function isCanonicalBase64(input: string): boolean {
-  const compact = input.replace(/\s/g, "");
-  // Buffer.from is deliberately permissive; validate first so malformed input
-  // cannot be silently decoded into a different asset.
-  return (
-    compact.length > 0 &&
-    compact.length % 4 === 0 &&
-    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      compact,
-    )
-  );
 }
 
 function resolveVaultRel(root: string, rel: string): string {
@@ -600,6 +632,14 @@ function replayProvenCaptureAppends(
   return recorded === diskContent && provenance.currentContent === diskContent
     ? committed
     : null;
+}
+
+function nativeOperationError(error: unknown): VaultEngineError {
+  if (error instanceof VaultEngineError) return error;
+  return domainError(
+    "NATIVE_OPERATION_FAILED",
+    error instanceof Error ? error.message : String(error),
+  );
 }
 
 function dedupe(values: string[]): string[] {

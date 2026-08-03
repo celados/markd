@@ -68,15 +68,16 @@ parentPort.on("message", (event) => {
   if (!connection.success || !port) {
     throw new Error("Markd Engine received an invalid renderer channel");
   }
-  const { epoch, configDir } = connection.output;
+  const { epoch, configDir, windowKind } = connection.output;
   if (!vault) {
     activeEpoch = epoch;
     activeConfigDir = configDir;
     vault = new VaultEngine(configDir, {
       moveToTrash: (root, path) => requestTrash(epoch, root, path),
-      activateAssetRoot: (root, assetRoot) =>
-        requestAssetRootActivation(epoch, root, assetRoot),
-      saveExport: (preparation) => requestExportSave(epoch, preparation),
+      stageAssetRoot: (root, assetRoot) => requestAssetRootStage(epoch, root, assetRoot),
+      commitAssetRoot: (stageId) => requestAssetRootCommit(epoch, stageId),
+      rollbackAssetRoot: (stageId) => requestAssetRootRollback(epoch, stageId),
+      saveExport: (preparation) => requestExportSave(epoch, "main", preparation),
     });
     initialization = vault.startup().then(() => undefined);
   } else if (epoch !== activeEpoch || configDir !== activeConfigDir) {
@@ -95,7 +96,7 @@ parentPort.on("message", (event) => {
       }
       // Every renderer gets its own MessagePort, so the utility process is the
       // only place that can impose one mutation order across editor + capture.
-      void requests.enqueue(() => handleRequest(activeVault, parsed.output))
+      void requests.enqueue(() => handleRequest(activeVault, parsed.output, windowKind))
         .then((value) =>
           respond(port, {
             type: "response",
@@ -131,7 +132,11 @@ parentPort.on("message", (event) => {
     });
 });
 
-async function handleRequest(vault: VaultEngine, request: EngineRequest): Promise<unknown> {
+async function handleRequest(
+  vault: VaultEngine,
+  request: EngineRequest,
+  windowKind: "main" | "quick-capture",
+): Promise<unknown> {
   if (request.method.startsWith("capture.")) {
     const delay = Number(process.env.MARKD_ENGINE_TEST_CAPTURE_DELAY_MS ?? 0);
     if (Number.isFinite(delay) && delay > 0) {
@@ -168,6 +173,7 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
     case "vault.asset.save":
       return vault.saveAsset(request.params.data, request.params.extension);
     case "vault.note.export":
+      assertMainWindow(windowKind);
       return vault.exportNote(request.params.rel, request.params.content);
     case "collections.snapshot":
       return vault.collectionsSnapshot();
@@ -194,6 +200,7 @@ async function handleRequest(vault: VaultEngine, request: EngineRequest): Promis
     case "capture.append":
       return vault.captureAppend(request.params.rel, request.params.content);
     case "collections.bookmarks.export":
+      assertMainWindow(windowKind);
       return vault.exportBookmarks();
   }
 }
@@ -219,19 +226,51 @@ function requestTrash(epoch: number, root: string, path: string): Promise<void> 
   });
 }
 
-function requestAssetRootActivation(
+function requestAssetRootStage(
   epoch: number,
   root: string,
   assetRoot: string,
+): Promise<string> {
+  const id = randomUUID();
+  const request = v.parse(nativeRequestSchema, {
+    type: "native-request",
+    id,
+    epoch,
+    method: "asset-root.stage",
+    root,
+    assetRoot,
+  });
+  return new Promise((resolve, reject) => {
+    nativeCalls.set(id, {
+      epoch,
+      method: request.method,
+      resolve: (value) => resolve(value as string),
+      reject,
+    });
+    parentPort.postMessage(request);
+  });
+}
+
+function requestAssetRootCommit(epoch: number, stageId: string): Promise<void> {
+  return requestAssetRootTransition(epoch, "asset-root.commit", stageId);
+}
+
+function requestAssetRootRollback(epoch: number, stageId: string): Promise<void> {
+  return requestAssetRootTransition(epoch, "asset-root.rollback", stageId);
+}
+
+function requestAssetRootTransition(
+  epoch: number,
+  method: "asset-root.commit" | "asset-root.rollback",
+  stageId: string,
 ): Promise<void> {
   const id = randomUUID();
   const request = v.parse(nativeRequestSchema, {
     type: "native-request",
     id,
     epoch,
-    method: "asset-root.activate",
-    root,
-    assetRoot,
+    method,
+    stageId,
   });
   return new Promise((resolve, reject) => {
     nativeCalls.set(id, {
@@ -246,6 +285,7 @@ function requestAssetRootActivation(
 
 function requestExportSave(
   epoch: number,
+  windowKind: "main" | "quick-capture",
   preparation: { suggestedName: string; content: string },
 ): Promise<string | null> {
   const id = randomUUID();
@@ -254,6 +294,7 @@ function requestExportSave(
     id,
     epoch,
     method: "export.save",
+    windowKind,
     ...preparation,
   });
   return new Promise((resolve, reject) => {
@@ -268,9 +309,22 @@ function requestExportSave(
 }
 
 function validateNativeResponse(method: NativeRequest["method"], value: unknown): boolean {
-  return method === "export.save"
-    ? v.safeParse(v.nullable(v.pipe(v.string(), v.minLength(1))), value).success
-    : value === null;
+  if (method === "export.save") {
+    return v.safeParse(v.nullable(v.pipe(v.string(), v.minLength(1))), value).success;
+  }
+  if (method === "asset-root.stage") {
+    return v.safeParse(v.pipe(v.string(), v.minLength(1)), value).success;
+  }
+  return value === null;
+}
+
+function assertMainWindow(windowKind: "main" | "quick-capture"): asserts windowKind is "main" {
+  if (windowKind !== "main") {
+    throw new VaultEngineError({
+      kind: "INVALID_WINDOW",
+      message: "This operation is only available from the main window.",
+    });
+  }
 }
 
 function respond(port: Electron.MessagePortMain, response: EngineResponse): void {
