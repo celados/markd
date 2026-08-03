@@ -77,8 +77,9 @@ jobs:
 
   package-macos:
     name: Package Electron macOS arm64
-    # A persistent runner is an OS authority boundary; pull-request code must never execute on it.
-    if: github.event_name == 'push'
+    needs: checks
+    # Fork PR code never crosses the persistent host authority boundary.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
     env:
@@ -102,6 +103,7 @@ jobs:
           if [ "${node_modules_gib:-0}" -gt 20 ]; then
             rm -rf node_modules
           fi
+          rm -rf release/electron
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -110,9 +112,18 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          registry-url: https://npm.celados.com
+          scope: '@celados'
 
       - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm install --frozen-lockfile
+
+      - name: Resolve canonical artifact names
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          node scripts/electron-artifacts.mjs "$version" arm64 --github-env >> "$GITHUB_ENV"
 
       - name: Build installable Electron artifacts
         run: pnpm run package:artifact
@@ -128,9 +139,8 @@ jobs:
         with:
           name: markd-electron-macos-arm64
           path: |
-            release/electron/Markd-*.dmg
-            release/electron/Markd-*.dmg.blockmap
-            release/electron/Markd-*.zip
-            release/electron/Markd-*.zip.blockmap
-            release/electron/latest-mac.yml
+            release/electron/${{ env.ELECTRON_DMG }}
+            release/electron/${{ env.ELECTRON_ZIP }}
+            release/electron/${{ env.ELECTRON_ZIP_BLOCKMAP }}
+            release/electron/${{ env.ELECTRON_MANIFEST }}
           if-no-files-found: error

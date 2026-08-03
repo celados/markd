@@ -102,35 +102,19 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
 }));
 
 async function checkForUpdate(): Promise<PendingUpdate | null> {
-  if (window.markd) {
-    const update = await unwrapDesktopResult(window.markd.updates.check());
-    if (!update) return null;
-    return {
-      ...update,
-      downloadAndInstall: async () => {
-        await unwrapDesktopResult(window.markd!.updates.install(update.id));
-      },
-    };
-  }
-
-  const { check } = await import("@tauri-apps/plugin-updater");
-  const update = await check();
+  const desktop = window.markd;
+  if (!desktop) return null;
+  const update = await unwrapDesktopResult(desktop.updates.check());
   if (!update) return null;
   return {
-    id: update.version,
-    currentVersion: update.currentVersion,
-    version: update.version,
-    body: update.body,
-    rawJson: update.rawJson,
-    downloadAndInstall: () => update.downloadAndInstall(),
+    ...update,
+    downloadAndInstall: async () => {
+      await unwrapDesktopResult(desktop.updates.install(update.id));
+    },
   };
 }
 
 async function relaunchApp(): Promise<void> {
-  if (window.markd) {
-    await unwrapDesktopResult(window.markd.updates.relaunch());
-    return;
-  }
-  const { relaunch } = await import("@tauri-apps/plugin-process");
-  await relaunch();
+  if (!window.markd) throw new Error("Electron updater is unavailable.");
+  await unwrapDesktopResult(window.markd.updates.relaunch());
 }

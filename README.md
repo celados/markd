@@ -4,10 +4,9 @@
 
 > [!NOTE]
 > This is [Celados' Octane-based fork](https://github.com/celados/markd) of
-> [starc007/markd](https://github.com/starc007/markd). The framework port is complete and keeps
-> the product behavior and Tauri data model intact. Upstream currently owns the public website,
-> cloud service, signed binaries, and update channel; this repository is the source for Celados'
-> independent fixes and customization.
+> [starc007/markd](https://github.com/starc007/markd). The default development shell and package pipeline are
+> Electron-native. The legacy Tauri tree remains temporarily for unmigrated runtime comparison; it is not a
+> second release path.
 
 Markd is a fast notes app for macOS, built for people who care about speed, privacy, and ownership.
 
@@ -59,15 +58,18 @@ Notes are addressed by path, never by ID. Deletes go to the OS trash. Edit notes
 
 Requirements: [pnpm](https://pnpm.io) and macOS.
 
+First render the private `@celados` registry authentication described in
+[NOTARIZATION.md](./NOTARIZATION.md#local-package-gate); a clean checkout cannot install without it.
+
 ```bash
 pnpm install
 pnpm run dev
 ```
 
-Build a release bundle:
+Build, inspect, and smoke-test an unsigned local Electron package:
 
 ```bash
-pnpm run package:artifact
+pnpm run package:test
 ```
 
 Maintainers can follow [NOTARIZATION.md](./NOTARIZATION.md) to configure Developer ID signing and Apple notarization for releases.

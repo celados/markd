@@ -12,25 +12,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  async headers() {
-    return [
-      {
-        // Update manifest must never be stale because the app polls it for versions.
-        source: "/updates/latest.json",
-        headers: [
-          { key: "Cache-Control", value: "no-cache, must-revalidate" },
-          { key: "Content-Type", value: "application/json" },
-        ],
-      },
-      {
-        // Signed bundles / installers are immutable per release.
-        source: "/updates/:file*.tar.gz",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
-      },
-    ];
-  },
 };
 
 export default nextConfig;

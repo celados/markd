@@ -20,8 +20,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    name: Reject non-tag dispatches
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require a tag ref
+        run: |
+          test "$GITHUB_REF_TYPE" = "tag" || {
+            echo "Electron releases must be dispatched from an existing tag ref." >&2
+            exit 1
+          }
+
   build:
     name: Build signed and notarized Electron macOS app
+    needs: guard
     # A persistent runner is an OS authority boundary; manual branch runs must never execute on it.
     if: github.ref_type == 'tag'
     runs-on: [self-hosted, macOS, ARM64]
@@ -48,6 +61,7 @@ jobs:
           if [ "${node_modules_gib:-0}" -gt 20 ]; then
             rm -rf node_modules
           fi
+          rm -rf release/electron
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -56,6 +70,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          registry-url: https://npm.celados.com
+          scope: '@celados'
 
       - name: Validate release contract
         env:
@@ -85,6 +101,8 @@ jobs:
             echo "PUBLISH=$publish"
           } >> "$GITHUB_ENV"
 
+          node scripts/electron-artifacts.mjs "$version" arm64 --github-env >> "$GITHUB_ENV"
+
       - name: Ensure Developer ID G2 intermediate
         run: |
           intermediate="$RUNNER_TEMP/DeveloperIDG2CA.cer"
@@ -97,6 +115,8 @@ jobs:
           fi
 
       - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm install --frozen-lockfile
 
       - name: Run release gates
@@ -111,22 +131,41 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm exec electron-builder --mac dmg zip --publish never -c.forceCodeSigning=true
+        run: pnpm exec electron-builder --mac --arm64 --publish never -c.forceCodeSigning=true
+
+      - name: Notarize and staple canonical DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          dmg="release/electron/$ELECTRON_DMG"
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$dmg"
 
       - name: Inspect native and updater payloads
         run: pnpm run package:verify
 
       - name: Verify signing, notarization, and updater metadata
         run: |
-          app="$(find release/electron -type d -name Markd.app -print -quit)"
-          test -n "$app"
+          app="release/electron/mac-arm64/Markd.app"
+          dmg="release/electron/$ELECTRON_DMG"
+          test -d "$app"
+          test -f "$dmg"
           codesign --verify --deep --strict --verbose=2 "$app"
           spctl --assess --type execute --verbose=2 "$app"
           xcrun stapler validate "$app"
-          native="$(find "$app/Contents/Resources/app.asar.unpacked" -type f \( -name 'libfff_c.dylib' -o -name '*.node' \))"
-          test -n "$native"
-          while IFS= read -r file; do codesign --verify --strict --verbose=2 "$file"; done <<< "$native"
-          test -s release/electron/latest-mac.yml
+          xcrun stapler validate "$dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          unpacked="$app/Contents/Resources/app.asar.unpacked/node_modules"
+          codesign --verify --strict --verbose=2 \
+            "$unpacked/@celados/fff-bin-darwin-arm64/libfff_c.dylib"
+          codesign --verify --strict --verbose=2 \
+            "$unpacked/@yuuang/ffi-rs-darwin-arm64/ffi-rs.darwin-arm64.node"
 
       - name: Run packaged utility smoke in background
         run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
@@ -136,11 +175,10 @@ jobs:
         with:
           name: markd-electron-macos-${{ env.VERSION }}
           path: |
-            release/electron/Markd-*.dmg
-            release/electron/Markd-*.dmg.blockmap
-            release/electron/Markd-*.zip
-            release/electron/Markd-*.zip.blockmap
-            release/electron/latest-mac.yml
+            release/electron/${{ env.ELECTRON_DMG }}
+            release/electron/${{ env.ELECTRON_ZIP }}
+            release/electron/${{ env.ELECTRON_ZIP_BLOCKMAP }}
+            release/electron/${{ env.ELECTRON_MANIFEST }}
           if-no-files-found: error
 
       - name: Upload to GitHub release
@@ -153,9 +191,8 @@ jobs:
             gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "Markd $VERSION" || \
             gh release view "$RELEASE_TAG" >/dev/null
           gh release upload "$RELEASE_TAG" \
-            release/electron/Markd-*.dmg \
-            release/electron/Markd-*.dmg.blockmap \
-            release/electron/Markd-*.zip \
-            release/electron/Markd-*.zip.blockmap \
-            release/electron/latest-mac.yml \
+            "release/electron/$ELECTRON_DMG" \
+            "release/electron/$ELECTRON_ZIP" \
+            "release/electron/$ELECTRON_ZIP_BLOCKMAP" \
+            "release/electron/$ELECTRON_MANIFEST" \
             --clobber

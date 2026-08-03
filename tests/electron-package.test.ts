@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { createPackage } from "@electron/asar";
+import { createPackageWithOptions } from "@electron/asar";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -8,6 +8,7 @@ import {
   inspectElectronPackage,
   inspectUpdateManifest,
 } from "../scripts/verify-electron-package.mjs";
+import { electronArtifactNames } from "../scripts/electron-artifacts.mjs";
 
 const scratch: string[] = [];
 
@@ -45,7 +46,38 @@ test("artifact inspection accepts complete Electron and native inventories", asy
   expect(inspectElectronPackage(fixture, "arm64")).toMatchObject({
     fffLibrary: expect.stringMatching(/libfff_c\.dylib$/u),
     ffiAddon: expect.stringMatching(/\.node$/u),
+    nativeFiles: [
+      "node_modules/@celados/fff-bin-darwin-arm64/libfff_c.dylib",
+      "node_modules/@yuuang/ffi-rs-darwin-arm64/ffi-rs.darwin-arm64.node",
+    ],
   });
+});
+
+test("artifact inspection rejects wrong-arch and extra native payloads", async () => {
+  const wrongArch = await packageFixture({
+    includeFff: true,
+    includeFfi: true,
+    extraNativeFiles: ["node_modules/@celados/fff-bin-darwin-x64/libfff_c.dylib"],
+  });
+  expect(() => inspectElectronPackage(wrongArch, "arm64")).toThrow(/unexpected native payload/u);
+
+  const extra = await packageFixture({
+    includeFff: true,
+    includeFfi: true,
+    extraNativeFiles: ["node_modules/example/extra.node"],
+  });
+  expect(() => inspectElectronPackage(extra, "arm64")).toThrow(/unexpected native payload/u);
+});
+
+test("artifact inspection rejects a native payload hidden inside the ASAR", async () => {
+  const fixture = await packageFixture({
+    includeFff: true,
+    includeFfi: true,
+    archivedOnlyNativeFiles: ["node_modules/example/hidden.node"],
+  });
+  expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(
+    /ASAR contains an unexpected native payload/u,
+  );
 });
 
 test("artifact inspection rejects updater metadata for another repository", async () => {
@@ -61,20 +93,56 @@ test("artifact inspection rejects updater metadata for another repository", asyn
 
 test("updater manifest verifies every artifact size and SHA-512", async () => {
   const output = await manifestFixture();
-  expect(inspectUpdateManifest(output)).toMatchObject({
+  expect(inspectUpdateManifest(output, "1.0.0", "arm64")).toMatchObject({
     artifacts: ["Markd-1.0.0-mac-arm64.zip"],
+    primaryArtifact: "Markd-1.0.0-mac-arm64.zip",
   });
 });
 
 test("updater manifest rejects a missing artifact and wrong digest", async () => {
   const missing = await manifestFixture({ artifactName: "missing.zip" });
-  expect(() => inspectUpdateManifest(missing)).toThrow(/artifact is missing/u);
+  expect(() => inspectUpdateManifest(missing, "1.0.0", "arm64")).toThrow(/primary path/u);
 
   const wrongDigest = await manifestFixture({ sha512: "invalid" });
-  expect(() => inspectUpdateManifest(wrongDigest)).toThrow(/SHA-512/u);
+  expect(() => inspectUpdateManifest(wrongDigest, "1.0.0", "arm64")).toThrow(/SHA-512/u);
 
   const missingBlockmap = await manifestFixture({ includeBlockmap: false });
-  expect(() => inspectUpdateManifest(missingBlockmap)).toThrow(/blockmap is missing/u);
+  expect(() => inspectUpdateManifest(missingBlockmap, "1.0.0", "arm64")).toThrow(
+    /release payload must contain exactly/u,
+  );
+});
+
+test("updater manifest rejects stale, x64, and mismatched top-level metadata", async () => {
+  const stale = await manifestFixture({ artifactName: "Markd-0.9.0-mac-arm64.zip" });
+  expect(() => inspectUpdateManifest(stale, "1.0.0", "arm64")).toThrow(/primary path/u);
+
+  const x64 = await manifestFixture({ artifactName: "Markd-1.0.0-mac-x64.zip" });
+  expect(() => inspectUpdateManifest(x64, "1.0.0", "arm64")).toThrow(/primary path/u);
+
+  const wrongVersion = await manifestFixture({ manifestVersion: "0.9.0" });
+  expect(() => inspectUpdateManifest(wrongVersion, "1.0.0", "arm64")).toThrow(/version/u);
+
+  const wrongTopLevelDigest = await manifestFixture({ topLevelSha512: "invalid" });
+  expect(() => inspectUpdateManifest(wrongTopLevelDigest, "1.0.0", "arm64")).toThrow(
+    /top-level SHA-512/u,
+  );
+
+  const staleOutput = await manifestFixture({
+    extraArtifactName: "Markd-0.9.0-mac-arm64.dmg",
+  });
+  expect(() => inspectUpdateManifest(staleOutput, "1.0.0", "arm64")).toThrow(
+    /release payload must contain exactly/u,
+  );
+});
+
+test("artifact names share one canonical macOS arm64 contract", () => {
+  expect(electronArtifactNames("1.2.3", "arm64")).toEqual({
+    dmg: "Markd-1.2.3-mac-arm64.dmg",
+    zip: "Markd-1.2.3-mac-arm64.zip",
+    zipBlockmap: "Markd-1.2.3-mac-arm64.zip.blockmap",
+    manifest: "latest-mac.yml",
+  });
+  expect(() => electronArtifactNames("1.2.3", "x64")).toThrow(/arm64/u);
 });
 
 async function packageFixture(options: {
@@ -83,6 +151,8 @@ async function packageFixture(options: {
   fffPackage?: string;
   updateRepo?: string;
   arch?: "arm64" | "x64";
+  extraNativeFiles?: string[];
+  archivedOnlyNativeFiles?: string[];
 }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "markd-package-test-"));
   scratch.push(root);
@@ -100,26 +170,37 @@ async function packageFixture(options: {
     await mkdir(join(source, path, ".."), { recursive: true });
     await writeFile(join(source, path), "fixture");
   }
-  await mkdir(resources, { recursive: true });
-  await createPackage(source, join(resources, "app.asar"));
-  const [owner, repo] = (options.updateRepo ?? "celados/markd").split("/");
-  await writeFile(
-    join(resources, "app-update.yml"),
-    `provider: github\nowner: ${owner}\nrepo: ${repo}\n`,
-  );
-  const nativeRoot = join(resources, "app.asar.unpacked", "node_modules");
   const ffiPackage = `ffi-rs-darwin-${arch}`;
   const ffiFile = `ffi-rs.darwin-${arch}.node`;
   if (options.includeFfi) {
-    await mkdir(join(nativeRoot, "@yuuang", ffiPackage), { recursive: true });
-    await writeFile(join(nativeRoot, "@yuuang", ffiPackage, ffiFile), "native");
+    await mkdir(join(source, "node_modules", "@yuuang", ffiPackage), { recursive: true });
+    await writeFile(join(source, "node_modules", "@yuuang", ffiPackage, ffiFile), "native");
   }
   if (options.includeFff) {
     const packageName =
       options.fffPackage ?? `fff-bin-darwin-${arch}`;
     const library = "libfff_c.dylib";
-    await mkdir(join(nativeRoot, "@celados", packageName), { recursive: true });
-    await writeFile(join(nativeRoot, "@celados", packageName, library), "native");
+    await mkdir(join(source, "node_modules", "@celados", packageName), { recursive: true });
+    await writeFile(join(source, "node_modules", "@celados", packageName, library), "native");
+  }
+  for (const path of [...(options.extraNativeFiles ?? []), ...(options.archivedOnlyNativeFiles ?? [])]) {
+    await mkdir(join(source, path, ".."), { recursive: true });
+    await writeFile(join(source, path), "native");
+  }
+  await mkdir(resources, { recursive: true });
+  await createPackageWithOptions(source, join(resources, "app.asar"), {
+    // Production only unpacks the two supported arm64 packages; extras must stay visible to the verifier.
+    unpackDir: "node_modules/{@celados/fff-bin-darwin-arm64,@yuuang/ffi-rs-darwin-arm64}",
+  });
+  const [owner, repo] = (options.updateRepo ?? "celados/markd").split("/");
+  await writeFile(
+    join(resources, "app-update.yml"),
+    `provider: github\nowner: ${owner}\nrepo: ${repo}\n`,
+  );
+  const nativeRoot = join(resources, "app.asar.unpacked");
+  for (const path of options.extraNativeFiles ?? []) {
+    await mkdir(join(nativeRoot, path, ".."), { recursive: true });
+    await writeFile(join(nativeRoot, path), "native");
   }
   return app;
 }
@@ -128,27 +209,36 @@ async function manifestFixture(options: {
   artifactName?: string;
   sha512?: string;
   includeBlockmap?: boolean;
+  manifestVersion?: string;
+  topLevelSha512?: string;
+  extraArtifactName?: string;
 } = {}): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "markd-manifest-test-"));
   scratch.push(root);
   const actualName = "Markd-1.0.0-mac-arm64.zip";
+  const dmgName = "Markd-1.0.0-mac-arm64.dmg";
   const body = Buffer.from("artifact");
+  const dmgBody = Buffer.from("dmg");
   await writeFile(join(root, actualName), body);
+  await writeFile(join(root, dmgName), dmgBody);
   if (options.includeBlockmap !== false) {
     await writeFile(join(root, `${actualName}.blockmap`), "blockmap");
+  }
+  if (options.extraArtifactName) {
+    await writeFile(join(root, options.extraArtifactName), "stale");
   }
   const artifactName = options.artifactName ?? actualName;
   const sha512 = options.sha512 ?? createHash("sha512").update(body).digest("base64");
   await writeFile(
     join(root, "latest-mac.yml"),
     [
-      "version: 1.0.0",
+      `version: ${options.manifestVersion ?? "1.0.0"}`,
       "files:",
       `  - url: ${artifactName}`,
       `    sha512: ${sha512}`,
       `    size: ${body.byteLength}`,
       `path: ${artifactName}`,
-      `sha512: ${sha512}`,
+      `sha512: ${options.topLevelSha512 ?? sha512}`,
       "",
     ].join("\n"),
   );

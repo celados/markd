@@ -42,8 +42,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(quick_capture)
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::startup,

@@ -1,89 +1,74 @@
 ---
 type: Playbook
-title: Markd macOS signing and notarization
-description: Build, sign, notarize, verify, and publish Markd macOS releases locally or on the celados self-hosted runner.
-when: Setting up or diagnosing Markd Developer ID signing, Apple notarization, Tauri updater signatures, or macOS releases.
+title: Electron macOS release
+description: Build, sign, notarize, verify, and publish the macOS arm64 Electron application.
+when: Preparing or diagnosing a Markd macOS release.
+status: active
+generated: { by: codex/gpt-5, at: 2026-08-03T20:45:00+08:00 }
 ---
 
-# macOS signing and notarization
+# Release boundary
 
-Markd releases are signed with a Developer ID Application certificate, submitted to Apple's notary service, and stapled before distribution. Tauri updater artifacts use a separate minisign keypair; the public verifier lives in `src-tauri/tauri.conf.json`, while the private key remains in Vaultwarden and GitHub Secrets.
+Markd publishes one desktop target: Electron on macOS arm64. The release path does not invoke Tauri, Rust
+bundling, minisign, a custom update server, Linux builders, or Intel builders.
 
-The authoritative CI path is `.github/workflows/release-macos.yml`. Manual dispatches build and notarize without publishing by default; tag pushes publish only when the tag matches the app version.
+The executable contract is split across three files:
 
-## 1. Install the signing certificate
+- [`electron-builder.yml`](./electron-builder.yml) owns ASAR layout, signing inputs, GitHub updater provider,
+  target architecture, and artifact naming;
+- [`scripts/verify-electron-package.mjs`](./scripts/verify-electron-package.mjs) fails closed on native payload,
+  updater metadata, and stale or extra artifacts;
+- [`.github/workflows/release-macos.yml`](./.github/workflows/release-macos.yml) owns tag validation, signing,
+  notarization, Gatekeeper checks, background packaged smoke, and upload.
 
-In Apple Developer, create a **Developer ID Application** certificate using a certificate signing request from this Mac. Download and install the certificate in the login keychain.
+# Local package gate
 
-Confirm that the certificate and its private key are available:
-
-```bash
-security find-identity -v -p codesigning
-```
-
-Copy the complete identity, including the team name and ID:
-
-```bash
-export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-```
-
-Do not use an Apple Development, Apple Distribution, or ad-hoc identity for direct downloads.
-
-## 2. Configure notarization credentials
-
-The App Store Connect API key flow is recommended for releases. Create a key with Developer access in App Store Connect under **Users and Access → Integrations**, then set:
+Authenticate private `@celados` dependencies through the team `publish-package` workflow. A clean checkout
+must copy the managed template, then render its sibling `.npmrc` before install:
 
 ```bash
-export APPLE_API_ISSUER="issuer-id"
-export APPLE_API_KEY="key-id"
-export APPLE_API_KEY_PATH="$HOME/.private_keys/AuthKey_key-id.p8"
+cp "$HOME/.agents/.skills/celados/agents/publish-package/resources/.npmrc.tpl" .npmrc.tpl
+hq secret.render "{ file: '.npmrc.tpl' }"
+pnpm install --frozen-lockfile
+pnpm test
+pnpm run package:test
 ```
 
-The private key can only be downloaded once. Keep it outside the repository. `.p8`, `.p12`, `.key`, and environment files are ignored by Git.
+Both `.npmrc.tpl` and the rendered `.npmrc` are local-only and gitignored: the template contains a secret
+locator, while the rendered file contains the registry credential. Neither may be committed.
 
-Alternatively, use an Apple ID with an app-specific password:
+`package:test` builds an unsigned local macOS arm64 DMG and ZIP, checks the exact ASAR-unpacked fff/ffi native
+payload, validates `latest-mac.yml`, and launches the packaged app with `MARKD_E2E_BACKGROUND=1`.
 
-```bash
-export APPLE_ID="you@example.com"
-export APPLE_PASSWORD="app-specific-password"
-export APPLE_TEAM_ID="team-id"
+# Release workflow
+
+Create a `v<package.json version>` tag whose commit is reachable from `origin/main`, then run or observe the
+`Release Electron macOS` workflow for that tag. A manual branch dispatch fails before reaching the persistent
+runner. The self-hosted build uses `[self-hosted, macOS, ARM64]` and installs private dependencies with the
+step-scoped `NPM_TOKEN`.
+
+The workflow accepts these secrets only at their owning steps:
+
+- `NPM_TOKEN` for private dependency installation;
+- `DEVELOPER_ID_CERT_BASE64` and `P12_PASSWORD` for Developer ID signing;
+- `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` for Apple notarization;
+- the workflow-scoped GitHub token for release upload.
+
+The canonical release payload for version `<version>` is exactly:
+
+```text
+Markd-<version>-mac-arm64.dmg
+Markd-<version>-mac-arm64.zip
+Markd-<version>-mac-arm64.zip.blockmap
+latest-mac.yml
 ```
 
-## 3. Verify the environment
+The workflow verifies the signed app and both unpacked native libraries with `codesign`, validates the app and
+DMG notarization tickets with `stapler`, assesses them with Gatekeeper, then runs the packaged Vault Index smoke
+without activating Markd in the foreground.
 
-```bash
-pnpm run release:check
-```
+# Publication boundary
 
-The check rejects ad-hoc signing, Apple Development certificates, missing private keys, and partial notarization credentials.
-It also requires `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, because a release without a signed updater archive must not be published.
-
-## 4. Release
-
-```bash
-pnpm run release 0.1.7 --type=feature "Release notes"
-```
-
-The release script removes stale artifacts and asks Tauri to build an unsigned app, avoiding a redundant signing pass that cannot address CI's ephemeral Keychain explicitly. It then applies the final Developer ID signature with the selected Keychain, notarizes and staples that exact app, creates a fresh updater archive from it, and signs the archive. Only then does it create and notarize the DMG. The script verifies the app and DMG with `codesign`, `hdiutil`, `stapler`, and Gatekeeper before generating updater metadata.
-
-If DMG creation or notarization fails after the app has passed verification, resume without rebuilding it:
-
-```bash
-pnpm run release 0.1.7 --type=feature --resume "Release notes"
-```
-
-The resume path validates the existing app version, signature, notarization ticket, updater archive, and updater signature before using them. If Tauri's DMG command fails, the release automatically retries with Tauri's generated `create-dmg` helper.
-
-Never use `--skip-stapling` for a public release.
-
-## 5. CI secret mapping
-
-The workflow imports the certificate into an ephemeral Keychain and deletes it in an `always()` cleanup step. It passes the imported certificate fingerprint to `codesign`, avoiding an older same-named identity that may already exist on a persistent runner. Repository secrets are populated from Vaultwarden rather than copied from a developer shell:
-
-- `DEVELOPER_ID_CERT_BASE64`, `P12_PASSWORD`, `KEYCHAIN_PASSWORD`
-- `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
-- `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-
-The current Apple material is shared with OnType at the team/certificate level. `APPLE_ID_PWD` is mapped to Markd's `APPLE_PASSWORD`; no new Apple app record is required for direct Developer ID distribution.
-
-The current certificate chains through Apple's Developer ID G2 intermediate. The runner verifies the downloaded G2 certificate against a pinned SHA-256 value and installs this public intermediate into the System Keychain with non-interactive sudo; `codesign` does not reliably construct a Developer ID chain from an intermediate held only in a custom Keychain. The private key and leaf certificate remain isolated in the ephemeral Keychain. The workflow intentionally does not install G1: both intermediates share a common name, while this P12's issuer is explicitly G2. The P12 import explicitly authorizes `/usr/bin/codesign` and sets the Apple key partition list so a headless runner can use the private key. `codesign` selects the leaf identity by certificate fingerprint, and the signing step explicitly unlocks the Keychain again because unlock state is not reliable across isolated Actions step processes. See [Developer ID Intermediate Certificate Updates](https://developer.apple.com/support/developer-id-intermediate-certificate/).
+The website continues linking the real legacy `v0.1.9` DMG until #15 uploads the first canonical Electron asset.
+That issue must switch the website URL and release asset atomically; pointing the site at a not-yet-published
+canonical filename would create a public 404.

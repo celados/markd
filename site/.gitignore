@@ -11,12 +11,5 @@ next-env.d.ts
 .wrangler/
 cloudflare-env.d.ts
 
-# Release binaries are dropped in by scripts/release.sh at release time.
-# Only latest.json (tiny, versioned) is committed; the bundles are not.
-public/downloads/*
-public/updates/*.tar.gz
-public/updates/*.AppImage
-!public/downloads/.gitkeep
-
 # TS build cache
 *.tsbuildinfo

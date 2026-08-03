@@ -46,6 +46,7 @@ test-results
 .env
 .env.local
 .npmrc
+.npmrc.tpl
 *.keystore
 
 # macOS code signing (private keys)

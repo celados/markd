@@ -66,4 +66,50 @@ describe("UpdaterService", () => {
     expect(updater.checkForUpdates).not.toHaveBeenCalled();
     expect(fallback).toHaveBeenCalledOnce();
   });
+
+  test("a no-update result clears a previously downloaded update", async () => {
+    const updater = fakeUpdater();
+    const fallback = vi.fn();
+    vi.mocked(updater.checkForUpdates)
+      .mockResolvedValueOnce({
+        isUpdateAvailable: true,
+        updateInfo: { version: "2.0.0" },
+      })
+      .mockResolvedValueOnce({
+        isUpdateAvailable: false,
+        updateInfo: { version: "1.0.0" },
+      });
+    const service = new UpdaterService(updater, "1.0.0", true);
+
+    await service.check();
+    await service.download("2.0.0");
+    await expect(service.check()).resolves.toBeNull();
+    service.installOrRelaunch(fallback);
+
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    expect(fallback).toHaveBeenCalledOnce();
+  });
+
+  test("provider and download failures release the exclusive operation for retry", async () => {
+    const updater = fakeUpdater();
+    vi.mocked(updater.checkForUpdates)
+      .mockRejectedValueOnce(new Error("provider unavailable"))
+      .mockResolvedValueOnce({
+        isUpdateAvailable: true,
+        updateInfo: { version: "2.0.0" },
+      });
+    vi.mocked(updater.downloadUpdate)
+      .mockRejectedValueOnce(new Error("download unavailable"))
+      .mockResolvedValueOnce(["/tmp/Markd.zip"]);
+    const service = new UpdaterService(updater, "1.0.0", true);
+
+    await expect(service.check()).rejects.toMatchObject<Partial<UpdaterServiceError>>({
+      kind: "UPDATE_FAILED",
+    });
+    await expect(service.check()).resolves.toMatchObject({ version: "2.0.0" });
+    await expect(service.download("2.0.0")).rejects.toMatchObject<Partial<UpdaterServiceError>>({
+      kind: "UPDATE_FAILED",
+    });
+    await expect(service.download("2.0.0")).resolves.toBeUndefined();
+  });
 });

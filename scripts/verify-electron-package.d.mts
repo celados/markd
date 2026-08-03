@@ -3,6 +3,7 @@ export type ElectronPackageInventory = {
   asarPath: string;
   fffLibrary: string;
   ffiAddon: string;
+  nativeFiles: string[];
   updateConfig: string;
 };
 
@@ -16,4 +17,16 @@ export function findPackagedApp(
 ): string;
 export function inspectUpdateManifest(
   outputDir: string,
-): { manifestPath: string; artifacts: string[] };
+  expectedVersion: string,
+  arch?: string,
+): {
+  manifestPath: string;
+  artifacts: string[];
+  primaryArtifact: string;
+  releaseArtifacts: string[];
+};
+export function inspectReleaseArtifacts(
+  outputDir: string,
+  expectedVersion: string,
+  arch?: string,
+): string[];

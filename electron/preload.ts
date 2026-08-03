@@ -622,11 +622,11 @@ contextBridge.exposeInMainWorld("markd", {
           openExternal: (url: string) =>
             requestControl(controlRequestInput("external.open", { url })),
         },
+        updates: {
+          check: () => requestControl(controlRequestInput("updates.check", null)),
+          install: (id: string) => requestControl(controlRequestInput("updates.install", { id })),
+          relaunch: () => requestControl(controlRequestInput("app.relaunch", null)),
+        },
       }
     : {}),
-  updates: {
-    check: () => requestControl(controlRequestInput("updates.check", null)),
-    install: (id: string) => requestControl(controlRequestInput("updates.install", { id })),
-    relaunch: () => requestControl(controlRequestInput("app.relaunch", null)),
-  },
 });
