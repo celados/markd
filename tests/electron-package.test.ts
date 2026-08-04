@@ -243,6 +243,60 @@ test("release workflow removes every exact draft transaction readback target", a
   expect(workflow).not.toContain("markd-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$name");
 });
 
+test("release draft transaction uses one stable release ID", async () => {
+  const workflow = await readFile(
+    join(process.cwd(), ".github", "workflows", "release-macos.yml"),
+    "utf8",
+  );
+  const start = workflow.indexOf("- name: Create or resume canonical draft release");
+  const publicGate = workflow.indexOf("# POST-PUBLISH EVIDENCE:");
+  const transaction = workflow.slice(start, publicGate);
+  expect(start).toBeGreaterThan(-1);
+  expect(transaction).toContain("id: draft_release");
+  expect(transaction).toContain('release_id=$release_id');
+  expect(transaction).toContain('upload_url=$upload_url');
+  expect(transaction).toContain('${{ steps.draft_release.outputs.release_id }}');
+  expect(transaction).toContain('${{ steps.draft_release.outputs.upload_url }}');
+  const validateMarker = "node scripts/resolve-draft-release.mjs validate";
+  const validateOffsets = [...transaction.matchAll(new RegExp(validateMarker, "gu"))]
+    .map((match) => match.index);
+  expect(validateOffsets).toHaveLength(2);
+  const [initialValidate, finalValidate] = validateOffsets;
+  const initialIdentity = transaction.indexOf(
+    'initial_release_id="$(jq -er \'.release_id\' <<< "$identity")"',
+  );
+  const patch = transaction.indexOf("gh api --method PATCH");
+  const finalReleaseId = transaction.indexOf(
+    'release_id="$(jq -er \'.release_id\' <<< "$identity")"',
+    finalValidate,
+  );
+  const finalUploadUrl = transaction.indexOf(
+    'upload_url="$(jq -er \'.upload_url\' <<< "$identity")"',
+    finalValidate,
+  );
+  const outputs = transaction.indexOf('} >> "$GITHUB_OUTPUT"');
+  expect([
+    initialValidate,
+    initialIdentity,
+    patch,
+    finalValidate,
+    finalReleaseId,
+    finalUploadUrl,
+    outputs,
+  ]).not.toContain(-1);
+  expect(initialValidate).toBeLessThan(initialIdentity);
+  expect(initialIdentity).toBeLessThan(patch);
+  expect(patch).toBeLessThan(finalValidate);
+  expect(finalValidate).toBeLessThan(finalReleaseId);
+  expect(finalReleaseId).toBeLessThan(finalUploadUrl);
+  expect(finalUploadUrl).toBeLessThan(outputs);
+  expect(transaction).toContain('-f name="$name"');
+  expect(transaction).not.toContain('?name=$name');
+  expect(transaction).not.toContain("releases/tags/$RELEASE_TAG");
+  expect(transaction).not.toContain('gh release upload "$RELEASE_TAG"');
+  expect(transaction).not.toContain('gh release edit "$RELEASE_TAG"');
+});
+
 test("release workflow preflights P12 signing and verifies the signed DMG before notarization", async () => {
   const [workflow, configText] = await Promise.all([
     readFile(join(process.cwd(), ".github", "workflows", "release-macos.yml"), "utf8"),

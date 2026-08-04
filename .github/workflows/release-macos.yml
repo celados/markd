@@ -353,44 +353,61 @@ jobs:
           if-no-files-found: error
 
       - name: Create or resume canonical draft release
+        id: draft_release
         if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: v${{ env.VERSION }}
         run: |
           metadata="$RUNNER_TEMP/markd-draft-before-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
-          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$metadata" 2>/dev/null; then
-            test "$(jq -r '[.draft, .prerelease] | @tsv' "$metadata")" = $'true\tfalse' || {
-              echo "Release $RELEASE_TAG must be a non-prerelease draft before resume." >&2
-              exit 1
-            }
+          releases="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          resolved="$(printf '%s' "$releases" | \
+            node scripts/resolve-draft-release.mjs resolve "$GITHUB_REPOSITORY" "$RELEASE_TAG")"
+          if [ "$resolved" = "null" ]; then
+            jq -n \
+              --arg tag "$RELEASE_TAG" \
+              --arg name "Markd $VERSION" \
+              --rawfile body RELEASE_NOTES.md \
+              '{tag_name: $tag, name: $name, body: $body, draft: true, prerelease: false, make_latest: "false"}' | \
+              gh api --method POST "repos/$GITHUB_REPOSITORY/releases" --input - > "$metadata"
           else
-            gh release create "$RELEASE_TAG" \
-              --draft \
-              --latest=false \
-              --verify-tag \
-              --notes-file RELEASE_NOTES.md \
-              --title "Markd $VERSION"
+            printf '%s\n' "$resolved" > "$metadata"
           fi
-          gh release edit "$RELEASE_TAG" \
-            --draft \
-            --latest=false \
-            --prerelease=false \
-            --verify-tag \
-            --notes-file RELEASE_NOTES.md \
-            --title "Markd $VERSION"
+          identity="$(node scripts/resolve-draft-release.mjs validate \
+            "$GITHUB_REPOSITORY" "$RELEASE_TAG" < "$metadata")"
+          initial_release_id="$(jq -er '.release_id' <<< "$identity")"
+          jq -n \
+            --arg tag "$RELEASE_TAG" \
+            --arg name "Markd $VERSION" \
+            --rawfile body RELEASE_NOTES.md \
+            '{tag_name: $tag, name: $name, body: $body, draft: true, prerelease: false, make_latest: "false"}' | \
+            gh api --method PATCH \
+              "repos/$GITHUB_REPOSITORY/releases/$initial_release_id" \
+              --input - > "$metadata"
+          identity="$(node scripts/resolve-draft-release.mjs validate \
+            "$GITHUB_REPOSITORY" "$RELEASE_TAG" < "$metadata")"
+          release_id="$(jq -er '.release_id' <<< "$identity")"
+          test "$release_id" = "$initial_release_id"
+          upload_url="$(jq -er '.upload_url' <<< "$identity")"
+          {
+            echo "release_id=$release_id"
+            echo "upload_url=$upload_url"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload canonical draft assets without clobbering
         if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v${{ env.VERSION }}
+          DRAFT_RELEASE_ID: ${{ steps.draft_release.outputs.release_id }}
+          DRAFT_UPLOAD_URL: ${{ steps.draft_release.outputs.upload_url }}
         run: |
           metadata="$RUNNER_TEMP/markd-draft-assets-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
           existing_root="$RUNNER_TEMP/markd-draft-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$existing_root"
           mkdir "$existing_root"
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$metadata"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_RELEASE_ID" > "$metadata"
+          test "$(jq -r '.id' "$metadata")" = "$DRAFT_RELEASE_ID"
+          test "$(jq -r '[.draft, .prerelease] | @tsv' "$metadata")" = $'true\tfalse'
           expected="$(printf '%s\n' "$ELECTRON_DMG" "$ELECTRON_ZIP" "$ELECTRON_ZIP_BLOCKMAP" "$ELECTRON_MANIFEST" | sort)"
           actual="$(jq -r '.assets[].name' "$metadata" | sort)"
           unexpected="$(comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual"))"
@@ -411,7 +428,11 @@ jobs:
                 exit 1
               }
             else
-              gh release upload "$RELEASE_TAG" "$local_path"
+              gh api --method POST \
+                "$DRAFT_UPLOAD_URL" \
+                -H "Content-Type: application/octet-stream" \
+                --input "$local_path" \
+                -f name="$name" >/dev/null
             fi
           done
 
@@ -419,13 +440,14 @@ jobs:
         if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v${{ env.VERSION }}
+          DRAFT_RELEASE_ID: ${{ steps.draft_release.outputs.release_id }}
         run: |
           readback="$RUNNER_TEMP/markd-draft-readback-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           metadata="$RUNNER_TEMP/markd-draft-final-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
           test ! -e "$readback"
           mkdir "$readback"
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$metadata"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_RELEASE_ID" > "$metadata"
+          test "$(jq -r '.id' "$metadata")" = "$DRAFT_RELEASE_ID"
           for name in "$ELECTRON_DMG" "$ELECTRON_ZIP" "$ELECTRON_ZIP_BLOCKMAP" "$ELECTRON_MANIFEST"; do
             asset_id="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .id' "$metadata")"
             test -n "$asset_id"
@@ -438,8 +460,12 @@ jobs:
         if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v${{ env.VERSION }}
-        run: gh release edit "$RELEASE_TAG" --draft=false --latest
+          DRAFT_RELEASE_ID: ${{ steps.draft_release.outputs.release_id }}
+        run: |
+          gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$DRAFT_RELEASE_ID" \
+            -F draft=false \
+            -f make_latest=true >/dev/null
 
       # POST-PUBLISH EVIDENCE: production GitHubProvider resolves stable updates through /latest.
       - name: Verify anonymous public release assets and digests
