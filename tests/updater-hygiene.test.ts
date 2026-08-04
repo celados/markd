@@ -35,7 +35,12 @@ test("updater hygiene resolves only exact Riffle cache, ShipIt, and user-data pa
 });
 
 test("updater hygiene accepts the released Markd cache during the rename upgrade", async () => {
-  const fixture = await hygieneFixture("markd-updater", {}, "Markd.app");
+  const fixture = await hygieneFixture(
+    "markd-updater",
+    {},
+    "Markd.app",
+    "markd-release-e2e-public-fixture",
+  );
   expect(resolveUpdaterHygienePaths(
     fixture.app,
     fixture.root,
@@ -133,10 +138,11 @@ async function hygieneFixture(
   cacheName: string,
   initial: { preferences?: boolean; systemJob?: boolean } = {},
   appName = "Riffle.app",
+  rootName = "riffle-release-e2e-local-fixture",
 ) {
   const parent = await mkdtemp(join(tmpdir(), "riffle-hygiene-fixture-"));
   scratch.push(parent);
-  const root = join(parent, "riffle-release-e2e-local-fixture");
+  const root = join(parent, rootName);
   const app = join(root, appName);
   const backup = join(parent, "riffle-updater-backup-fixture");
   const home = join(parent, "home");

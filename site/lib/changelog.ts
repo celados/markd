@@ -15,6 +15,19 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: VERSION,
     date: "2026-08-04",
     displayDate: "August 4, 2026",
+    title: "A proven path from Markd",
+    summary:
+      "The independent Electron-native app now has a verified upgrade path from its Markd lineage.",
+    changes: [
+      "Repair the release harness around the published Markd baseline's original isolation contract.",
+      "Prove the signed Markd 0.2.6 app upgrades in place to the signed Riffle release through Squirrel/ShipIt.",
+    ],
+    releaseUrl: RELEASE,
+  },
+  {
+    version: "0.3.0",
+    date: "2026-08-04",
+    displayDate: "August 4, 2026",
     title: "Meet Riffle",
     summary:
       "The independent Electron-native app now has a name and identity of its own.",
@@ -22,9 +35,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Rename the desktop app, repository, packages, artifacts, website, and runtime surface to Riffle.",
       "Carry an existing Vault selection forward without overwriting newer Riffle state.",
       "Keep existing Vault assets and installed updater identity intact across the rename.",
-      "Verify the public Markd 0.2.6 app upgrades in place to Riffle before publication.",
     ],
-    releaseUrl: RELEASE,
+    releaseUrl: "https://github.com/celados/riffle/releases/tag/v0.3.0",
   },
   {
     version: "0.2.5",

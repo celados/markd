@@ -25,7 +25,11 @@ test("signed baseline upgrades and relaunches through the real release channel",
   let replacementPid: number | null = null;
   let evidenceNonce: string | null = null;
   const derivedApp = dirname(dirname(dirname(baselineExecutable)));
-  if (!basename(stateRoot).startsWith("riffle-release-e2e-")) {
+  // The released Markd baseline enforces its original prefix before Riffle can
+  // take over, while current-only journeys use the Riffle prefix.
+  if (!["riffle-release-e2e-", "markd-release-e2e-"].some((prefix) =>
+    basename(stateRoot).startsWith(prefix)
+  )) {
     throw new Error("Updater smoke requires an isolated release E2E root.");
   }
   expect(await realpath(dirname(stateRoot))).toBe(await realpath(allowedTempRoot));

@@ -389,6 +389,9 @@ test("release proves the published Markd baseline can become Riffle", async () =
     "utf8",
   );
   expect(workflow).toContain('gh release download "v$baseline_version"');
+  expect(workflow).toContain(
+    'public_root="$RUNNER_TEMP/markd-release-e2e-public-$run_key"',
+  );
   expect(workflow).toContain('baseline_app="$public_root/Markd.app"');
   expect(workflow).toContain(
     'RIFFLE_BASELINE_EXECUTABLE="$PUBLIC_BASELINE_APP/Contents/MacOS/Markd"',

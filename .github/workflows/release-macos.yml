@@ -479,7 +479,8 @@ jobs:
           baseline_version="0.2.6"
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           download_root="$RUNNER_TEMP/riffle-legacy-download-$run_key"
-          public_root="$RUNNER_TEMP/riffle-release-e2e-public-$run_key"
+          # Markd 0.2.6 validates this prefix before it writes the updater handoff.
+          public_root="$RUNNER_TEMP/markd-release-e2e-public-$run_key"
           archive="$download_root/Markd-$baseline_version-mac-arm64.zip"
           test ! -e "$download_root"
           test ! -e "$public_root"
@@ -533,7 +534,7 @@ jobs:
             "$RUNNER_TEMP/riffle-installed-$run_key" \
             "$RUNNER_TEMP/riffle-baseline-$run_key" \
             "$RUNNER_TEMP/riffle-release-e2e-local-$run_key" \
-            "$RUNNER_TEMP/riffle-release-e2e-public-$run_key" \
+            "$RUNNER_TEMP/markd-release-e2e-public-$run_key" \
             "$RUNNER_TEMP/riffle-legacy-download-$run_key" \
             "$RUNNER_TEMP/riffle-draft-existing-$run_key" \
             "$RUNNER_TEMP/riffle-draft-readback-$run_key" \
@@ -548,7 +549,7 @@ jobs:
               "riffle-installed-$run_key" | \
               "riffle-baseline-$run_key" | \
               "riffle-release-e2e-local-$run_key" | \
-              "riffle-release-e2e-public-$run_key" | \
+              "markd-release-e2e-public-$run_key" | \
               "riffle-legacy-download-$run_key" | \
               "riffle-draft-existing-$run_key" | \
               "riffle-draft-readback-$run_key" | \
