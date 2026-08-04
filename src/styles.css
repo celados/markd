@@ -15,12 +15,12 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-[data-markd-drag-region] {
+[data-riffle-drag-region] {
     -webkit-app-region: drag;
 }
 
-[data-markd-no-drag],
-[data-markd-drag-region] :where(button, [role="tab"], input, textarea, select, a) {
+[data-riffle-no-drag],
+[data-riffle-drag-region] :where(button, [role="tab"], input, textarea, select, a) {
     -webkit-app-region: no-drag;
 }
 
@@ -375,11 +375,11 @@ body {
     padding: 0.04em 0.12em;
 }
 
-.prose-note .markd-find-match {
+.prose-note .riffle-find-match {
     border-radius: 0.18em;
     background: color-mix(in srgb, var(--ink) 12%, transparent);
 }
-.prose-note .markd-find-match-active {
+.prose-note .riffle-find-match-active {
     background: color-mix(in srgb, var(--ink) 22%, transparent);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 22%, transparent);
 }

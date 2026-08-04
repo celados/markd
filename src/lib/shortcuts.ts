@@ -41,7 +41,7 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
 ];
 
 export const shortcutStorageKey = (mac: boolean) =>
-  `markd:shortcuts:v1:${mac ? "mac" : "standard"}`;
+  `riffle:shortcuts:v1:${mac ? "mac" : "standard"}`;
 
 export function defaultShortcutBindings(
   mac: boolean,

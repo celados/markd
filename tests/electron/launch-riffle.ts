@@ -2,12 +2,12 @@ import { _electron as electron, type ElectronApplication, type Page } from "@pla
 
 type ElectronLaunchOptions = Parameters<typeof electron.launch>[0];
 
-type MarkdLaunchOptions = Omit<ElectronLaunchOptions, "args" | "env"> & {
+type RiffleLaunchOptions = Omit<ElectronLaunchOptions, "args" | "env"> & {
   env?: NodeJS.ProcessEnv;
   foreground?: boolean;
 };
 
-export function launchMarkd(options: MarkdLaunchOptions = {}) {
+export function launchRiffle(options: RiffleLaunchOptions = {}) {
   const { env = {}, foreground = false, ...launchOptions } = options;
   return electron.launch({
     ...launchOptions,
@@ -15,12 +15,12 @@ export function launchMarkd(options: MarkdLaunchOptions = {}) {
     env: {
       ...process.env,
       ...env,
-      MARKD_E2E_BACKGROUND: foreground ? "0" : "1",
+      RIFFLE_E2E_BACKGROUND: foreground ? "0" : "1",
     },
   });
 }
 
-export async function markdWindow(
+export async function riffleWindow(
   application: ElectronApplication,
   kind: "main" | "quick-capture",
 ): Promise<Page> {
@@ -29,11 +29,11 @@ export async function markdWindow(
   while (Date.now() < deadline) {
     for (const page of application.windows()) {
       const candidate = await page
-        .evaluate(() => window.markd?.app.windowKind ?? null)
+        .evaluate(() => window.riffle?.app.windowKind ?? null)
         .catch(() => null);
       if (candidate === kind) return page;
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  throw new Error(`Markd ${kind} window did not load`);
+  throw new Error(`Riffle ${kind} window did not load`);
 }

@@ -19,7 +19,7 @@ export function ReleaseNotesModal() {
     <Modal
       open={open && Boolean(update)}
       onClose={() => !busy && dismiss()}
-      ariaLabel={`What's new in Markd ${update?.version ?? ""}`.trim()}
+      ariaLabel={`What's new in Riffle ${update?.version ?? ""}`.trim()}
       className="w-[460px]"
     >
       <header className="flex items-center gap-3 border-b border-line-soft px-5 py-4">
@@ -28,7 +28,7 @@ export function ReleaseNotesModal() {
         </div>
         <div className="min-w-0">
           <h2 className="text-[14px] font-semibold tracking-[-0.01em]">
-            What&apos;s new in Markd
+            What&apos;s new in Riffle
           </h2>
           <p className="mt-0.5 text-[10.5px] text-faint">
             Version {update?.version}
@@ -52,7 +52,7 @@ export function ReleaseNotesModal() {
           </p>
         </div>
         <p className="mt-3 text-[10.5px] leading-4 text-faint">
-          Markd will restart after the update is installed.
+          Riffle will restart after the update is installed.
         </p>
       </div>
 

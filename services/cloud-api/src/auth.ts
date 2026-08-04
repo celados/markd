@@ -48,5 +48,5 @@ export async function revokeSession(request: Request, env: Env): Promise<Respons
 }
 
 export function authenticationRequired(): Response {
-  return error(401, "login_required", "Sign in to Markd before publishing a note.");
+  return error(401, "login_required", "Sign in to Riffle before publishing a note.");
 }

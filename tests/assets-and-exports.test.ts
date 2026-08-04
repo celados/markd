@@ -37,7 +37,7 @@ afterEach(async () => {
 
 describe("Vault Engine assets", () => {
   test("publishes only the committed Vault generation after its response", async () => {
-    const scratch = await scratchDirectory("markd-open-ordering-");
+    const scratch = await scratchDirectory("riffle-open-ordering-");
     const firstRoot = join(scratch, "first");
     const secondRoot = join(scratch, "second");
     await mkdir(firstRoot);
@@ -99,7 +99,7 @@ describe("Vault Engine assets", () => {
   });
 
   test("drops held changes when the active index becomes fatal", async () => {
-    const scratch = await scratchDirectory("markd-index-fatal-");
+    const scratch = await scratchDirectory("riffle-index-fatal-");
     const root = join(scratch, "vault");
     await mkdir(root);
     const events: VaultIndexEvent[] = [];
@@ -128,7 +128,7 @@ describe("Vault Engine assets", () => {
   });
 
   test("makes deferred index delivery failure fatal", async () => {
-    const scratch = await scratchDirectory("markd-index-delivery-fatal-");
+    const scratch = await scratchDirectory("riffle-index-delivery-fatal-");
     const root = join(scratch, "vault");
     await mkdir(root);
     const fatals: Error[] = [];
@@ -196,7 +196,7 @@ describe("Vault Engine assets", () => {
       ),
     ).rejects.toEqual(expect.objectContaining({ kind: "INVALID_INPUT" }));
 
-    const scratch = await scratchDirectory("markd-assets-symlink-");
+    const scratch = await scratchDirectory("riffle-assets-symlink-");
     const root = join(scratch, "vault");
     const outside = join(scratch, "outside");
     await mkdir(join(root, ".markd"), { recursive: true });
@@ -211,7 +211,7 @@ describe("Vault Engine assets", () => {
 
   test("a failed asset-root stage leaves the previous Vault transaction intact", async () => {
     const native = nativeDouble();
-    const scratch = await scratchDirectory("markd-open-transaction-");
+    const scratch = await scratchDirectory("riffle-open-transaction-");
     const firstRoot = join(scratch, "first");
     const secondRoot = join(scratch, "second");
     const configDir = join(scratch, "config");
@@ -235,7 +235,7 @@ describe("Vault Engine assets", () => {
 
   test("a failed asset-root commit rolls utility state and config back", async () => {
     const native = nativeDouble();
-    const scratch = await scratchDirectory("markd-open-commit-");
+    const scratch = await scratchDirectory("riffle-open-commit-");
     const firstRoot = join(scratch, "first");
     const secondRoot = join(scratch, "second");
     const configDir = join(scratch, "config");
@@ -259,7 +259,7 @@ describe("Vault Engine assets", () => {
 
   test("a one-off config commit failure rolls back without poisoning the Engine", async () => {
     const native = nativeDouble();
-    const scratch = await scratchDirectory("markd-open-config-failure-");
+    const scratch = await scratchDirectory("riffle-open-config-failure-");
     const firstRoot = join(scratch, "first");
     const secondRoot = join(scratch, "second");
     const configDir = join(scratch, "config");
@@ -294,7 +294,7 @@ describe("Vault Engine assets", () => {
 
   test("a config rollback failure is fatal and closes later mutation paths", async () => {
     const native = nativeDouble();
-    const scratch = await scratchDirectory("markd-open-rollback-fatal-");
+    const scratch = await scratchDirectory("riffle-open-rollback-fatal-");
     const firstRoot = join(scratch, "first");
     const secondRoot = join(scratch, "second");
     const configDir = join(scratch, "config");
@@ -374,7 +374,7 @@ describe("Vault Engine exports", () => {
 
 describe("native content paths", () => {
   test("serves only canonical files below the active asset root", async () => {
-    const scratch = await scratchDirectory("markd-protocol-");
+    const scratch = await scratchDirectory("riffle-protocol-");
     const assetRootPath = join(scratch, "assets");
     await mkdir(assetRootPath);
     const assetRoot = await realpath(assetRootPath);
@@ -389,14 +389,14 @@ describe("native content paths", () => {
     expect(saved).toMatchObject({ extension: "png", contentType: "image/png" });
     expect(loaded).toMatchObject({ extension: "png", contentType: "image/png" });
     expect(loaded.bytes).toEqual(saved.bytes);
-    expect(url).toBe("markd-asset://vault/pixel.png");
+    expect(url).toBe("riffle-asset://vault/pixel.png");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
     expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
   });
 
   test("rejects traversal, unsupported files, and symlink escapes", async () => {
-    const scratch = await scratchDirectory("markd-protocol-reject-");
+    const scratch = await scratchDirectory("riffle-protocol-reject-");
     const assetRootPath = join(scratch, "assets");
     await mkdir(assetRootPath);
     const assetRoot = await realpath(assetRootPath);
@@ -405,20 +405,20 @@ describe("native content paths", () => {
     await writeFile(join(assetRoot, "spoofed.png"), "not really a PNG");
     await writeFile(join(assetRoot, "page.html"), "<script></script>");
 
-    await expect(loadAssetResponse(assetRoot, "markd-asset://vault/%2Fetc/passwd"))
+    await expect(loadAssetResponse(assetRoot, "riffle-asset://vault/%2Fetc/passwd"))
       .rejects.toEqual(expect.objectContaining({ kind: "INVALID_PATH" }));
-    await expect(loadAssetResponse(assetRoot, "markd-asset://vault/escape.png"))
+    await expect(loadAssetResponse(assetRoot, "riffle-asset://vault/escape.png"))
       .rejects.toEqual(expect.objectContaining({ kind: "INVALID_PATH" }));
-    await expect(loadAssetResponse(assetRoot, "markd-asset://vault/page.html"))
+    await expect(loadAssetResponse(assetRoot, "riffle-asset://vault/page.html"))
       .rejects.toEqual(expect.objectContaining({ kind: "INVALID_PATH" }));
-    await expect(loadAssetResponse(assetRoot, "markd-asset://vault/spoofed.png"))
+    await expect(loadAssetResponse(assetRoot, "riffle-asset://vault/spoofed.png"))
       .rejects.toEqual(expect.objectContaining({ kind: "INVALID_INPUT" }));
     expect(assetUrl("../outside.png")).toBeNull();
     expect(assetUrl(".markd/assets/active.svg")).toBeNull();
   });
 
   test("writes through a canonical destination without following a leaf symlink", async () => {
-    const scratch = await scratchDirectory("markd-export-");
+    const scratch = await scratchDirectory("riffle-export-");
     const output = join(scratch, "Note.md");
     expect(await writeExportFile(output, "exported")).toBe(
       join(await realpath(scratch), "Note.md"),
@@ -440,7 +440,7 @@ async function setupEngine(
   activatedRoots: Array<{ root: string; assetRoot: string }> = [],
   exports: ExportPreparation[] = [],
 ) {
-  const scratch = await scratchDirectory("markd-assets-engine-");
+  const scratch = await scratchDirectory("riffle-assets-engine-");
   const root = join(scratch, "vault");
   await mkdir(root);
   const engine = new VaultEngine(

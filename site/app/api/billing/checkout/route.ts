@@ -1,4 +1,4 @@
-const CLOUD_API = process.env.MARKD_CLOUD_API_URL ?? "https://api.usemarkd.app";
+const CLOUD_API = process.env.RIFFLE_CLOUD_API_URL ?? "https://api.usemarkd.app";
 
 export async function POST(request: Request): Promise<Response> {
   const contentLength = Number(request.headers.get("content-length") ?? "0");

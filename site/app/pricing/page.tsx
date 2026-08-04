@@ -7,10 +7,10 @@ import { AnalyticsEvent } from "@/components/analytics/AnalyticsEvent";
 export const metadata: Metadata = {
   title: "Cloud pricing",
   description:
-    "Publish linked notes and hosted images with Markd Cloud. Choose yearly or monthly billing.",
+    "Publish linked notes and hosted images with Riffle Cloud. Choose yearly or monthly billing.",
   alternates: { canonical: "/pricing" },
   openGraph: {
-    title: "Markd Cloud pricing",
+    title: "Riffle Cloud pricing",
     description:
       "Publish connected Markdown notes and hosted images for $6 per month billed yearly or $8 billed monthly.",
     url: "/pricing",

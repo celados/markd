@@ -9,13 +9,14 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 test("signed baseline upgrades and relaunches through the real release channel", async () => {
-  const baselineExecutable = requiredEnv("MARKD_BASELINE_EXECUTABLE");
-  const installedApp = requiredEnv("MARKD_INSTALLED_APP");
-  const targetVersion = requiredEnv("MARKD_TARGET_VERSION");
-  const baselineVersion = process.env.MARKD_BASELINE_VERSION ?? "0.1.10";
-  const channelDir = process.env.MARKD_UPDATE_CHANNEL_DIR;
-  const allowedTempRoot = requiredEnv("MARKD_ALLOWED_TEMP_ROOT");
+  const baselineExecutable = requiredEnv("RIFFLE_BASELINE_EXECUTABLE");
+  const installedApp = requiredEnv("RIFFLE_INSTALLED_APP");
+  const targetVersion = requiredEnv("RIFFLE_TARGET_VERSION");
+  const baselineVersion = process.env.RIFFLE_BASELINE_VERSION ?? "0.1.10";
+  const channelDir = process.env.RIFFLE_UPDATE_CHANNEL_DIR;
+  const allowedTempRoot = requiredEnv("RIFFLE_ALLOWED_TEMP_ROOT");
   const stateRoot = dirname(installedApp);
+  const targetExecutable = join(installedApp, "Contents", "MacOS", "Riffle");
   const marker = join(stateRoot, "release-evidence.json");
   const configDir = join(stateRoot, "config");
   let server: Server | null = null;
@@ -24,7 +25,7 @@ test("signed baseline upgrades and relaunches through the real release channel",
   let replacementPid: number | null = null;
   let evidenceNonce: string | null = null;
   const derivedApp = dirname(dirname(dirname(baselineExecutable)));
-  if (!basename(stateRoot).startsWith("markd-release-e2e-")) {
+  if (!basename(stateRoot).startsWith("riffle-release-e2e-")) {
     throw new Error("Updater smoke requires an isolated release E2E root.");
   }
   expect(await realpath(dirname(stateRoot))).toBe(await realpath(allowedTempRoot));
@@ -37,6 +38,15 @@ test("signed baseline upgrades and relaunches through the real release channel",
       executablePath: baselineExecutable,
       env: {
         ...process.env,
+        RIFFLE_E2E_BACKGROUND: "1",
+        RIFFLE_E2E_EXPECTED_VERSION: targetVersion,
+        RIFFLE_E2E_RELEASE_MARKER: marker,
+        RIFFLE_E2E_STATE_ROOT: stateRoot,
+        RIFFLE_TEST_CONFIG_DIR: configDir,
+        RIFFLE_TEST_QUICK_CAPTURE_ACCELERATOR: "F24",
+        RIFFLE_E2E_UPDATE_URL: server ? serverOrigin(server) : "",
+        // v0.2.6 predates the rename. The harness speaks both generations so
+        // the shipped baseline can hand control to the clean Riffle runtime.
         MARKD_E2E_BACKGROUND: "1",
         MARKD_E2E_EXPECTED_VERSION: targetVersion,
         MARKD_E2E_RELEASE_MARKER: marker,
@@ -64,21 +74,33 @@ test("signed baseline upgrades and relaunches through the real release channel",
       executable: baselineExecutable,
     });
     const baselineEvidence = await readMarker(marker);
-    if (!baselineEvidence) throw new Error("Baseline Markd did not produce release evidence.");
+    if (!baselineEvidence) throw new Error("Baseline Riffle did not produce release evidence.");
     baselinePid = baselineEvidence.pid;
     evidenceNonce = baselineEvidence.nonce;
     await expect.poll(async () => {
-      const result = await page.evaluate(() => window.markd!.updates!.check());
+      const result = await page.evaluate(() => {
+        const bridge = window.riffle ??
+          (window as typeof window & { markd?: typeof window.riffle }).markd;
+        return bridge!.updates!.check();
+      });
       return result.ok ? result.value : { error: result.error };
     }, { timeout: 2 * 60_000 }).toMatchObject({
       id: targetVersion,
       currentVersion: baselineVersion,
       version: targetVersion,
     });
-    await expect(page.evaluate((version) => window.markd!.updates!.install(version), targetVersion))
+    await expect(page.evaluate((version) => {
+      const bridge = window.riffle ??
+        (window as typeof window & { markd?: typeof window.riffle }).markd;
+      return bridge!.updates!.install(version);
+    }, targetVersion))
       .resolves.toEqual({ ok: true, value: null });
     const exited = application.waitForEvent("close");
-    await expect(page.evaluate(() => window.markd!.updates!.relaunch()))
+    await expect(page.evaluate(() => {
+      const bridge = window.riffle ??
+        (window as typeof window & { markd?: typeof window.riffle }).markd;
+      return bridge!.updates!.relaunch();
+    }))
       .resolves.toEqual({ ok: true, value: null });
     await exited;
     await expect.poll(() => processAlive(baselinePid!)).toBe(false);
@@ -87,12 +109,12 @@ test("signed baseline upgrades and relaunches through the real release channel",
       timeout: 3 * 60_000,
     }).toMatchObject({
       version: targetVersion,
-      executable: baselineExecutable,
+      executable: targetExecutable,
       nonce: baselineEvidence.nonce,
     });
     const replacement = await readMarker(marker);
     if (!replacement || replacement.version !== targetVersion) {
-      throw new Error("Updated Markd did not produce relaunch evidence.");
+      throw new Error("Updated Riffle did not produce relaunch evidence.");
     }
     replacementPid = replacement.pid;
     expect(replacementPid).not.toBe(baselinePid);
@@ -108,13 +130,13 @@ test("signed baseline upgrades and relaunches through the real release channel",
   } finally {
     const cleanupErrors: Error[] = [];
     const finalEvidence = evidenceNonce
-      ? await waitForEvidence(marker, evidenceNonce, baselineExecutable, baselinePid)
+      ? await waitForEvidence(marker, evidenceNonce, targetExecutable, baselinePid)
       : await readMarker(marker);
     const cleanupPid =
       finalEvidence &&
       evidenceNonce &&
       finalEvidence.nonce === evidenceNonce &&
-      finalEvidence.executable === baselineExecutable &&
+      finalEvidence.executable === targetExecutable &&
       finalEvidence.pid !== baselinePid
         ? finalEvidence.pid
         : replacementPid;
@@ -136,7 +158,11 @@ test("signed baseline upgrades and relaunches through the real release channel",
       }
     }
     try {
-      for (const pid of await exactExecutablePids(baselineExecutable)) {
+      const pids = new Set([
+        ...await exactExecutablePids(baselineExecutable),
+        ...await exactExecutablePids(targetExecutable),
+      ]);
+      for (const pid of pids) {
         process.kill(pid, "SIGTERM");
         await waitForExit(pid);
       }
@@ -159,14 +185,22 @@ async function mainWindow(application: Awaited<ReturnType<typeof electron.launch
   await application.firstWindow();
   await expect.poll(async () => {
     const kinds = await Promise.all(application.windows().map((page) =>
-      page.evaluate(() => window.markd?.app.windowKind ?? null).catch(() => null),
+      page.evaluate(() => {
+        const bridge = window.riffle ??
+          (window as typeof window & { markd?: typeof window.riffle }).markd;
+        return bridge?.app.windowKind ?? null;
+      }).catch(() => null),
     ));
     return kinds.includes("main");
   }).toBe(true);
   for (const page of application.windows()) {
-    if (await page.evaluate(() => window.markd?.app.windowKind ?? null) === "main") return page;
+    if (await page.evaluate(() => {
+      const bridge = window.riffle ??
+        (window as typeof window & { markd?: typeof window.riffle }).markd;
+      return bridge?.app.windowKind ?? null;
+    }) === "main") return page;
   }
-  throw new Error("Markd main window did not load.");
+  throw new Error("Riffle main window did not load.");
 }
 
 async function readMarker(path: string) {
@@ -196,7 +230,7 @@ async function waitForExit(pid: number): Promise<void> {
   while (processAlive(pid) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  if (processAlive(pid)) throw new Error(`Markd process ${pid} did not exit.`);
+  if (processAlive(pid)) throw new Error(`Riffle process ${pid} did not exit.`);
 }
 
 async function waitForEvidence(
@@ -221,8 +255,8 @@ async function waitForEvidence(
 async function serveChannel(directory: string): Promise<Server> {
   const allowed = new Set([
     "latest-mac.yml",
-    `Markd-${requiredEnv("MARKD_TARGET_VERSION")}-mac-arm64.zip`,
-    `Markd-${requiredEnv("MARKD_TARGET_VERSION")}-mac-arm64.zip.blockmap`,
+    `Riffle-${requiredEnv("RIFFLE_TARGET_VERSION")}-mac-arm64.zip`,
+    `Riffle-${requiredEnv("RIFFLE_TARGET_VERSION")}-mac-arm64.zip.blockmap`,
   ]);
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");

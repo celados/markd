@@ -12,7 +12,7 @@ export function assetUrl(rel: string): string | null {
   if (!rel.startsWith(assetPrefix)) return null;
   const parts = safeAssetSegments(rel.slice(assetPrefix.length));
   if (!parts || !assetContentType(parts.at(-1)!)) return null;
-  return `markd-asset://vault/${parts.map(encodeURIComponent).join("/")}`;
+  return `riffle-asset://vault/${parts.map(encodeURIComponent).join("/")}`;
 }
 
 export function safeAssetSegments(path: string): string[] | null {

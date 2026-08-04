@@ -31,7 +31,7 @@ const PROPERTY_ICONS: Record<PublishedPropertyType, LucideIcon> = {
 
 function isSafeLink(href: string | undefined): boolean {
   if (!href) return false;
-  return href.startsWith("#") || href.startsWith("markd-page:") || /^(https?:|mailto:)/i.test(href);
+  return href.startsWith("#") || href.startsWith("riffle-page:") || /^(https?:|mailto:)/i.test(href);
 }
 
 function PublishedLink({
@@ -41,8 +41,8 @@ function PublishedLink({
   ...props
 }: ComponentPropsWithoutRef<"a"> & { siteSlug: string }) {
   if (!isSafeLink(href)) return <span>{children}</span>;
-  const pagePath = href?.startsWith("markd-page:")
-    ? href.slice("markd-page:".length)
+  const pagePath = href?.startsWith("riffle-page:")
+    ? href.slice("riffle-page:".length)
     : null;
   const safeHref =
     pagePath === null
@@ -87,15 +87,15 @@ export function PublishedMarkdown({
         skipHtml
         urlTransform={(url) =>
           typeof url === "string" &&
-          (url.startsWith("markd-asset:") || url.startsWith("markd-page:"))
+          (url.startsWith("riffle-asset:") || url.startsWith("riffle-page:"))
             ? url
             : defaultUrlTransform(url)
         }
         components={{
           a: (props) => <PublishedLink {...props} siteSlug={siteSlug} />,
           img: ({ alt, src }) => {
-            const hash = typeof src === "string" && src.startsWith("markd-asset:")
-              ? src.slice("markd-asset:".length)
+            const hash = typeof src === "string" && src.startsWith("riffle-asset:")
+              ? src.slice("riffle-asset:".length)
               : null;
             if (!hash || !/^[a-f0-9]{64}$/.test(hash)) {
               return (

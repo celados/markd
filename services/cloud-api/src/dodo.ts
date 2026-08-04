@@ -68,8 +68,8 @@ export async function createCheckoutSession(
     product_cart: [{ product_id: productId, quantity: 1 }],
     minimal_address: true,
     metadata: {
-      ...(user ? { markd_user_id: user.id } : {}),
-      markd_billing_interval: interval,
+      ...(user ? { riffle_user_id: user.id } : {}),
+      riffle_billing_interval: interval,
     },
     customization: {
       redirect_immediately: true,

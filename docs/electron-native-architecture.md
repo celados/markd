@@ -1,15 +1,15 @@
 ---
 type: Proposal
-title: Markd Electron-native desktop architecture
+title: Riffle Electron-native desktop architecture
 description: >
   用 Electron 原生进程模型替换 Tauri 基座，以隔离的 Vault Engine、fff 驱动的 Vault Index、
-  @pierre/trees 文件树和窄 preload interface 重构 Markd，而不是逐项翻译旧 Tauri commands。
+  @pierre/trees 文件树和窄 preload interface 重构 Riffle，而不是逐项翻译旧 Tauri commands。
 status: accepted # draft | accepted | superseded
 version: 0.4
 implemented: 2026-08-04
 generated: { by: codex/gpt-5.6, at: 2026-08-04T01:00:00+08:00 }
 supersedes: ./port-plan.md#objective-and-boundary
-tags: [markd, electron, architecture, migration, fff, octane, reliability]
+tags: [riffle, electron, architecture, migration, fff, octane, reliability]
 ---
 
 # Decision
@@ -17,7 +17,7 @@ tags: [markd, electron, architecture, migration, fff, octane, reliability]
 > Implementation status: complete. This accepted proposal is the historical decision record; `AGENTS.md`,
 > `electron/`, and the executable tests are the current implementation truth.
 
-Markd 将从 Tauri 2 完全迁移到 Electron。迁移采用 Electron-native 架构，不把 56 个 Tauri
+Riffle 将从 Tauri 2 完全迁移到 Electron。迁移采用 Electron-native 架构，不把 56 个 Tauri
 command 机械翻译成 56 个 Electron IPC handler，也不长期维护 Tauri/Electron 双基座。
 
 本 proposal 取代 [`port-plan.md`](./port-plan.md) 中“保留 Tauri/Rust backend”的架构边界；该文档
@@ -36,13 +36,13 @@ command 机械翻译成 56 个 Electron IPC handler，也不长期维护 Tauri/E
 
 # Objective
 
-迁移完成后的 Markd 必须：
+迁移完成后的 Riffle 必须：
 
 1. 保持 Vault 为普通 Markdown 文件夹，Note 继续使用 Vault-relative path 标识；
 2. 将窗口、快捷键、对话框、Trash、协议、更新和 DevTools 交给 Electron 原生能力；
 3. 将文件扫描、内容索引、watcher、搜索和文件变更隔离出 Electron main event loop；
 4. 让 tree、search 和外部文件变化共享同一份 Vault Index，而不是各自扫描磁盘；
-5. 让 renderer 只依赖窄、typed、schema-validated 的 `window.markd` interface；
+5. 让 renderer 只依赖窄、typed、schema-validated 的 `window.riffle` interface；
 6. 让开发期崩溃、console、IPC error 和 utility process 生命周期可观察；
 7. 通过真实 packaged app 验证 native binary、签名、公证、更新和系统操作。
 
@@ -50,7 +50,7 @@ command 机械翻译成 56 个 Electron IPC handler，也不长期维护 Tauri/E
 
 - 不重写 Octane renderer 或 Tiptap editor；
 - 不改变 Note、Vault App Data、Pin、Collection 或 Published Share 的产品语义；
-- 不为了迁移重新设计 Markd Cloud protocol；
+- 不为了迁移重新设计 Riffle Cloud protocol；
 - 不复制 T3 Code 的 Effect/backend/server 分层；
 - 不承诺兼容旧 Tauri IPC command names；
 - 不把 web endpoint 当作可用的默认开发产品 surface；
@@ -78,7 +78,7 @@ command 机械翻译成 56 个 Electron IPC handler，也不长期维护 Tauri/E
 │ Octane Renderer                                             │
 │ UI · editor · tabs · view state · @pierre/trees adapter     │
 └──────────────────────────┬──────────────────────────────────┘
-                           │ window.markd
+                           │ window.riffle
                            │ typed + schema validated
 ┌──────────────────────────▼──────────────────────────────────┐
 │ Sandboxed Preload                                           │
@@ -91,7 +91,7 @@ command 机械翻译成 56 个 Electron IPC handler，也不长期维护 Tauri/E
 └──────────────────────────┬──────────────────────────────────┘
                            │ lifecycle + native control
 ┌──────────────────────────▼──────────────────────────────────┐
-│ Utility Process — Markd Engine                              │
+│ Utility Process — Riffle Engine                              │
 │ Vault Engine · Cloud Engine                                 │
 │ CRUD · collections · fff scan/index/search/watch             │
 └─────────────────────────────────────────────────────────────┘
@@ -112,7 +112,7 @@ hosts CPU-intensive or crash-prone work. See the
 | Module | Process | Owns | Must not own |
 | --- | --- | --- | --- |
 | Renderer | renderer | UI, editor instances, transient view state, user intent | Node, filesystem, raw IPC channels |
-| Desktop Bridge | preload | validation, serialization, semantic `window.markd` methods | domain state, arbitrary Electron access |
+| Desktop Bridge | preload | validation, serialization, semantic `window.riffle` methods | domain state, arbitrary Electron access |
 | Desktop Shell | main | windows, app lifecycle, native OS actions, protocol, update, diagnostics | vault scans, parsing, content search |
 | Vault Engine | utility | active Vault, path policy, CRUD, Collections, index lifecycle | Electron windows or renderer state |
 | Cloud Engine | utility | account session, publish lifecycle, billing and remote metadata requests | Electron windows, updater lifecycle |
@@ -124,11 +124,11 @@ These are deep modules. Their interfaces are the test surfaces; internal librari
 
 # Desktop Bridge interface
 
-`window.markd` exposes semantic modules rather than transport-shaped command names. The exact method inventory
+`window.riffle` exposes semantic modules rather than transport-shaped command names. The exact method inventory
 is frozen during implementation reconnaissance, but the target shape is:
 
 ```ts
-type MarkdDesktop = {
+type RiffleDesktop = {
   app: AppDesktop
   vault: VaultDesktop
   collections: CollectionsDesktop
@@ -139,7 +139,7 @@ type MarkdDesktop = {
 
 Rules:
 
-- use `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true` for every Markd window;
+- use `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true` for every Riffle window;
 - expose one wrapper function per allowed operation through `contextBridge`; never expose `ipcRenderer`;
 - validate requests and responses with Valibot at the process seam;
 - transfer serializable values only; paths use explicit absolute or Vault-relative types;
@@ -167,7 +167,7 @@ Desktop Shell uses Electron-native capabilities:
 - `shell.trashItem()` moves entries to OS Trash;
 - `shell.showItemInFolder()` reveals files and `shell.openExternal()` opens trusted URLs;
 - `nativeTheme` owns system/light/dark integration;
-- `protocol.handle('markd-asset', ...)` serves validated Vault assets after `markd-asset` is registered with
+- `protocol.handle('riffle-asset', ...)` serves validated Vault assets after `riffle-asset` is registered with
   `protocol.registerSchemesAsPrivileged()` before `app.ready`;
 - updater checks, downloads and relaunch are owned by main;
 - renderer crash, unresponsive, console, utility stdout/stderr and utility exit events are observable in dev;
@@ -192,13 +192,13 @@ It owns:
 - on-demand backlinks candidate lookup and Markdown validation;
 - disk conflicts and rescan recovery.
 
-It does not expose fff result types. Search returns Markd Note hits with title/path matches ranked before content
+It does not expose fff result types. Search returns Riffle Note hits with title/path matches ranked before content
 matches, deduplicated by canonical Vault-relative path.
 
 ## Vault Index and fff
 
 fff is preferred because one long-lived native module already combines initial scan, path/content index,
-frecency-aware search and background watch. Markd must not add `@parcel/watcher` beside fff; two event sources
+frecency-aware search and background watch. Riffle must not add `@parcel/watcher` beside fff; two event sources
 would create duplicate ownership and inconsistent ignore semantics. See
 [`dmtrKovalenko/fff.nvim`](https://github.com/dmtrKovalenko/fff.nvim).
 
@@ -206,7 +206,7 @@ The target accepted set is evaluated by fff's ignore implementation from:
 
 ```text
 fff built-ins
-+ a Vault-root .ignore file with a Markd-owned final block
++ a Vault-root .ignore file with a Riffle-owned final block
 + Git user/global excludes
 + Vault .git/info/exclude
 + Vault root and nested .gitignore/.ignore rules
@@ -214,21 +214,21 @@ fff built-ins
 
 This is not naïve string concatenation. fff delegates ignore evaluation to its native walker; `.ignore`, Git
 global excludes, `.git/info/exclude`, and root/nested `.gitignore` files keep the precedence and negation semantics
-defined by that implementation. The target deliberately adopts `.git/info/exclude`. To preserve current Markd
+defined by that implementation. The target deliberately adopts `.git/info/exclude`. To preserve current Riffle
 behavior, hidden files and directories are excluded from Notes, tree, and content search even inside a Git Vault;
 the managed block must cover the difference from fff's context-dependent hidden-file default.
 
-Markd owns one final, marker-delimited block in the Vault-root `.ignore` file:
+Riffle owns one final, marker-delimited block in the Vault-root `.ignore` file:
 
 ```gitignore
-# BEGIN MARKD MANAGED IGNORE
+# BEGIN RIFFLE MANAGED IGNORE
 .markd/
 node_modules/
-# END MARKD MANAGED IGNORE
+# END RIFFLE MANAGED IGNORE
 ```
 
 The concrete built-in list is frozen by contract tests before adoption; the example is not the complete list.
-If `.ignore` does not exist, Markd creates it. If it exists, Markd preserves content outside its block byte for
+If `.ignore` does not exist, Riffle creates it. If it exists, Riffle preserves content outside its block byte for
 byte, replaces only one balanced block, and keeps that block last so same-file user rules cannot accidentally
 override it. Duplicate or unbalanced markers are an explicit configuration error, never a guessed rewrite.
 Updates use an atomic replace and only occur when the managed policy changes or the file drifts; an update forces
@@ -241,9 +241,9 @@ is intentional because a more-nested `.ignore` has higher precedence than the ro
 must never appear in a Snapshot, Change, search result, or product mutation even if an external rule re-includes
 one. It is not a substitute for pre-index filtering of the general ignore set.
 
-Markd does not edit `.gitignore`: that file owns Git and collaborator behavior. A Vault-root `.ignore` also affects
+Riffle does not edit `.gitignore`: that file owns Git and collaborator behavior. A Vault-root `.ignore` also affects
 other tools that honor the ripgrep ignore convention; this is an explicit, visible Vault contract, not an implicit
-side effect. Current fff already supports `.ignore`, so Markd will not patch native create options or cross FFI once
+side effect. Current fff already supports `.ignore`, so Riffle will not patch native create options or cross FFI once
 per path.
 
 fff runs only inside the utility process. Native load failure, crash, overflow/rescan and shutdown are explicit
@@ -253,11 +253,11 @@ Initial and replacement snapshots use fff's atomic resident-entry enumeration: o
 copy, without search ranking, sorting, pagination, or a second filesystem scan. New Note creation asks the same
 retained matcher whether the not-yet-created relative path is accepted before the exclusive write. The hard path
 policy still validates the candidate and every existing ancestor first; ignore matching is not a symlink security
-boundary. With symlink following disabled, fff and Markd's watch ingestion reject symlink leaves and ancestors so
+boundary. With symlink following disabled, fff and Riffle's watch ingestion reject symlink leaves and ancestors so
 initial, watch, and mutation paths share one fail-closed accepted set.
 
 The Node integration is pinned to `@celados/fff-node@0.10.2-nightly.8a9a970`, whose atomic resident-entry,
-preflight ignore, symlink, and initial/live folder contracts pass the Markd gates. It uses `ffi-rs` to load the
+preflight ignore, symlink, and initial/live folder contracts pass the Riffle gates. It uses `ffi-rs` to load the
 fff C `cdylib`; platform binaries are
 exact optional dependencies with authoritative
 `os`/`cpu` metadata, so a clean consumer installs only the package matching its architecture. It is not treated as
@@ -292,7 +292,7 @@ and context menus. It will be replaced by the Vanilla runtime from
 
 Tree Projection receives sorted canonical paths from Vault Snapshot/Change, prepares presorted input, and maps
 Trees interactions to Vault Engine intents. Trees owns virtualization, expansion, selection, keyboard navigation,
-rename and drag/drop interaction; Markd owns persistence and errors.
+rename and drag/drop interaction; Riffle owns persistence and errors.
 
 Pins remain a separate short shortcut list. They are not duplicated into the main tree and are not forced into a
 second general-purpose tree model.
@@ -304,11 +304,11 @@ Adoption gates:
   acceptable only while it remains hidden behind the Trees interface;
 - do not add React/ReactDOM merely to satisfy package peer metadata;
 - lock focus, keyboard, rename, drag/drop, context-menu and large-tree behavior with browser journeys;
-- preserve Markd's monochrome tokens and path-first selection contract.
+- preserve Riffle's monochrome tokens and path-first selection contract.
 
 # Development and release toolchain
 
-Markd keeps Vite 8 because the installed Octane plugin requires it. The Electron integration uses
+Riffle keeps Vite 8 because the installed Octane plugin requires it. The Electron integration uses
 [`vite-plugin-electron`](https://github.com/electron-vite/vite-plugin-electron), which explicitly supports Vite 8,
 rather than stable `electron-vite@5`, whose peer range stops at Vite 7.
 
@@ -352,7 +352,7 @@ exactly-once execution.
 # Test strategy
 
 Existing logic and system-Chrome browser journeys are retained and moved from the Tauri fixture to a fake
-`window.markd` adapter. New test layers are:
+`window.riffle` adapter. New test layers are:
 
 | Layer | Required evidence |
 | --- | --- |
@@ -379,7 +379,7 @@ The migration follows dependencies and vertical slices, not file-for-file transl
 ## Phase 0 — Freeze behavior and contracts
 
 - inventory the current Tauri command consumers, events, windows, capabilities and release paths;
-- freeze renderer-facing behavior in a transport-neutral fake `window.markd`;
+- freeze renderer-facing behavior in a transport-neutral fake `window.riffle`;
 - record current unit/browser/Rust evidence and the known Settings/Trash regressions;
 - add missing browser behavior coverage for Quick Capture and search before replacing their transport;
 - define tagged error schemas, Snapshot/Change schemas and operation cancellation semantics.
@@ -390,8 +390,8 @@ Exit: renderer tests no longer need to know Tauri command names.
 
 - add Electron, `vite-plugin-electron`, main, preload and utility build entries;
 - implement secure BrowserWindow defaults, lifecycle, DevTools and diagnostic forwarding;
-- expose the minimal `window.markd` modules with schema validation;
-- launch one empty Markd Engine utility process and prove crash/teardown behavior.
+- expose the minimal `window.riffle` modules with schema validation;
+- launch one empty Riffle Engine utility process and prove crash/teardown behavior.
 
 Exit: `pnpm run dev` opens the real Electron app; no Vault feature has been claimed migrated.
 
@@ -469,7 +469,7 @@ alternative. Do not hide it behind a local compatibility adapter.
 - editing user `.gitignore` files or writing an unmarked, non-preserving `.ignore`;
 - patching fff with `additionalIgnorePatterns` while its supported `.ignore` seam satisfies the contract;
 - maintaining long-lived Tauri/Electron compatibility paths;
-- importing T3 Code's application-scale Effect/server machinery into Markd.
+- importing T3 Code's application-scale Effect/server machinery into Riffle.
 
 # Acceptance criteria
 

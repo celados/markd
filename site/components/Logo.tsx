@@ -1,4 +1,4 @@
-// Markd app icon: the hash "#" mark, matching build-resources/icon-source.svg
+// Riffle app icon: the hash "#" mark, matching build-resources/icon-source.svg
 // exactly (dark rounded tile, rounded white strokes).
 
 export function LogoMark({ size = 28 }: { size?: number }) {
@@ -26,7 +26,7 @@ export function Wordmark({ size = 24 }: { size?: number }) {
     <span className="flex items-center gap-2.5">
       <LogoMark size={size} />
       <span className="text-[16px] font-semibold tracking-tight text-foreground">
-        Markd
+        Riffle
       </span>
     </span>
   );

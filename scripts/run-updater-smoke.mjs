@@ -12,7 +12,7 @@ const child = spawn(
   ["test", "--config", "playwright.updater.config.ts"],
   {
     stdio: "inherit",
-    env: { ...process.env, MARKD_E2E_BACKGROUND: "1" },
+    env: { ...process.env, RIFFLE_E2E_BACKGROUND: "1" },
   },
 );
 child.once("error", (error) => {

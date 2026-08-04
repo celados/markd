@@ -13,18 +13,18 @@ describe("Cloud ownership gate", () => {
         "Cloud publishing is unavailable because this build has not verified ownership of its Cloud API and site.",
     });
     expect(resolveCloudConfig({
-      MARKD_CLOUD_OWNERSHIP: "verified",
-      MARKD_CLOUD_API_BASE: "https://api.usemarkd.app",
-      MARKD_CLOUD_SITE_ORIGIN: "https://usemarkd.app",
+      RIFFLE_CLOUD_OWNERSHIP: "verified",
+      RIFFLE_CLOUD_API_BASE: "https://api.usemarkd.app",
+      RIFFLE_CLOUD_SITE_ORIGIN: "https://usemarkd.app",
     })).toEqual({
       ok: false,
       message:
         "Cloud publishing is unavailable because this build has not verified ownership of its Cloud API and site.",
     });
     expect(resolveCloudConfig({
-      MARKD_CLOUD_TEST_MODE: "1",
-      MARKD_CLOUD_API_BASE: "https://api.example.test/path",
-      MARKD_CLOUD_SITE_ORIGIN: "javascript:alert(1)",
+      RIFFLE_CLOUD_TEST_MODE: "1",
+      RIFFLE_CLOUD_API_BASE: "https://api.example.test/path",
+      RIFFLE_CLOUD_SITE_ORIGIN: "javascript:alert(1)",
     })).toEqual({
       ok: false,
       message: "Cloud publishing is unavailable because its trusted origins are invalid.",
@@ -33,9 +33,9 @@ describe("Cloud ownership gate", () => {
 
   test("allows only the verified site origin for native external open", () => {
     const result = resolveCloudConfig({
-      MARKD_CLOUD_TEST_MODE: "1",
-      MARKD_CLOUD_API_BASE: "http://127.0.0.1:3001",
-      MARKD_CLOUD_SITE_ORIGIN: "http://127.0.0.1:3002",
+      RIFFLE_CLOUD_TEST_MODE: "1",
+      RIFFLE_CLOUD_API_BASE: "http://127.0.0.1:3001",
+      RIFFLE_CLOUD_SITE_ORIGIN: "http://127.0.0.1:3002",
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;

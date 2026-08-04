@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Markd site tokens mirror the desktop app palette. Marketing pages can still
+/* Riffle site tokens mirror the desktop app palette. Marketing pages can still
    use the display serif, but public notes use the app reading system. */
 
 :root {

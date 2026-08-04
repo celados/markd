@@ -37,9 +37,9 @@ export function publishedPropertyType(
 const FRONTMATTER_RE = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 
 function apiOrigin(): string {
-  const origin = process.env.MARKD_CLOUD_API_URL;
+  const origin = process.env.RIFFLE_CLOUD_API_URL;
   if (!origin) {
-    throw new Error("MARKD_CLOUD_API_URL is not configured");
+    throw new Error("RIFFLE_CLOUD_API_URL is not configured");
   }
   return origin.replace(/\/$/, "");
 }
@@ -81,7 +81,7 @@ export const getPublishedNote = cache(
     const response = await fetch(
       `${apiOrigin()}/v1/public/sites/${encodeURIComponent(slug)}${pagePath}`,
       {
-        next: { revalidate: 300, tags: [`markd-slug-${slug}`] },
+        next: { revalidate: 300, tags: [`riffle-slug-${slug}`] },
         headers: { accept: "application/json" },
       },
     );

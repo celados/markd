@@ -135,8 +135,8 @@ describe("publishing identifiers", () => {
   });
 
   test("hashes content deterministically", async () => {
-    expect(await sha256("Markd")).toBe(
-      "5f760a58961babe4c488f61b3457e73fc9d9b78f5727b04ae80a8e470580eb6f",
+    expect(await sha256("Riffle")).toBe(
+      "5559b7eb5c318b41dbc31f20855f57e4351e94f3d84dc9c3eeab596db81f4a39",
     );
   });
 
@@ -207,7 +207,7 @@ describe("email OTP authentication", () => {
     expect(first).toHaveLength(64);
   });
 
-  test("sends login codes from the configured Markd sender", async () => {
+  test("sends login codes from the configured Riffle sender", async () => {
     const messages: EmailMessageBuilder[] = [];
     const EMAIL = {
       async send(next: EmailMessageBuilder) {
@@ -218,14 +218,14 @@ describe("email OTP authentication", () => {
 
     await sendOtpEmail({ EMAIL }, "person@example.com", "123456");
     const message = messages[0];
-    expect(message.from).toEqual({ email: "no-reply@usemarkd.app", name: "Markd" });
+    expect(message.from).toEqual({ email: "no-reply@usemarkd.app", name: "Riffle" });
     expect(message.to).toBe("person@example.com");
-    expect(message.subject).toBe("Your Markd sign-in code");
+    expect(message.subject).toBe("Your Riffle sign-in code");
     expect(message.text).toContain("123456");
     expect(message.text).toContain("expires in 5 minutes");
   });
 
-  test("sends the welcome message from the configured Markd sender", async () => {
+  test("sends the welcome message from the configured Riffle sender", async () => {
     const messages: EmailMessageBuilder[] = [];
     const EMAIL = {
       async send(next: EmailMessageBuilder) {
@@ -238,10 +238,10 @@ describe("email OTP authentication", () => {
     const message = messages[0];
     expect(message.from).toEqual({
       email: "no-reply@usemarkd.app",
-      name: "saurabh from markd",
+      name: "saurabh from riffle",
     });
     expect(message.to).toBe("person@example.com");
-    expect(message.subject).toBe("welcome to markd");
+    expect(message.subject).toBe("welcome to riffle");
     expect(message.text).toContain("hey person,");
     expect(message.text).toContain("second brain");
     expect(message.text).toContain("https://usemarkd.app/download");
@@ -251,7 +251,7 @@ describe("email OTP authentication", () => {
 
   test("derives a safe welcome name from the email address", () => {
     expect(welcomeName("john.doe@example.com")).toBe("John");
-    expect(welcomeName("SAURABH+markd@example.com")).toBe("Saurabh");
+    expect(welcomeName("SAURABH+riffle@example.com")).toBe("Saurabh");
     expect(welcomeName("007@example.com")).toBe("there");
   });
 });

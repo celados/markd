@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "markd-site",
+      "name": "riffle-site",
       "dependencies": {
         "clsx": "^2.1.1",
         "geist": "^1.4.2",

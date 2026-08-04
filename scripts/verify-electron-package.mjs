@@ -73,9 +73,9 @@ export function inspectElectronPackage(
   if (
     provider?.provider !== "github" ||
     provider?.owner !== "celados" ||
-    provider?.repo !== "markd"
+    provider?.repo !== "riffle"
   ) {
-    throw new Error("Packaged updater provider must target celados/markd GitHub releases.");
+    throw new Error("Packaged updater provider must target celados/riffle GitHub releases.");
   }
   return { appPath, asarPath, fffLibrary, ffiAddon, nativeFiles, nativeVersions, updateConfig };
 }
@@ -213,7 +213,7 @@ export function inspectReleaseArtifacts(outputDir, expectedVersion, arch = "arm6
 
 function nativeLayout(arch) {
   if (arch !== "arm64") {
-    throw new Error(`Markd packages only macOS arm64, not ${arch}.`);
+    throw new Error(`Riffle packages only macOS arm64, not ${arch}.`);
   }
   return {
     fffPackage: `fff-bin-darwin-${arch}`,
@@ -266,7 +266,7 @@ export function findPackagedApp(
   arch = process.arch,
 ) {
   nativeLayout(arch);
-  const appPath = join(outputDir, "mac-arm64", "Markd.app");
+  const appPath = join(outputDir, "mac-arm64", "Riffle.app");
   if (!existsSync(appPath)) throw new Error(`Packaged app is missing: ${appPath}`);
   return appPath;
 }

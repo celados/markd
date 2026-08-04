@@ -1,11 +1,11 @@
-# Markd — agent guide
+# Riffle — agent guide
 
 Local-first markdown notes app for macOS. Electron is the only desktop shell and release path. The UI uses
 Octane + Vite + Tailwind v4 + Tiptap 3.
 
-## Fork provenance
+## Project provenance
 
-This is the Celados Octane fork of
+Riffle is Celados' independent Octane/Electron continuation of
 [`starc007/markd`](https://github.com/starc007/markd), based on upstream commit
 `1d9f0e7f7f2a3cce1a8c83966ff07f6ed2448fb4`. The port was validated against Octane snapshot
 `bbb668df31c3a7f13c79b5bbea6fb7d2e8f4db10`; current package versions and pnpm patches are the
@@ -55,7 +55,7 @@ root pnpm workspace.
 
 The renderer is UI + state only. Filesystem, index, Collections, Cloud, and capture persistence belong to the
 utility-owned engines under `electron/`; OS-authority operations belong to Electron main. The isolated preload
-exposes the typed, semantic `window.markd` bridge. Renderer modules consume the domain-shaped services in
+exposes the typed, semantic `window.riffle` bridge. Renderer modules consume the domain-shaped services in
 `src/lib/desktop-services.ts`; there is no transport compatibility layer.
 
 The Electron-native architecture and migration gates are recorded in
@@ -66,7 +66,7 @@ accepted proposal and the current implementation.
 
 User picks any folder as a vault:
 
-- `<vault>/` — plain `.md` files live directly in the selected vault root, filename = title, no IDs. Folders are real folders. `.markd/` remains reserved app data. Portable plain-markdown. Frontmatter is optional: Markd preserves external YAML and only authors flat properties after an explicit user action in the Properties UI.
+- `<vault>/` — plain `.md` files live directly in the selected vault root, filename = title, no IDs. Folders are real folders. `.markd/` remains reserved app data. Portable plain-markdown. Frontmatter is optional: Riffle preserves external YAML and only authors flat properties after an explicit user action in the Properties UI.
 - `<vault>/.markd/` — app data: atomic `collections.json`, `assets/` (pasted images). Electron
   migrates the legacy `todos.json` / `bookmarks.json` and tag registries once when the canonical
   Collection store is absent.
@@ -77,7 +77,7 @@ Notes are addressed by path relative to the vault root (e.g. `projects/app.md`),
 ### Electron (`electron/`)
 
 - `main.ts` — secure windows, dialogs, Trash, Finder reveal, trusted external navigation, asset protocol, updater
-- `preload.ts` / `bridge-contract.ts` — narrow validated `window.markd` interface; never expose `ipcRenderer`
+- `preload.ts` / `bridge-contract.ts` — narrow validated `window.riffle` interface; never expose `ipcRenderer`
 - `engine.ts` / `vault-engine.ts` — utility-owned Vault operations and coherent snapshots
 - `vault-index.ts` — the single ignore-aware fff index shared by tree, search, backlinks, and live changes
 - `collections-engine.ts` / `cloud-engine.ts` — Vault App Data and remote publishing owners
@@ -125,7 +125,7 @@ Our `Modal` (`components/ui/Modal.tsx`) is built on the same tokens; keep new di
 
 ### Issue tracker
 
-工作项使用 `celados/markd` GitHub Issues 管理。具体操作与 blocking-edge 合同见
+工作项使用 `celados/riffle` GitHub Issues 管理。具体操作与 blocking-edge 合同见
 [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)。
 
 ### Triage labels

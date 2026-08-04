@@ -7,7 +7,7 @@ test("account and Published Share lifecycle use the semantic Cloud bridge", asyn
 
   await page.keyboard.press("ControlOrMeta+,");
   const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("button", { name: "Markd Cloud" }).click();
+  await settings.getByRole("button", { name: "Riffle Cloud" }).click();
   await settings.getByRole("button", { name: "Sign in" }).click();
   await settings.getByLabel("Email address").fill("reader@example.test");
   await settings.getByRole("button", { name: "Send code" }).click();
@@ -17,8 +17,8 @@ test("account and Published Share lifecycle use the semantic Cloud bridge", asyn
   await expect(settings.getByText("Active", { exact: true })).toBeVisible();
   await settings.getByRole("button", { name: "Manage billing" }).click();
   await expect.poll(() => page.evaluate(() => (
-    window as Window & { __MARKD_TEST__: { openedExternalUrls: string[] } }
-  ).__MARKD_TEST__.openedExternalUrls)).toEqual(["https://example.test/billing"]);
+    window as Window & { __RIFFLE_TEST__: { openedExternalUrls: string[] } }
+  ).__RIFFLE_TEST__.openedExternalUrls)).toEqual(["https://example.test/billing"]);
 
   await page.keyboard.press("Escape");
   await page.getByRole("treeitem", { name: "README.md" }).click();
@@ -41,7 +41,7 @@ test("remote sign-out failure does not leave the renderer signed in", async ({ p
   await page.goto("/");
   await page.keyboard.press("ControlOrMeta+,");
   const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("button", { name: "Markd Cloud" }).click();
+  await settings.getByRole("button", { name: "Riffle Cloud" }).click();
   await settings.getByRole("button", { name: "Sign in" }).click();
   await settings.getByLabel("Email address").fill("reader@example.test");
   await settings.getByRole("button", { name: "Send code" }).click();

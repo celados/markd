@@ -6,9 +6,9 @@ export function electronArtifactNames(version, arch = "arm64") {
     throw new Error(`Invalid Electron artifact version: ${version}`);
   }
   if (arch !== "arm64") {
-    throw new Error(`Markd publishes only macOS arm64 artifacts, not ${arch}.`);
+    throw new Error(`Riffle publishes only macOS arm64 artifacts, not ${arch}.`);
   }
-  const stem = `Markd-${version}-mac-${arch}`;
+  const stem = `Riffle-${version}-mac-${arch}`;
   return {
     dmg: `${stem}.dmg`,
     zip: `${stem}.zip`,

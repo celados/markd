@@ -40,7 +40,7 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
     setAccount(next);
     onAccountChange(next);
     window.dispatchEvent(
-      new CustomEvent("markd:cloud-account", {
+      new CustomEvent("riffle:cloud-account", {
         detail: { signedIn: Boolean(next) },
       }),
     );
@@ -159,7 +159,7 @@ export function CloudAccountCard(props: CloudAccountCardProps) @{
               </div>
               <p className="mt-0.5 text-[10.5px] text-faint">
                 {account
-                  ? "Publishing is connected to this Markd account."
+                  ? "Publishing is connected to this Riffle account."
                   : "Your local notes stay available without an account."}
               </p>
             </div>

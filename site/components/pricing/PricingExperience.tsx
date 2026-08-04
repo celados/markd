@@ -85,7 +85,7 @@ export function PricingExperience({
             <span className="inline-flex size-6 items-center justify-center rounded-full bg-accent-soft text-foreground">
               <Globe2 className="size-3.5" strokeWidth={1.9} />
             </span>
-            Markd Cloud
+            Riffle Cloud
           </span>
         </motion.div>
 
@@ -130,7 +130,7 @@ export function PricingExperience({
                 One plan. Everything included.
               </p>
               <h2 className="mt-1 text-[20px] font-semibold tracking-[-0.02em]">
-                Markd Cloud
+                Riffle Cloud
               </h2>
             </div>
             <BillingToggle
@@ -178,7 +178,7 @@ export function PricingExperience({
           <div className="flex flex-col gap-3 border-t border-black/[0.07] bg-white/68 px-5 py-4 backdrop-blur-[3px] sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
               <p className="text-[12px] font-medium text-foreground">
-                Start publishing with Markd Cloud
+                Start publishing with Riffle Cloud
               </p>
               <p className="mt-0.5 text-[10.5px] text-muted-foreground">
                 {yearly ? "One yearly payment of $72" : "$8 billed every month"}

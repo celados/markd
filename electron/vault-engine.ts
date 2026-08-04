@@ -211,7 +211,7 @@ export class VaultEngine {
       if (rollbackFailures.length > 0) {
         const fatal = domainError(
           "VAULT_ROLLBACK_FAILED",
-          "Vault activation failed and could not be rolled back safely. Restart Markd before continuing.",
+          "Vault activation failed and could not be rolled back safely. Restart Riffle before continuing.",
           {
             original: describeError(error),
             rollbackFailures,
@@ -271,7 +271,7 @@ export class VaultEngine {
     if (this.#fatalError) return;
     const fatal = domainError(
       "VAULT_INDEX_FAILED",
-      "The Vault Index failed and Markd must restart it before continuing.",
+      "The Vault Index failed and Riffle must restart it before continuing.",
       { cause: describeError(error) },
     );
     this.#fatalError = fatal;
@@ -596,7 +596,7 @@ export class VaultEngine {
     } catch (error) {
       // Trash already succeeded and cannot be rolled back. A failed cleanup is
       // surfaced as an explicit stale Pin on the next load, not a false delete failure.
-      console.error("[markd-engine] failed to clean Pins after Trash", error);
+      console.error("[riffle-engine] failed to clean Pins after Trash", error);
     }
     return { snapshot: await this.snapshot() };
   }

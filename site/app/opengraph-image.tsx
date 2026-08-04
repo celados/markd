@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Markd: local-first Markdown notes for macOS";
+export const alt = "Riffle: local-first Markdown notes for macOS";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -30,7 +30,7 @@ export default function Image() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={MARK} width={64} height={64} alt="" />
           <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.5 }}>
-            Markd
+            Riffle
           </div>
         </div>
 
@@ -72,7 +72,7 @@ export default function Image() {
             color: "#9c9c95",
           }}
         >
-          <div style={{ display: "flex" }}>usemarkd.app</div>
+          <div style={{ display: "flex" }}>Riffle</div>
           <div style={{ display: "flex" }}>Free · macOS</div>
         </div>
       </div>

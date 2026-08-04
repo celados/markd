@@ -22,7 +22,7 @@ export const GUIDES: Guide[] = [
     title: "Local-first Markdown notes without lock-in",
     shortTitle: "Local-first Markdown notes",
     description:
-      "Learn what local-first note-taking means, where Markd stores your Markdown files, and how the model keeps your writing portable.",
+      "Learn what local-first note-taking means, where Riffle stores your Markdown files, and how the model keeps your writing portable.",
     eyebrow: "Local-first notes",
     publishedAt: "2026-07-19",
     updatedAt: "2026-07-19",
@@ -33,35 +33,35 @@ export const GUIDES: Guide[] = [
     ],
     sections: [
       {
-        heading: "What local-first means in Markd",
+        heading: "What local-first means in Riffle",
         paragraphs: [
-          "Markd treats the files on your computer as the source of truth. You choose a folder, Markd keeps notes inside it as standard Markdown files, and folders in the sidebar are real folders on disk. The app does not require an account to create, edit, search, or organize a vault.",
-          "That model is different from an offline cache. A cache is a temporary copy of data owned by a remote service. A Markd vault is the primary copy: it remains useful with no network connection and can be opened by other text editors or command-line tools.",
+          "Riffle treats the files on your computer as the source of truth. You choose a folder, Riffle keeps notes inside it as standard Markdown files, and folders in the sidebar are real folders on disk. The app does not require an account to create, edit, search, or organize a vault.",
+          "That model is different from an offline cache. A cache is a temporary copy of data owned by a remote service. A Riffle vault is the primary copy: it remains useful with no network connection and can be opened by other text editors or command-line tools.",
         ],
       },
       {
         heading: "Portability is a product feature",
         paragraphs: [
-          "Plain Markdown reduces the cost of leaving. Titles come from filenames, hierarchy comes from folders, and optional YAML frontmatter remains in the note. Markd can present a rich editor, backlinks, properties, tabs, todos, and bookmarks without hiding the underlying document format.",
-          "You can back up the vault with Time Machine, git, Syncthing, Dropbox, iCloud Drive, or another file-sync tool. Markd does not force a particular sync provider, although native Markd sync is planned for the future.",
+          "Plain Markdown reduces the cost of leaving. Titles come from filenames, hierarchy comes from folders, and optional YAML frontmatter remains in the note. Riffle can present a rich editor, backlinks, properties, tabs, todos, and bookmarks without hiding the underlying document format.",
+          "You can back up the vault with Time Machine, git, Syncthing, Dropbox, iCloud Drive, or another file-sync tool. Riffle does not force a particular sync provider, although native Riffle sync is planned for the future.",
         ],
       },
       {
         heading: "What happens when you publish",
         paragraphs: [
-          "Publishing is an explicit action. Markd prepares the selected note, its linked pages, and referenced images for a public web copy. The original vault stays on your disk and remains the editable source of truth.",
+          "Publishing is an explicit action. Riffle prepares the selected note, its linked pages, and referenced images for a public web copy. The original vault stays on your disk and remains the editable source of truth.",
           "This separation makes the boundary clear: local writing does not silently become cloud data. You choose what becomes public, and unpublishing removes the hosted site without changing the local notes.",
         ],
       },
     ],
     faqs: [
       {
-        question: "Does local-first mean Markd never uses the internet?",
+        question: "Does local-first mean Riffle never uses the internet?",
         answer:
           "Core note editing works locally. Network access is used only for features that require it, such as checking for updates, fetching bookmark details, signing in, or publishing a site.",
       },
       {
-        question: "Can I open a Markd vault without Markd?",
+        question: "Can I open a Riffle vault without Riffle?",
         answer:
           "Yes. Notes are ordinary Markdown files in ordinary folders, so any compatible text editor can read them.",
       },
@@ -72,7 +72,7 @@ export const GUIDES: Guide[] = [
     title: "A plain-text notes app with a real editor",
     shortTitle: "Plain-text notes app",
     description:
-      "See how Markd combines portable plain-text Markdown files with rich editing, source mode, search, links, and properties.",
+      "See how Riffle combines portable plain-text Markdown files with rich editing, source mode, search, links, and properties.",
     eyebrow: "Plain-text notes",
     publishedAt: "2026-07-19",
     updatedAt: "2026-07-19",
@@ -85,7 +85,7 @@ export const GUIDES: Guide[] = [
       {
         heading: "Plain text does not have to feel primitive",
         paragraphs: [
-          "A portable file format and a polished writing experience are not opposites. Markd renders Markdown through a focused editor with headings, lists, tasks, code blocks, tables, links, images, text styles, and keyboard commands. When exact syntax matters, source mode exposes the underlying Markdown for direct editing.",
+          "A portable file format and a polished writing experience are not opposites. Riffle renders Markdown through a focused editor with headings, lists, tasks, code blocks, tables, links, images, text styles, and keyboard commands. When exact syntax matters, source mode exposes the underlying Markdown for direct editing.",
           "Both modes edit the same note. There is no export step and no second proprietary representation to keep in sync.",
         ],
       },
@@ -93,7 +93,7 @@ export const GUIDES: Guide[] = [
         heading: "Files stay understandable outside the app",
         paragraphs: [
           "A note named Roadmap is stored as Roadmap.md. A project folder is a folder. Internal note links are saved as standard Markdown links, even when you type familiar wiki-link syntax. This keeps the vault readable by other editors, static-site tools, scripts, and version-control systems.",
-          "Markd also preserves YAML frontmatter written by other tools. Properties are added only when you explicitly use the properties interface; the app does not inject metadata into every note automatically.",
+          "Riffle also preserves YAML frontmatter written by other tools. Properties are added only when you explicitly use the properties interface; the app does not inject metadata into every note automatically.",
         ],
       },
       {
@@ -111,9 +111,9 @@ export const GUIDES: Guide[] = [
           "No. Source mode is an editable CodeMirror view, and changes are saved back to the same Markdown file.",
       },
       {
-        question: "Does Markd add frontmatter to every note?",
+        question: "Does Riffle add frontmatter to every note?",
         answer:
-          "No. Existing frontmatter is preserved, and Markd authors properties only after an explicit action in the properties interface.",
+          "No. Existing frontmatter is preserved, and Riffle authors properties only after an explicit action in the properties interface.",
       },
     ],
   },
@@ -123,7 +123,7 @@ export const GUIDES: Guide[] = [
     shortTitle: "Markdown notes for macOS",
     description:
       "Use plain Markdown notes on Apple Silicon Macs with a signed, notarized desktop app, quick capture, keyboard navigation, and Finder access.",
-    eyebrow: "Markd for macOS",
+    eyebrow: "Riffle for macOS",
     publishedAt: "2026-07-19",
     updatedAt: "2026-07-19",
     takeaways: [
@@ -135,30 +135,30 @@ export const GUIDES: Guide[] = [
       {
         heading: "A desktop app around files you control",
         paragraphs: [
-          "Markd runs as a desktop application while keeping the vault in a folder you select. You can reveal a note or folder in Finder, use your existing backup workflow, and inspect or edit the Markdown with other Mac tools whenever you want.",
+          "Riffle runs as a desktop application while keeping the vault in a folder you select. You can reveal a note or folder in Finder, use your existing backup workflow, and inspect or edit the Markdown with other Mac tools whenever you want.",
           "The current macOS build supports Apple Silicon Macs running macOS 12 or newer. Releases are signed with a Developer ID certificate and notarized by Apple before distribution.",
         ],
       },
       {
         heading: "Capture and navigate from the keyboard",
         paragraphs: [
-          "A global Quick Capture window can save a thought without first finding the main Markd window. Inside the app, the command palette, customizable shortcuts, quick search, tabs, daily notes, and focus controls reduce the amount of pointer travel needed to work through a vault.",
+          "A global Quick Capture window can save a thought without first finding the main Riffle window. Inside the app, the command palette, customizable shortcuts, quick search, tabs, daily notes, and focus controls reduce the amount of pointer travel needed to work through a vault.",
           "Because the result is still a Markdown file, fast capture does not create an inbox that can only be processed inside a proprietary service.",
         ],
       },
       {
-        heading: "Install and keep Markd current",
+        heading: "Install and keep Riffle current",
         paragraphs: [
-          "The macOS download is distributed as a DMG. Move Markd to Applications, open a new or existing vault, and the app can check signed update metadata for later releases.",
-          "Markd is currently built for Apple Silicon. An Intel macOS build is not listed, so Intel Mac users should not assume compatibility with the current download.",
+          "The macOS download is distributed as a DMG. Move Riffle to Applications, open a new or existing vault, and the app can check signed update metadata for later releases.",
+          "Riffle is currently built for Apple Silicon. An Intel macOS build is not listed, so Intel Mac users should not assume compatibility with the current download.",
         ],
       },
     ],
     faqs: [
       {
-        question: "Does Markd support Intel Macs?",
+        question: "Does Riffle support Intel Macs?",
         answer:
-          "The current published macOS build targets Apple Silicon. Markd lists macOS 12 or newer as the supported system version.",
+          "The current published macOS build targets Apple Silicon. Riffle lists macOS 12 or newer as the supported system version.",
       },
       {
         question: "Is the macOS app notarized?",
@@ -169,15 +169,15 @@ export const GUIDES: Guide[] = [
   },
   {
     slug: "obsidian-compatible-markdown-editor",
-    title: "Use Markd with an existing Obsidian vault",
-    shortTitle: "Markd and Obsidian vaults",
+    title: "Use Riffle with an existing Obsidian vault",
+    shortTitle: "Riffle and Obsidian vaults",
     description:
-      "Understand which Markdown, folders, links, and frontmatter Markd can share with an Obsidian vault, and where app-specific differences remain.",
+      "Understand which Markdown, folders, links, and frontmatter Riffle can share with an Obsidian vault, and where app-specific differences remain.",
     eyebrow: "Vault compatibility",
     publishedAt: "2026-07-19",
     updatedAt: "2026-07-19",
     takeaways: [
-      "Point Markd at a folder of existing Markdown notes.",
+      "Point Riffle at a folder of existing Markdown notes.",
       "Real folders and YAML frontmatter remain portable.",
       "Plugin data, themes, and app settings are not interchangeable.",
     ],
@@ -185,33 +185,33 @@ export const GUIDES: Guide[] = [
       {
         heading: "What the two apps can share",
         paragraphs: [
-          "Both Markd and Obsidian can work with folders of Markdown files. That common foundation means an existing vault does not need to be imported into a new database before Markd can read it. Filenames, folders, Markdown content, standard links, and common YAML frontmatter remain visible on disk.",
-          "Markd accepts wiki-link syntax while typing and converts it to standard Markdown links for storage. This favors broad portability, but it means you should test link behavior on a copy if your vault relies on unusual aliases, embeds, or plugin-defined syntax.",
+          "Both Riffle and Obsidian can work with folders of Markdown files. That common foundation means an existing vault does not need to be imported into a new database before Riffle can read it. Filenames, folders, Markdown content, standard links, and common YAML frontmatter remain visible on disk.",
+          "Riffle accepts wiki-link syntax while typing and converts it to standard Markdown links for storage. This favors broad portability, but it means you should test link behavior on a copy if your vault relies on unusual aliases, embeds, or plugin-defined syntax.",
         ],
       },
       {
         heading: "What is not automatically compatible",
         paragraphs: [
-          "A shared file format does not make two applications identical. Obsidian plugins, themes, workspace state, graph settings, and files inside its app-specific configuration folder do not become Markd features. Likewise, Markd’s todos, bookmarks, and local app state are not Obsidian plugins.",
+          "A shared file format does not make two applications identical. Obsidian plugins, themes, workspace state, graph settings, and files inside its app-specific configuration folder do not become Riffle features. Likewise, Riffle’s todos, bookmarks, and local app state are not Obsidian plugins.",
           "Markdown extensions can also render differently. Back up the vault and review representative notes, especially complex embeds, callouts, plugin queries, and custom HTML, before adopting a two-app workflow.",
         ],
       },
       {
         heading: "A safe way to try the same vault",
         paragraphs: [
-          "Start with a backup or a small copy of the vault. Open it in Markd, inspect folders and frontmatter, follow internal links, and compare a few notes in both editors. Keep only the syntax and features that both applications interpret the way you expect.",
+          "Start with a backup or a small copy of the vault. Open it in Riffle, inspect folders and frontmatter, follow internal links, and compare a few notes in both editors. Keep only the syntax and features that both applications interpret the way you expect.",
           "If the vault uses mostly standard Markdown, links, images, and flat frontmatter, the file-based model makes experimentation straightforward and reversible.",
         ],
       },
     ],
     faqs: [
       {
-        question: "Does Markd import an Obsidian vault?",
+        question: "Does Riffle import an Obsidian vault?",
         answer:
-          "There is no database import. You select the folder containing the Markdown files and Markd reads that folder as a vault.",
+          "There is no database import. You select the folder containing the Markdown files and Riffle reads that folder as a vault.",
       },
       {
-        question: "Will every Obsidian plugin feature work in Markd?",
+        question: "Will every Obsidian plugin feature work in Riffle?",
         answer:
           "No. Plugin-defined syntax and application-specific settings are not guaranteed to work. Standard Markdown and simple frontmatter are the most portable parts of a vault.",
       },

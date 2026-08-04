@@ -84,7 +84,7 @@ function resolveHref(
   if (
     !trimmed ||
     trimmed.startsWith("#") ||
-    trimmed.startsWith("markd-page:") ||
+    trimmed.startsWith("riffle-page:") ||
     /^[a-z][a-z0-9+.-]*:/i.test(trimmed)
   ) {
     return null;
@@ -132,7 +132,7 @@ function rewriteLinks(
       const target = resolveHref(href, fromRel, noteRels);
       if (!target || !publicPaths.has(target)) return match;
       const path = publicPaths.get(target) ?? "";
-      const publicHref = `markd-page:${path}`;
+      const publicHref = `riffle-page:${path}`;
       const suffix = title ? ` ${title}` : "";
       return `[${label}](${publicHref}${suffix})`;
     },

@@ -1,5 +1,5 @@
 appId: app.usemarkd
-productName: Markd
+productName: Riffle
 directories:
   output: release/electron
   buildResources: build-resources
@@ -31,7 +31,7 @@ npmRebuild: false
 publish:
   provider: github
   owner: celados
-  repo: markd
+  repo: riffle
 mac:
   category: public.app-category.productivity
   icon: build-resources/icon.icns
@@ -44,7 +44,7 @@ mac:
       arch: arm64
     - target: zip
       arch: arm64
-artifactName: Markd-${version}-${os}-${arch}.${ext}
+artifactName: Riffle-${version}-${os}-${arch}.${ext}
 dmg:
   # electron-builder reuses its Developer ID identity to sign the container
   # before artifact completion; Gatekeeper's DMG assessment requires that edge.

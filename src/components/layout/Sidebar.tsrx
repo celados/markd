@@ -32,12 +32,12 @@ export function Sidebar() @{
   const shortcuts = useShortcuts((s) => s.bindings);
 
   <aside
-      id="markd-sidebar"
-      data-markd-sidebar
+      id="riffle-sidebar"
+      data-riffle-sidebar
       className="flex h-full w-full shrink-0 flex-col border-r border-line-soft bg-panel"
     >
       {/* drag region + traffic-light clearance */}
-      <div data-markd-drag-region className="flex h-12 items-end px-3 pb-1" />
+      <div data-riffle-drag-region className="flex h-12 items-end px-3 pb-1" />
 
       <div className="px-2 pb-2">
         <button

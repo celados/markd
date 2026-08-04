@@ -1,7 +1,7 @@
 ---
 type: AgentConfig
 title: Triage labels
-description: mattpocock engineering flows 与 Markd GitHub labels 的角色映射。
+description: mattpocock engineering flows 与 Riffle GitHub labels 的角色映射。
 status: active
 generated: { by: codex/gpt-5, at: 2026-08-03T10:50:11+08:00 }
 ---

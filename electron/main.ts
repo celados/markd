@@ -44,12 +44,13 @@ import {
   readReleaseE2eState,
 } from "./release-e2e-state";
 import { createQuitCoordinator } from "./quit-coordinator";
+import { importLegacyConfig } from "./product-identity";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const development =
   Boolean(process.env.VITE_DEV_SERVER_URL) ||
-  process.env.MARKD_ENABLE_DEVTOOLS === "1";
-const explicitBackgroundE2e = process.env.MARKD_E2E_BACKGROUND === "1";
+  process.env.RIFFLE_ENABLE_DEVTOOLS === "1";
+const explicitBackgroundE2e = process.env.RIFFLE_E2E_BACKGROUND === "1";
 const releaseE2eState =
   prepareReleaseE2eState(process.env, process.execPath) ??
   readReleaseE2eState(process.execPath);
@@ -57,7 +58,7 @@ const backgroundE2e = explicitBackgroundE2e || releaseE2eState !== null;
 if (releaseE2eState) app.setPath("userData", releaseE2eState.configDir);
 const { autoUpdater } = electronUpdater;
 const e2eUpdateChannel = resolveE2eUpdateChannel(
-  process.env.MARKD_E2E_UPDATE_URL,
+  process.env.RIFFLE_E2E_UPDATE_URL,
   backgroundE2e,
 );
 if (e2eUpdateChannel) {
@@ -67,10 +68,10 @@ if (e2eUpdateChannel) {
 const updater = new UpdaterService(autoUpdater, app.getVersion(), app.isPackaged);
 
 autoUpdater.logger = {
-  info: (message) => console.log(`[markd-updater] ${String(message)}`),
-  warn: (message) => console.warn(`[markd-updater] ${String(message)}`),
-  error: (message) => console.error(`[markd-updater] ${String(message)}`),
-  debug: (message) => console.debug(`[markd-updater] ${String(message)}`),
+  info: (message) => console.log(`[riffle-updater] ${String(message)}`),
+  warn: (message) => console.warn(`[riffle-updater] ${String(message)}`),
+  error: (message) => console.error(`[riffle-updater] ${String(message)}`),
+  debug: (message) => console.debug(`[riffle-updater] ${String(message)}`),
 };
 
 if (backgroundE2e && process.platform === "darwin") {
@@ -89,7 +90,7 @@ const attachedWebContents = new Set<number>();
 const loadedWebContents = new Set<number>();
 const windowKinds = new Map<number, v.InferOutput<typeof windowKindSchema>>();
 const captureAccelerator =
-  process.env.MARKD_TEST_QUICK_CAPTURE_ACCELERATOR ?? "Control+Shift+Space";
+  process.env.RIFFLE_TEST_QUICK_CAPTURE_ACCELERATOR ?? "Control+Shift+Space";
 const quitCoordinator = createQuitCoordinator(() => {
   globalShortcut.unregisterAll();
   engine?.kill();
@@ -107,7 +108,7 @@ const stagedAssetRoots = new Map<string, string>();
 
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: "markd-asset",
+    scheme: "riffle-asset",
     privileges: {
       secure: true,
       standard: true,
@@ -119,10 +120,10 @@ protocol.registerSchemesAsPrivileged([
 
 function attachWindowDiagnostics(webContents: WebContents): void {
   webContents.on("render-process-gone", (_event, details) => {
-    console.error("[markd-renderer] process gone", details);
+    console.error("[riffle-renderer] process gone", details);
   });
   webContents.on("unresponsive", () => {
-    console.error("[markd-renderer] unresponsive");
+    console.error("[riffle-renderer] unresponsive");
   });
   if (development) {
     webContents.on("console-message", (details) => {
@@ -130,7 +131,7 @@ function attachWindowDiagnostics(webContents: WebContents): void {
         details.level === "error" || details.level === "warning"
           ? console.error
           : console.log;
-      write(`[markd-renderer] ${details.message}`);
+      write(`[riffle-renderer] ${details.message}`);
     });
     webContents.on("before-input-event", (event, input) => {
       if (input.type !== "keyDown") return;
@@ -161,7 +162,7 @@ function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      additionalArguments: ["--markd-window-kind=main"],
+      additionalArguments: ["--riffle-window-kind=main"],
     },
   });
 
@@ -229,7 +230,7 @@ function wireRendererWindow(
   }
 }
 
-function markdWindows(): BrowserWindow[] {
+function riffleWindows(): BrowserWindow[] {
   return [mainWindow, captureWindow].filter(
     (window): window is BrowserWindow => Boolean(window && !window.isDestroyed()),
   );
@@ -237,8 +238,8 @@ function markdWindows(): BrowserWindow[] {
 
 function publishEngineState(state: EngineState): void {
   engineState = v.parse(engineStateSchema, state);
-  for (const window of markdWindows()) {
-    window.webContents.send("markd:engine-state", engineState);
+  for (const window of riffleWindows()) {
+    window.webContents.send("riffle:engine-state", engineState);
   }
 }
 
@@ -256,13 +257,13 @@ function connectEngine(): UtilityProcess {
   stagedAssetRoots.clear();
   publishEngineState({ state: "starting", epoch });
   const child = utilityProcess.fork(join(moduleDir, "engine.js"), [], {
-    serviceName: "Markd Engine",
+    serviceName: "Riffle Engine",
     stdio: "pipe",
     env: {
       ...process.env,
-      MARKD_ENGINE_TEST_ABORT_DELAY_MS:
-        process.env.MARKD_TEST_ABORT_ENGINE_EPOCH === String(epoch)
-          ? process.env.MARKD_TEST_ABORT_DELAY_MS ?? "500"
+      RIFFLE_ENGINE_TEST_ABORT_DELAY_MS:
+        process.env.RIFFLE_TEST_ABORT_ENGINE_EPOCH === String(epoch)
+          ? process.env.RIFFLE_TEST_ABORT_DELAY_MS ?? "500"
           : "",
     },
   });
@@ -273,28 +274,28 @@ function connectEngine(): UtilityProcess {
       error: unavailableError(message),
     });
     if (engine === child) engine = null;
-    if (quitCoordinator.isQuitting() || !restartAvailable || markdWindows().length === 0) return;
+    if (quitCoordinator.isQuitting() || !restartAvailable || riffleWindows().length === 0) return;
     restartAvailable = false;
-    console.log(`[markd-main] restarting engine after epoch=${epoch}`);
+    console.log(`[riffle-main] restarting engine after epoch=${epoch}`);
     engine = connectEngine();
   });
   child.once("spawn", () => {
     engineSpawned = true;
-    console.log(`[markd-main] engine spawned epoch=${epoch} pid=${child.pid}`);
-    for (const window of markdWindows()) attachRendererToEngine(window);
+    console.log(`[riffle-main] engine spawned epoch=${epoch} pid=${child.pid}`);
+    for (const window of riffleWindows()) attachRendererToEngine(window);
   });
   child.on("exit", (code) => {
-    console.error(`[markd-main] engine exited epoch=${epoch} code=${code}`);
-    terminal.terminate("Markd Engine exited unexpectedly.");
+    console.error(`[riffle-main] engine exited epoch=${epoch} code=${code}`);
+    terminal.terminate("Riffle Engine exited unexpectedly.");
   });
   child.on("error", (type, location, report) => {
-    console.error("[markd-main] engine fatal error", {
+    console.error("[riffle-main] engine fatal error", {
       epoch,
       type,
       location,
       report,
     });
-    terminal.terminate("Markd Engine encountered a fatal error.");
+    terminal.terminate("Riffle Engine encountered a fatal error.");
     child.kill();
   });
   child.on("message", (input: unknown) => {
@@ -342,7 +343,7 @@ function attachRendererToEngine(window: BrowserWindow): void {
   attachedWebContents.add(webContents.id);
   const windowKind = windowKinds.get(webContents.id);
   if (!windowKind) {
-    throw new Error("Markd Desktop cannot attach an unowned renderer window.");
+    throw new Error("Riffle Desktop cannot attach an unowned renderer window.");
   }
   const { port1, port2 } = new MessageChannelMain();
   const transfer = () => {
@@ -356,17 +357,17 @@ function attachRendererToEngine(window: BrowserWindow): void {
       epoch: engineEpoch,
       configDir:
         releaseE2eState?.configDir ??
-        process.env.MARKD_TEST_CONFIG_DIR ??
+        process.env.RIFFLE_TEST_CONFIG_DIR ??
         app.getPath("userData"),
       windowKind,
     }, [port1]);
     webContents.postMessage(
-      "markd:engine-port",
+      "riffle:engine-port",
       { epoch: engineEpoch, windowKind },
       [port2],
     );
   };
-  const delay = Number(process.env.MARKD_TEST_ENGINE_TRANSFER_DELAY_MS ?? 0);
+  const delay = Number(process.env.RIFFLE_TEST_ENGINE_TRANSFER_DELAY_MS ?? 0);
   if (Number.isFinite(delay) && delay > 0) setTimeout(transfer, delay);
   else transfer();
 }
@@ -405,7 +406,7 @@ async function performNativeRequest(
         "Export is only available from the live main window.",
       );
     }
-    if (process.env.MARKD_TEST_EXPORT_FAILURE === "1") {
+    if (process.env.RIFFLE_TEST_EXPORT_FAILURE === "1") {
       throw new Error("The operating system rejected the export operation.");
     }
     const result = await dialog.showSaveDialog(owner, {
@@ -416,7 +417,7 @@ async function performNativeRequest(
     if (result.canceled || !result.filePath) return null;
     return writeExportFile(result.filePath, request.content);
   }
-  if (process.env.MARKD_TEST_TRASH_FAILURE === "1") {
+  if (process.env.RIFFLE_TEST_TRASH_FAILURE === "1") {
     throw new Error("The operating system rejected the Trash operation.");
   }
   const [root, path] = await Promise.all([
@@ -430,7 +431,7 @@ async function performNativeRequest(
     offset.startsWith(`..${sep}`) ||
     isAbsolute(offset)
   ) {
-    throw new Error("Markd Desktop rejected a Trash target outside the Vault.");
+    throw new Error("Riffle Desktop rejected a Trash target outside the Vault.");
   }
   await shell.trashItem(path);
   return null;
@@ -448,14 +449,14 @@ async function validateAssetRoot(root: string, assetRoot: string): Promise<strin
   ) {
     throw new NativeContentError(
       "INVALID_PATH",
-      "Markd Desktop rejected an invalid Vault asset root.",
+      "Riffle Desktop rejected an invalid Vault asset root.",
     );
   }
   const offset = relative(canonicalRoot, canonicalAssetRoot);
   if (!offset || offset === ".." || offset.startsWith(`..${sep}`) || isAbsolute(offset)) {
     throw new NativeContentError(
       "INVALID_PATH",
-      "Markd Desktop rejected an asset root outside the Vault.",
+      "Riffle Desktop rejected an asset root outside the Vault.",
     );
   }
   return canonicalAssetRoot;
@@ -505,7 +506,7 @@ function showQuickCapture(): void {
     window.webContents.once("did-finish-load", showQuickCapture);
     return;
   }
-  window.webContents.send("markd:capture-open");
+  window.webContents.send("riffle:capture-open");
   if (backgroundE2e) return;
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const bounds = window.getBounds();
@@ -523,7 +524,7 @@ function closeQuickCapture(): void {
   window.hide();
 }
 
-ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlResponse> => {
+ipcMain.handle("riffle:control", async (event, input: unknown): Promise<ControlResponse> => {
   const request = v.safeParse(controlRequestSchema, input);
   const kind = senderKind(event);
   if (!request.success || !kind) {
@@ -533,7 +534,7 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
       ok: false,
       error: {
         kind: "INVALID_REQUEST",
-        message: "Markd Desktop rejected an invalid request.",
+        message: "Riffle Desktop rejected an invalid request.",
       },
     });
   }
@@ -570,7 +571,7 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
     }
     const result = await dialog.showSaveDialog(mainWindow!, {
       title: "Create Vault",
-      defaultPath: "Markd Vault",
+      defaultPath: "Riffle Vault",
       buttonLabel: "Create Vault",
     });
     return v.parse(controlResponseSchema, {
@@ -637,7 +638,7 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
         type: "response",
         id,
         ok: false,
-        error: { kind: "INVALID_REQUEST", message: "Only the main window can relaunch Markd." },
+        error: { kind: "INVALID_REQUEST", message: "Only the main window can relaunch Riffle." },
       });
     }
     setImmediate(() => {
@@ -680,7 +681,7 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
         ok: false,
         error: {
           kind: "UNTRUSTED_EXTERNAL_URL",
-          message: "Markd Desktop rejected an untrusted external URL.",
+          message: "Riffle Desktop rejected an untrusted external URL.",
         },
       });
     }
@@ -695,7 +696,7 @@ ipcMain.handle("markd:control", async (event, input: unknown): Promise<ControlRe
         ok: false,
         error: {
           kind: kind === "main" ? "UNTRUSTED_EXTERNAL_URL" : "INVALID_WINDOW",
-          message: "Markd Desktop rejected this external URL.",
+          message: "Riffle Desktop rejected this external URL.",
         },
       });
     }
@@ -763,41 +764,47 @@ function updaterError(error: unknown): DesktopErrorData {
   };
 }
 
-ipcMain.handle("markd:engine-state", (event): EngineState => {
+ipcMain.handle("riffle:engine-state", (event): EngineState => {
   if (!windowKinds.has(event.sender.id) || !engineState) {
-    throw new Error("Markd Desktop rejected an invalid engine state request.");
+    throw new Error("Riffle Desktop rejected an invalid engine state request.");
   }
   return v.parse(engineStateSchema, engineState);
 });
 
-ipcMain.on("markd:engine-ready", (event, input: unknown) => {
+ipcMain.on("riffle:engine-ready", (event, input: unknown) => {
   const epoch = acceptEngineControl(event, input);
   if (epoch === null) return;
   restartAvailable = true;
   publishEngineState({ state: "ready", epoch });
-  console.log(`[markd-main] engine ready epoch=${epoch}`);
+  console.log(`[riffle-main] engine ready epoch=${epoch}`);
 });
 
-ipcMain.on("markd:engine-protocol-error", (event, input: unknown) => {
+ipcMain.on("riffle:engine-protocol-error", (event, input: unknown) => {
   const epoch = acceptEngineControl(event, input);
   if (epoch === null) return;
-  console.error(`[markd-main] engine protocol failure epoch=${epoch}`);
+  console.error(`[riffle-main] engine protocol failure epoch=${epoch}`);
   engine?.kill();
 });
 
-ipcMain.on("markd:engine-channel-error", (event, input: unknown) => {
+ipcMain.on("riffle:engine-channel-error", (event, input: unknown) => {
   const failure = v.safeParse(engineChannelFailureSchema, input);
   if (!failure.success || !windowKinds.has(event.sender.id)) return;
-  console.error(`[markd-main] invalid engine channel epoch=${engineEpoch}`);
+  console.error(`[riffle-main] invalid engine channel epoch=${engineEpoch}`);
   engine?.kill();
 });
 
-ipcMain.on("markd:window-kind", (event) => {
+ipcMain.on("riffle:window-kind", (event) => {
   event.returnValue = v.parse(windowKindSchema, windowKinds.get(event.sender.id));
 });
 
-app.whenReady().then(() => {
-  console.log("[markd-main] app ready");
+app.whenReady().then(async () => {
+  if (!releaseE2eState && !process.env.RIFFLE_TEST_CONFIG_DIR) {
+    await importLegacyConfig(
+      app.getPath("userData"),
+      join(app.getPath("appData"), "Markd"),
+    );
+  }
+  console.log("[riffle-main] app ready");
   if (releaseE2eState) {
     // ShipIt does not promise to preserve env; parent-scoped state keeps the replacement hidden and observable.
     void writeFile(releaseE2eState.markerPath, JSON.stringify({
@@ -810,10 +817,10 @@ app.whenReady().then(() => {
         consumeReleaseE2eState(process.execPath, releaseE2eState.nonce);
       }
     }).catch((error: unknown) => {
-      console.error("[markd-main] could not write release evidence", error);
+      console.error("[riffle-main] could not write release evidence", error);
     });
   }
-  protocol.handle("markd-asset", handleAssetRequest);
+  protocol.handle("riffle-asset", handleAssetRequest);
   mainWindow = createMainWindow();
   mainWindow.webContents.once("did-finish-load", () => {
     if (!captureWindow || captureWindow.isDestroyed()) {
@@ -828,7 +835,7 @@ app.whenReady().then(() => {
 
   const registered = globalShortcut.register(captureAccelerator, showQuickCapture);
   if (!registered) {
-    console.error(`[markd-main] Quick Capture shortcut unavailable: ${captureAccelerator}`);
+    console.error(`[riffle-main] Quick Capture shortcut unavailable: ${captureAccelerator}`);
   }
 
   app.on("activate", () => {
@@ -841,6 +848,9 @@ app.whenReady().then(() => {
       mainWindow = null;
     });
   });
+}).catch((error: unknown) => {
+  console.error("[riffle-main] startup failed", error);
+  app.quit();
 });
 
 app.on("before-quit", () => {

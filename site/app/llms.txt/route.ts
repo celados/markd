@@ -8,11 +8,11 @@ export function GET(): Response {
   const guides = GUIDES.map(
     (guide) => `- [${guide.title}](${SITE_URL}/guides/${guide.slug}): ${guide.description}`,
   ).join("\n");
-  const body = `# Markd
+  const body = `# Riffle
 
 > ${SITE_DESCRIPTION}
 
-Markd ${VERSION} is a local-first desktop notes application. Notes are stored as plain Markdown files in a user-selected folder. The desktop app is free and open source under the MIT license. Markd Cloud is an optional paid service for publishing linked notes and hosted images.
+Riffle ${VERSION} is a local-first desktop notes application. Notes are stored as plain Markdown files in a user-selected folder. The desktop app is free and open source under the MIT license. Riffle Cloud is an optional paid service for publishing linked notes and hosted images.
 
 ## Canonical pages
 
@@ -32,7 +32,7 @@ ${guides}
 - Desktop platform: Apple Silicon macOS 12 or newer
 - Editing: rich-text Markdown editor and editable Markdown source mode
 - Organization: search, tabs, backlinks, note links, properties, todos, bookmarks, and pinned items
-- Publishing: optional Markd Cloud subscription; local editing does not require an account
+- Publishing: optional Riffle Cloud subscription; local editing does not require an account
 - AI agent: announced as coming soon, not a currently shipped desktop feature
 `;
 

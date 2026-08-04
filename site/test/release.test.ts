@@ -10,12 +10,12 @@ const packageJson = JSON.parse(
 
 describe("public release contract", () => {
   test("points every current release surface at the canonical Electron artifact", () => {
-    assert.equal(VERSION, "0.2.6");
+    assert.equal(VERSION, "0.3.0");
     assert.equal(packageJson.version, VERSION);
-    assert.equal(RELEASE, "https://github.com/celados/markd/releases/tag/v0.2.6");
+    assert.equal(RELEASE, "https://github.com/celados/riffle/releases/tag/v0.3.0");
     assert.equal(
       DMG,
-      "https://github.com/celados/markd/releases/download/v0.2.6/Markd-0.2.6-mac-arm64.dmg",
+      "https://github.com/celados/riffle/releases/download/v0.3.0/Riffle-0.3.0-mac-arm64.dmg",
     );
     assert.equal(CHANGELOG[0]?.version, VERSION);
     assert.equal(CHANGELOG[0]?.releaseUrl, RELEASE);

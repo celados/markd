@@ -94,7 +94,7 @@ export function AgentTrace() {
           <div className="relative rounded-2xl border border-black/[0.06] bg-paper p-4 shadow-2xl sm:p-5">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <span className="font-mono text-[12px] font-medium text-fg-soft">
-                markd · agent run
+                riffle · agent run
               </span>
               <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
                 <span className="size-1.5 rounded-full bg-accent" /> working

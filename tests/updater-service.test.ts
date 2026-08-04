@@ -17,7 +17,7 @@ function fakeUpdater(): UpdaterPort {
         release_type: "feature",
       },
     })),
-    downloadUpdate: vi.fn(async () => ["/tmp/Markd.zip"]),
+    downloadUpdate: vi.fn(async () => ["/tmp/Riffle.zip"]),
     quitAndInstall: vi.fn(),
   };
 }
@@ -100,7 +100,7 @@ describe("UpdaterService", () => {
       });
     vi.mocked(updater.downloadUpdate)
       .mockRejectedValueOnce(new Error("download unavailable"))
-      .mockResolvedValueOnce(["/tmp/Markd.zip"]);
+      .mockResolvedValueOnce(["/tmp/Riffle.zip"]);
     const service = new UpdaterService(updater, "1.0.0", true);
 
     await expect(service.check()).rejects.toMatchObject<Partial<UpdaterServiceError>>({

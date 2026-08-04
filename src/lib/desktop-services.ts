@@ -1,15 +1,15 @@
 import {
   DesktopError,
-  type MarkdDesktop,
+  type RiffleDesktop,
   unwrapDesktopResult,
 } from "./desktop";
 import type { PublishPageDraft, Theme } from "./types";
 
-function desktop(): MarkdDesktop {
-  if (window.markd) return window.markd;
+function desktop(): RiffleDesktop {
+  if (window.riffle) return window.riffle;
   throw new DesktopError({
     kind: "DESKTOP_UNAVAILABLE",
-    message: "Markd Desktop is unavailable in this renderer.",
+    message: "Riffle Desktop is unavailable in this renderer.",
   });
 }
 
@@ -92,7 +92,7 @@ export const collectionsDesktop = {
   todos: {
     create: (text: string, tags: string[] = []) =>
       unwrapDesktopResult(desktop().collections.todos.create(text, tags)),
-    change: (id: string, change: Parameters<MarkdDesktop["collections"]["todos"]["change"]>[1]) =>
+    change: (id: string, change: Parameters<RiffleDesktop["collections"]["todos"]["change"]>[1]) =>
       unwrapDesktopResult(desktop().collections.todos.change(id, change)),
     remove: (id: string) => unwrapDesktopResult(desktop().collections.todos.remove(id)),
     clearCompleted: () => unwrapDesktopResult(desktop().collections.todos.clearCompleted()),
@@ -100,7 +100,7 @@ export const collectionsDesktop = {
   bookmarks: {
     create: (url: string, tags: string[] = []) =>
       unwrapDesktopResult(desktop().collections.bookmarks.create(url, tags)),
-    change: (id: string, change: Parameters<MarkdDesktop["collections"]["bookmarks"]["change"]>[1]) =>
+    change: (id: string, change: Parameters<RiffleDesktop["collections"]["bookmarks"]["change"]>[1]) =>
       unwrapDesktopResult(desktop().collections.bookmarks.change(id, change)),
     fetchMetadata: (id: string) =>
       unwrapDesktopResult(desktop().collections.bookmarks.fetchMetadata(id)),

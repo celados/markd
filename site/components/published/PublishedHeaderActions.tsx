@@ -35,7 +35,7 @@ export function PublishedHeaderActions({ title }: { title: string }) {
         href="/download"
         className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
       >
-        Get Markd Free
+        Get Riffle Free
       </a>
     </div>
   );

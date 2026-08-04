@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { installMarkdFixture } from "./markd-fixture";
+import { installRiffleFixture } from "./riffle-fixture";
 
 test.beforeEach(async ({ page }) => {
-  await installMarkdFixture(page);
+  await installRiffleFixture(page);
   await page.goto("/");
 });
 
@@ -22,7 +22,7 @@ test("settings shortcut renders every page without runtime errors", async ({
     dialog.getByRole("button", { name: "General" }),
   ).toHaveAttribute("aria-current", "page");
 
-  for (const pageName of ["Markd Cloud", "Appearance", "Shortcuts", "General"]) {
+  for (const pageName of ["Riffle Cloud", "Appearance", "Shortcuts", "General"]) {
     await dialog.getByRole("button", { name: pageName }).click();
     await expect(
       dialog.getByRole("heading", { name: pageName, exact: true }),

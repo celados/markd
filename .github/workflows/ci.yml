@@ -16,7 +16,7 @@ concurrency:
 jobs:
   checks:
     name: Tests and typecheck
-    # fff publishes only the macOS binding Markd consumes. Fork PRs must not
+    # fff publishes only the macOS binding Riffle consumes. Fork PRs must not
     # execute arbitrary code on the persistent org runner.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64]
@@ -62,7 +62,7 @@ jobs:
 
       - name: Run Electron desktop smoke tests
         env:
-          MARKD_E2E_BACKGROUND: "1"
+          RIFFLE_E2E_BACKGROUND: "1"
         run: pnpm exec playwright test --config playwright.electron.config.ts
 
   package-macos:
@@ -121,13 +121,13 @@ jobs:
         run: pnpm run package:verify
 
       - name: Run packaged utility smoke in background
-        run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged
+        run: RIFFLE_E2E_BACKGROUND=1 pnpm run test:packaged
 
       # CI already consumes and verifies installable binaries on the runner; durable full binaries belong to the signed release workflow.
       - name: Keep Electron updater metadata
         uses: actions/upload-artifact@v7
         with:
-          name: markd-electron-updater-metadata-macos-arm64
+          name: riffle-electron-updater-metadata-macos-arm64
           path: |
             release/electron/${{ env.ELECTRON_ZIP_BLOCKMAP }}
             release/electron/${{ env.ELECTRON_MANIFEST }}

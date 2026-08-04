@@ -30,11 +30,11 @@ test("anonymous release readback verifies canonical assets and updater metadata"
   })).resolves.toMatchObject({
     version: "0.2.0",
     latestTag: "v0.2.0",
-    primaryArtifact: "Markd-0.2.0-mac-arm64.zip",
+    primaryArtifact: "Riffle-0.2.0-mac-arm64.zip",
     assets: {
-      "Markd-0.2.0-mac-arm64.dmg": { size: expect.any(Number), sha512: expect.any(String) },
-      "Markd-0.2.0-mac-arm64.zip": { size: expect.any(Number), sha512: expect.any(String) },
-      "Markd-0.2.0-mac-arm64.zip.blockmap": {
+      "Riffle-0.2.0-mac-arm64.dmg": { size: expect.any(Number), sha512: expect.any(String) },
+      "Riffle-0.2.0-mac-arm64.zip": { size: expect.any(Number), sha512: expect.any(String) },
+      "Riffle-0.2.0-mac-arm64.zip.blockmap": {
         size: expect.any(Number),
         sha512: expect.any(String),
       },
@@ -45,7 +45,7 @@ test("anonymous release readback verifies canonical assets and updater metadata"
 
 test("anonymous release readback fails closed on missing or changed assets", async () => {
   const missing = await releaseFixture();
-  missing.files.delete("Markd-0.2.0-mac-arm64.dmg");
+  missing.files.delete("Riffle-0.2.0-mac-arm64.dmg");
   await expect(verifyRemoteRelease({
     outputDir: missing.outputDir,
     expectedVersion: "0.2.0",
@@ -53,7 +53,7 @@ test("anonymous release readback fails closed on missing or changed assets", asy
   })).rejects.toThrow(/exactly the canonical assets/u);
 
   const changed = await releaseFixture();
-  changed.files.set("Markd-0.2.0-mac-arm64.zip", Buffer.from("changed remote ZIP"));
+  changed.files.set("Riffle-0.2.0-mac-arm64.zip", Buffer.from("changed remote ZIP"));
   await expect(verifyRemoteRelease({
     outputDir: changed.outputDir,
     expectedVersion: "0.2.0",
@@ -61,7 +61,7 @@ test("anonymous release readback fails closed on missing or changed assets", asy
   })).rejects.toThrow(/size does not match|SHA-512 does not match/u);
 
   const extra = await releaseFixture();
-  extra.files.set("Markd-0.1.9-mac-arm64.zip", Buffer.from("stale"));
+  extra.files.set("Riffle-0.1.9-mac-arm64.zip", Buffer.from("stale"));
   await expect(verifyRemoteRelease({
     outputDir: extra.outputDir,
     expectedVersion: "0.2.0",
@@ -79,7 +79,7 @@ test("anonymous release readback requires latest to resolve to the published sta
 });
 
 async function releaseFixture() {
-  const outputDir = await mkdtemp(join(tmpdir(), "markd-remote-release-"));
+  const outputDir = await mkdtemp(join(tmpdir(), "riffle-remote-release-"));
   scratch.push(outputDir);
   const names = electronArtifactNames("0.2.0", "arm64");
   const zip = Buffer.from("signed Electron ZIP fixture");

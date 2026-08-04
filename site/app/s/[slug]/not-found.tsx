@@ -6,7 +6,7 @@ export default function PublishedNoteNotFound() {
       <div className="w-full max-w-md text-center">
         <a
           href="/"
-          aria-label="Markd home"
+          aria-label="Riffle home"
           className="inline-flex rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
         >
           <Wordmark size={22} />
@@ -24,7 +24,7 @@ export default function PublishedNoteNotFound() {
           href="/"
           className="mt-9 inline-flex h-10 items-center rounded-lg bg-primary px-5 text-[13px] font-medium text-primary-foreground transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground active:scale-[0.97]"
         >
-          Visit Markd
+          Visit Riffle
         </a>
       </div>
     </main>

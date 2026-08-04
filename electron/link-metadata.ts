@@ -82,7 +82,7 @@ export async function fetchLinkMetadata(
       const addresses = await assertPublicDestination(current, resolveHostname, signal);
       transport.bindApprovedDestination(current.hostname, addresses);
       const response = await transport.fetch(current, {
-        headers: { "user-agent": "Mozilla/5.0 (Macintosh) Markd/0.2" },
+        headers: { "user-agent": "Mozilla/5.0 (Macintosh) Riffle/0.2" },
         redirect: "manual",
         signal,
       });

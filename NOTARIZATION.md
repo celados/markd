@@ -2,14 +2,14 @@
 type: Playbook
 title: Electron macOS release
 description: Build, sign, notarize, verify, and publish the macOS arm64 Electron application.
-when: Preparing or diagnosing a Markd macOS release.
+when: Preparing or diagnosing a Riffle macOS release.
 status: active
 generated: { by: codex/gpt-5, at: 2026-08-03T20:45:00+08:00 }
 ---
 
 # Release boundary
 
-Markd publishes one desktop target: Electron on macOS arm64. The release path does not invoke Tauri, Rust
+Riffle publishes one desktop target: Electron on macOS arm64. The release path does not invoke Tauri, Rust
 bundling, minisign, a custom update server, Linux builders, or Intel builders.
 
 The executable contract is split across three files:
@@ -38,7 +38,7 @@ Both `.npmrc.tpl` and the rendered `.npmrc` are local-only and gitignored: the t
 locator, while the rendered file contains the registry credential. Neither may be committed.
 
 `package:test` builds an unsigned local macOS arm64 DMG and ZIP, checks the exact ASAR-unpacked fff/ffi native
-payload, validates `latest-mac.yml`, and launches the packaged app with `MARKD_E2E_BACKGROUND=1`. The packaged
+payload, validates `latest-mac.yml`, and launches the packaged app with `RIFFLE_E2E_BACKGROUND=1`. The packaged
 journeys cover Settings, Vault selection, editor-to-disk writes, fff search/watch, assets, Quick Capture, and
 the empty-Untitled Trash regression without taking foreground focus.
 
@@ -59,13 +59,13 @@ The workflow accepts these secrets only at their owning steps:
 The canonical release payload for version `<version>` is exactly:
 
 ```text
-Markd-<version>-mac-arm64.dmg
-Markd-<version>-mac-arm64.zip
-Markd-<version>-mac-arm64.zip.blockmap
+Riffle-<version>-mac-arm64.dmg
+Riffle-<version>-mac-arm64.zip
+Riffle-<version>-mac-arm64.zip.blockmap
 latest-mac.yml
 ```
 
-The workflow mounts the DMG read-only, copies `Markd.app` into a unique isolated `Applications` directory, and
+The workflow mounts the DMG read-only, copies `Riffle.app` into a unique isolated `Applications` directory, and
 then verifies signing, stapling, Gatekeeper, bundle identity, version, and the background packaged journeys on
 that installed copy. It also builds a temporary signed Electron `0.1.10` app and proves that the exact final ZIP
 replaces and relaunches it through Squirrel/ShipIt. The public Tauri `0.1.9` build is a different runtime and is

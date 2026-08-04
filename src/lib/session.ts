@@ -21,7 +21,7 @@ interface Session {
   sidebarWidth?: number;
 }
 
-const storageKey = (root: string) => `markd:session:${root}`;
+const storageKey = (root: string) => `riffle:session:${root}`;
 
 function writeSession(root: string) {
   const vault = useVault.getState();

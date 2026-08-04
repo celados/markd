@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, normalize } from "node:path";
+import { basename, dirname, join, normalize } from "node:path";
 
+// v0.2.6 writes this handoff before ShipIt replaces the bundle. The target
+// must read that exact file to prove the released Markd -> Riffle upgrade.
 const stateFileName = ".markd-release-e2e.json";
-const rootPrefix = "markd-release-e2e-";
+const rootPrefix = "riffle-release-e2e-";
 const maximumLifetimeMs = 15 * 60_000;
 
 export type ReleaseE2eState = {
@@ -21,11 +23,11 @@ export function prepareReleaseE2eState(
   executable: string,
   now = Date.now(),
 ): ReleaseE2eState | null {
-  if (env.MARKD_E2E_BACKGROUND !== "1") return null;
-  const expectedVersion = env.MARKD_E2E_EXPECTED_VERSION;
-  const markerPath = env.MARKD_E2E_RELEASE_MARKER;
-  const configDir = env.MARKD_TEST_CONFIG_DIR;
-  const stateRoot = env.MARKD_E2E_STATE_ROOT;
+  if (env.RIFFLE_E2E_BACKGROUND !== "1") return null;
+  const expectedVersion = env.RIFFLE_E2E_EXPECTED_VERSION;
+  const markerPath = env.RIFFLE_E2E_RELEASE_MARKER;
+  const configDir = env.RIFFLE_TEST_CONFIG_DIR;
+  const stateRoot = env.RIFFLE_E2E_STATE_ROOT;
   if (!expectedVersion || !markerPath || !configDir || !stateRoot) return null;
   const location = releaseE2eLocation(executable);
   if (
@@ -65,7 +67,7 @@ export function readReleaseE2eState(
   if (!isReleaseE2eState(input)) return null;
   if (
     normalize(input.installedApp) !== normalize(location.app) ||
-    normalize(input.executable) !== normalize(executable) ||
+    !isExpectedExecutable(input.executable, executable, location.app) ||
     normalize(dirname(input.markerPath)) !== normalize(location.root) ||
     normalize(input.configDir) !== normalize(join(location.root, "config")) ||
     input.expiresAt <= now ||
@@ -74,6 +76,17 @@ export function readReleaseE2eState(
     return null;
   }
   return input;
+}
+
+function isExpectedExecutable(stored: string, current: string, app: string): boolean {
+  if (normalize(stored) === normalize(current)) return true;
+  const executableRoot = join(app, "Contents", "MacOS");
+  return (
+    normalize(dirname(stored)) === normalize(executableRoot) &&
+    normalize(dirname(current)) === normalize(executableRoot) &&
+    basename(stored) === "Markd" &&
+    basename(current) === "Riffle"
+  );
 }
 
 export function consumeReleaseE2eState(

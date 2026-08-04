@@ -8,10 +8,10 @@ import { absoluteUrl, jsonLd } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Markdown notes guides",
   description:
-    "Practical guides to local-first notes, plain-text Markdown, Markd on macOS, and working with an existing vault.",
+    "Practical guides to local-first notes, plain-text Markdown, Riffle on macOS, and working with an existing vault.",
   alternates: { canonical: "/guides" },
   openGraph: {
-    title: "Markdown notes guides | Markd",
+    title: "Markdown notes guides | Riffle",
     description:
       "Practical guidance for building a portable, local-first Markdown notes workflow.",
     url: "/guides",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 const JSON_LD = {
   "@context": "https://schema.org",
   "@type": "CollectionPage",
-  name: "Markd Markdown notes guides",
+  name: "Riffle Markdown notes guides",
   description: metadata.description,
   url: absoluteUrl("/guides"),
   mainEntity: {

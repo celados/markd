@@ -87,7 +87,7 @@ export function Footer() {
               <div className="flex items-center gap-2.5">
                 <LogoMark size={24} />
                 <span className="text-[16px] font-semibold tracking-tight text-foreground">
-                  Markd
+                  Riffle
                 </span>
               </div>
               <p className="mt-4 text-[13.5px] leading-6 text-muted-foreground">
@@ -118,7 +118,7 @@ export function Footer() {
             </div>
           </div>
           <div className="mt-12 flex flex-col items-start justify-between gap-2 border-t border-border pt-6 font-mono text-[11px] uppercase tracking-[0.12em] text-faint sm:flex-row sm:items-center">
-            <span>© Markd · v{VERSION}</span>
+            <span>© Riffle · v{VERSION}</span>
             <span>Built local-first · Open source</span>
           </div>
         </div>

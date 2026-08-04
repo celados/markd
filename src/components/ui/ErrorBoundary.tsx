@@ -8,7 +8,7 @@ export function ErrorBoundary({ children }: Props) {
   return (
     <OctaneErrorBoundary
       fallback={(error: unknown) => {
-        console.error("Markd crashed:", error);
+        console.error("Riffle crashed:", error);
         const message = error instanceof Error ? error.message : String(error);
     return (
       <div className="flex h-full flex-col items-center justify-center gap-5 bg-bg px-8 text-center">
@@ -17,7 +17,7 @@ export function ErrorBoundary({ children }: Props) {
             Something went wrong
           </p>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-            Markd hit an unexpected error. Your notes are safe on disk — reloading
+            Riffle hit an unexpected error. Your notes are safe on disk — reloading
             usually fixes it.
           </p>
           {message && (

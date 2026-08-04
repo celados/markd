@@ -5,8 +5,8 @@ import { Nav } from "@/components/Nav";
 import { AnalyticsEvent } from "@/components/analytics/AnalyticsEvent";
 
 export const metadata: Metadata = {
-  title: "Welcome to Markd Cloud",
-  description: "Your Markd Cloud payment was completed successfully.",
+  title: "Welcome to Riffle Cloud",
+  description: "Your Riffle Cloud payment was completed successfully.",
   robots: { index: false, follow: false },
 };
 
@@ -44,7 +44,7 @@ export default async function CheckoutSuccessPage({
           <p className="mx-auto mt-4 max-w-md text-pretty text-[14px] leading-6 text-muted-foreground">
             {failed
               ? "Return to pricing whenever you’re ready to try again."
-              : "Your Markd Cloud subscription is being activated. Return to Markd and your account will refresh automatically."}
+              : "Your Riffle Cloud subscription is being activated. Return to Riffle and your account will refresh automatically."}
           </p>
 
           {failed ? (

@@ -1,27 +1,27 @@
-# Markd
+# Riffle
 
 **Local-first notes for people who write.**
 
 > [!NOTE]
-> This is [Celados' Octane-based fork](https://github.com/celados/markd) of
+> Riffle is [Celados' independent Octane/Electron continuation](https://github.com/celados/riffle) of
 > [starc007/markd](https://github.com/starc007/markd). Electron is the only desktop runtime and release path.
 
-Markd is a fast notes app for macOS, built for people who care about speed, privacy, and ownership.
+Riffle is a fast notes app for macOS, built for people who care about speed, privacy, and ownership.
 
 No accounts.
 No cloud.
 No sync (for now).
 
-Your notes live on your disk as plain `.md` files. Markd simply makes writing and finding them fast.
+Your notes live on your disk as plain `.md` files. Riffle simply makes writing and finding them fast.
 
 ---
 
 ## Installing on macOS
 
 Download the latest `.dmg` from the
-[Celados Markd releases](https://github.com/celados/markd/releases/latest) and drag Markd to Applications.
+[Celados Riffle releases](https://github.com/celados/riffle/releases/latest) and drag Riffle to Applications.
 
-Markd releases are Developer ID signed and notarized by Apple before distribution.
+Riffle releases are Developer ID signed and notarized by Apple before distribution.
 
 ---
 
@@ -50,7 +50,7 @@ Pick any folder on disk as your vault:
 ```
 
 Notes are addressed by path, never by ID. Deletes go to the OS trash. Edit notes externally with vim, VS Code,
-or another editor. Markd picks up changes through its live Vault Index.
+or another editor. Riffle picks up changes through its live Vault Index.
 
 ---
 
@@ -101,5 +101,5 @@ Sync, encryption, and publishing may be added later without compromising local-f
 
 ---
 
-**Markd**
+**Riffle**
 _Write at the speed of thought._

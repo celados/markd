@@ -220,10 +220,10 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
               Sign in to publish
             </h3>
             <p className="mx-auto mt-1.5 max-w-[330px] text-[11.5px] leading-5 text-muted">
-              Sign in to publish this note and its linked pages with Markd Cloud.
+              Sign in to publish this note and its linked pages with Riffle Cloud.
             </p>
             <p className="mt-2 text-[10.5px] text-faint">
-              Publishing requires Markd Cloud.
+              Publishing requires Riffle Cloud.
             </p>
             @if (error) {
               <div role="alert" className="mt-4 rounded-lg border border-danger/20 bg-danger/6 px-3 py-2.5 text-[11.5px] text-danger">
@@ -253,10 +253,10 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
               <Globe2 size={17} strokeWidth={1.8} />
             </div>
             <h3 className="mt-4 text-[13px] font-semibold text-ink">
-              Markd Cloud required
+              Riffle Cloud required
             </h3>
             <p className="mx-auto mt-1.5 max-w-[330px] text-[11.5px] leading-5 text-muted">
-              Public sites, linked pages, and image hosting are included with Markd Cloud.
+              Public sites, linked pages, and image hosting are included with Riffle Cloud.
             </p>
             <div className="mt-5 flex justify-center gap-2 border-t border-line-soft pt-4">
               <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
@@ -339,7 +339,7 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
                 update the published version.
                 @if (account) {
                   <p className="mt-2 text-[10.5px] text-faint">
-                    {`Markd Cloud · ${account.email}`}
+                    {`Riffle Cloud · ${account.email}`}
                   </p>
                 }
               </div>
@@ -435,7 +435,7 @@ export function PublishNoteModal(props: PublishNoteModalProps) @{
 
 function notifyPublishStatus(rel: string, published: boolean) {
   window.dispatchEvent(
-    new CustomEvent("markd:publish-status", {
+    new CustomEvent("riffle:publish-status", {
       detail: { rel, published },
     }),
   );

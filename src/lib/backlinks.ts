@@ -1,5 +1,5 @@
-export const BACKLINKS_CHANGED = "markd:backlinks-changed";
-export const NOTES_REWRITTEN = "markd:notes-rewritten";
+export const BACKLINKS_CHANGED = "riffle:backlinks-changed";
+export const NOTES_REWRITTEN = "riffle:notes-rewritten";
 
 export function notifyBacklinksChanged() {
   window.dispatchEvent(new Event(BACKLINKS_CHANGED));

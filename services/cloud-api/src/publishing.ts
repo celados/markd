@@ -324,7 +324,7 @@ export async function getPublicPage(env: Env, slug: string, pagePath = ""): Prom
     200,
     {
       "cache-control": "public, max-age=60, stale-while-revalidate=300",
-      "cache-tag": `markd-site-${resolved.site.id}`,
+      "cache-tag": `riffle-site-${resolved.site.id}`,
     },
   );
 }
@@ -388,7 +388,7 @@ function assetResponse(
       ...(size ? { "content-length": String(size) } : {}),
       "cache-control": "public, max-age=31536000, immutable",
       etag,
-      "cache-tag": `markd-site-${siteId}`,
+      "cache-tag": `riffle-site-${siteId}`,
       "x-content-type-options": "nosniff",
     },
   });
@@ -600,7 +600,7 @@ async function purgeSiteCache(env: Env, siteId: string, slug: string) {
         authorization: `Bearer ${env.CACHE_PURGE_TOKEN}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ tags: [`markd-site-${siteId}`, `markd-slug-${slug}`] }),
+      body: JSON.stringify({ tags: [`riffle-site-${siteId}`, `riffle-slug-${slug}`] }),
     },
   );
   if (!response.ok) console.error("Published site cache purge failed", response.status);
@@ -628,7 +628,7 @@ function requirePaid(plan: string, env: Env): void {
 
 export class PaidPublishingError extends Error {
   constructor(readonly upgradeUrl: string) {
-    super("Publishing is included with Markd Cloud. Upgrade to publish this site.");
+    super("Publishing is included with Riffle Cloud. Upgrade to publish this site.");
   }
 }
 

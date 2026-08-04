@@ -382,7 +382,7 @@ export class CloudEngine {
     await this.#expectSuccess(response);
     const url = await this.#json(response, billingUrlSchema).then((value) => value.url);
     if (!this.#trustedUrl(url)) {
-      throw cloudError("CLOUD_UNTRUSTED_URL", "Markd Cloud returned an untrusted external URL.");
+      throw cloudError("CLOUD_UNTRUSTED_URL", "Riffle Cloud returned an untrusted external URL.");
     }
     return url;
   }
@@ -394,7 +394,7 @@ export class CloudEngine {
     if (!this.#config.ok) {
       throw cloudError("CLOUD_OWNERSHIP_UNVERIFIED", this.#config.message);
     }
-    const headers = new Headers({ "user-agent": "Markd Electron" });
+    const headers = new Headers({ "user-agent": "Riffle Electron" });
     if (options.token) headers.set("authorization", `Bearer ${options.token}`);
     if (options.json !== undefined) headers.set("content-type", "application/json");
     return this.#fetch(`${this.#config.value.apiBase}${path}`, {
@@ -423,7 +423,7 @@ export class CloudEngine {
     const code = typeof record.code === "string" ? record.code : "cloud_remote_error";
     const message = typeof record.message === "string"
       ? record.message
-      : `Markd Cloud returned ${response.status}.`;
+      : `Riffle Cloud returned ${response.status}.`;
     const kind = response.status === 401
       ? "cloud_login_required"
       : response.status === 402
@@ -437,18 +437,18 @@ export class CloudEngine {
     try {
       input = await response.json();
     } catch {
-      throw cloudError("CLOUD_INVALID_RESPONSE", "Markd Cloud returned invalid JSON.");
+      throw cloudError("CLOUD_INVALID_RESPONSE", "Riffle Cloud returned invalid JSON.");
     }
     const parsed = v.safeParse(schema, input);
     if (!parsed.success) {
-      throw cloudError("CLOUD_INVALID_RESPONSE", "Markd Cloud returned an invalid response.");
+      throw cloudError("CLOUD_INVALID_RESPONSE", "Riffle Cloud returned an invalid response.");
     }
     return parsed.output;
   }
 
   async #accessToken(): Promise<string> {
     const session = await this.#loadSession();
-    if (!session) throw cloudError("cloud_login_required", "Sign in to Markd before publishing a Note.");
+    if (!session) throw cloudError("cloud_login_required", "Sign in to Riffle before publishing a Note.");
     return session.accessToken;
   }
 
@@ -600,7 +600,7 @@ async function rewriteAssets(
     replacements.push({
       start: index + hrefOffset,
       end: index + hrefOffset + href.length,
-      value: `markd-asset:${hash}`,
+      value: `riffle-asset:${hash}`,
     });
   }
   let result = markdown;
@@ -621,7 +621,7 @@ function hashBytes(bytes: Uint8Array): string {
 function networkFailure(error: unknown): never {
   throw cloudError(
     "network",
-    error instanceof Error ? error.message : "Markd Cloud could not be reached.",
+    error instanceof Error ? error.message : "Riffle Cloud could not be reached.",
   );
 }
 

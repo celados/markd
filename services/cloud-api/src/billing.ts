@@ -72,7 +72,7 @@ export async function beginCheckout(request: Request, env: Env): Promise<Respons
        RETURNING user_id, (SELECT email FROM users WHERE id = user_id) AS email`,
     ).bind(usedAt, tokenHash, usedAt).first<HandoffRow>();
     if (!handoff) {
-      throw new BillingError(401, "billing_link_expired", "Open pricing from Markd again to continue.");
+      throw new BillingError(401, "billing_link_expired", "Open pricing from Riffle again to continue.");
     }
     user = { id: handoff.user_id, email: handoff.email, plan: "free" };
     consumedHandoff = { tokenHash, usedAt };
@@ -121,7 +121,7 @@ export async function dodoWebhook(
     throw cause;
   }
   if (verified.payload.business_id !== env.DODO_BUSINESS_ID) {
-    throw new BillingError(400, "invalid_webhook", "The webhook business does not match Markd.");
+    throw new BillingError(400, "invalid_webhook", "The webhook business does not match Riffle.");
   }
 
   const duplicate = await env.DB.prepare("SELECT 1 FROM billing_webhooks WHERE id = ?")
@@ -163,7 +163,7 @@ async function syncSubscription(
   const interval = productInterval(env, subscription.product_id);
   if (!interval) return;
   const userId = await subscriptionUserId(env, ctx, subscription);
-  if (!userId) throw new BillingError(409, "billing_user_missing", "The subscription has no Markd user.");
+  if (!userId) throw new BillingError(409, "billing_user_missing", "The subscription has no Riffle user.");
 
   const providerUpdatedAt = Date.parse(eventTimestamp);
   const periodEnd = subscription.next_billing_date

@@ -165,7 +165,7 @@ describe("Collections Engine", () => {
 });
 
 async function createVault(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "markd-collections-"));
+  const root = await mkdtemp(join(tmpdir(), "riffle-collections-"));
   scratchPaths.push(root);
   await mkdir(join(root, ".markd"));
   return root;

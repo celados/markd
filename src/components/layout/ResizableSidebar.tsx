@@ -81,7 +81,7 @@ export function ResizableSidebar({
         <div
           role="separator"
           aria-label="Resize sidebar"
-          aria-controls="markd-sidebar"
+          aria-controls="riffle-sidebar"
           aria-orientation="vertical"
           aria-valuemin={SIDEBAR_MIN_WIDTH}
           aria-valuemax={SIDEBAR_MAX_WIDTH}

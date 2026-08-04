@@ -11,7 +11,7 @@ afterEach(() => {
 describe("script direct-invocation guards", () => {
   test.each([
     ["missing", null],
-    ["nonexistent", join(tmpdir(), "markd-nonexistent-script-entry")],
+    ["nonexistent", join(tmpdir(), "riffle-nonexistent-script-entry")],
     ["non-file", process.cwd()],
   ])("imports the package script graph when argv[1] is %s", async (name, argv1) => {
     process.argv.splice(0, process.argv.length, originalArgv[0]);

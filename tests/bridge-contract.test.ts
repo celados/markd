@@ -360,7 +360,7 @@ describe("Electron bridge contract", () => {
   test("keeps expected failures as tagged data until the renderer boundary", async () => {
     const data = v.parse(desktopErrorSchema, {
       kind: "ENGINE_UNAVAILABLE",
-      message: "Markd Engine is unavailable.",
+      message: "Riffle Engine is unavailable.",
       details: { localSignedOut: true },
     });
 
@@ -368,7 +368,7 @@ describe("Electron bridge contract", () => {
       expect.objectContaining({
         name: "DesktopError",
         kind: "ENGINE_UNAVAILABLE",
-        message: "Markd Engine is unavailable.",
+        message: "Riffle Engine is unavailable.",
         details: { localSignedOut: true },
       }),
     );
