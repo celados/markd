@@ -1,6 +1,6 @@
 {
   "name": "markd-site",
-  "version": "0.1.9",
+  "version": "0.2.5",
   "private": true,
   "type": "module",
   "scripts": {
