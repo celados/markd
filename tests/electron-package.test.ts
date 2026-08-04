@@ -243,6 +243,47 @@ test("release workflow removes every exact draft transaction readback target", a
   expect(workflow).not.toContain("markd-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$name");
 });
 
+test("release workflow preflights P12 signing and verifies the signed DMG before notarization", async () => {
+  const [workflow, configText] = await Promise.all([
+    readFile(join(process.cwd(), ".github", "workflows", "release-macos.yml"), "utf8"),
+    readFile(join(process.cwd(), "electron-builder.yml"), "utf8"),
+  ]);
+  const config = parse(configText) as { dmg?: { sign?: boolean } };
+  expect(config.dmg?.sign).toBe(true);
+
+  const preflight = workflow.indexOf("- name: Preflight Developer ID signing identity");
+  const cleanup = workflow.indexOf("- name: Remove signing identity preflight");
+  const install = workflow.indexOf("- name: Install dependencies");
+  const build = workflow.indexOf("- name: Build, sign, and notarize Electron artifacts");
+  const dmgVerification = workflow.indexOf('codesign --verify --strict --verbose=2 "$dmg"');
+  const dmgNotarization = workflow.indexOf('xcrun notarytool submit "$dmg"');
+  expect([preflight, cleanup, install, build, dmgVerification, dmgNotarization])
+    .not.toContain(-1);
+  expect(preflight).toBeLessThan(cleanup);
+  expect(cleanup).toBeLessThan(install);
+  expect(install).toBeLessThan(build);
+  expect(build).toBeLessThan(dmgVerification);
+  expect(dmgVerification).toBeLessThan(dmgNotarization);
+
+  const preflightBlock = workflow.slice(preflight, cleanup);
+  expect(preflightBlock).toContain("security import \"$p12\"");
+  expect(preflightBlock).toContain("security find-identity -v -p codesigning");
+  expect(preflightBlock).toContain('security find-key -t private "$keychain"');
+  expect(preflightBlock).not.toContain("security find-key -t private -s");
+  expect(preflightBlock).toContain("codesign --force --timestamp=none");
+  const cleanupBlock = workflow.slice(cleanup, install);
+  expect(cleanupBlock).toContain("if: always()");
+  expect(cleanupBlock).toContain("failed=0");
+  expect(cleanupBlock).toContain('security delete-keychain "$keychain" || failed=1');
+  expect(cleanupBlock).toContain('rm -f "$p12" || failed=1');
+  expect(cleanupBlock).toContain('rm -f "$probe" || failed=1');
+  expect(cleanupBlock).toContain('test ! -e "$keychain" || failed=1');
+  expect(cleanupBlock).toContain('test ! -e "$p12" || failed=1');
+  expect(cleanupBlock).toContain('test ! -e "$probe" || failed=1');
+  expect(cleanupBlock).toContain('exit "$failed"');
+  expect(cleanupBlock).not.toMatch(/rm -rf [^\n]*\*/u);
+});
+
 async function packageFixture(options: {
   includeFff: boolean;
   includeFfi: boolean;
