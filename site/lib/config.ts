@@ -1,4 +1,4 @@
-export const VERSION = "0.2.5";
+export const VERSION = "0.2.6";
 export const GITHUB_REPO = "celados/markd";
 export const GITHUB = `https://github.com/${GITHUB_REPO}`;
 export const RELEASE = `${GITHUB}/releases/tag/v${VERSION}`;

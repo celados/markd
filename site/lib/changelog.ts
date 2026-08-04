@@ -15,6 +15,20 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: VERSION,
     date: "2026-08-04",
     displayDate: "August 4, 2026",
+    title: "First-note onboarding fixed",
+    summary:
+      "Opening an empty Vault now keeps its file tree ready for the first note.",
+    changes: [
+      "Show Untitled.md in the sidebar immediately after creating the first note in an empty Vault.",
+      "Keep the native file tree mounted while the empty-state message is removed.",
+      "Verify the onboarding path in the real Electron app before publishing.",
+    ],
+    releaseUrl: RELEASE,
+  },
+  {
+    version: "0.2.5",
+    date: "2026-08-04",
+    displayDate: "August 4, 2026",
     title: "An Electron-native desktop",
     summary:
       "Markd now ships on a mature Electron foundation with one coherent local vault index.",
@@ -24,7 +38,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Install a Developer ID signed and Apple-notarized DMG built for Apple Silicon.",
       "Verify the installed app and signed updater through background desktop journeys before publication.",
     ],
-    releaseUrl: RELEASE,
+    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.2.5",
   },
   {
     version: "0.1.9",
