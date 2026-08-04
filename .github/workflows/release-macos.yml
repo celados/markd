@@ -111,6 +111,64 @@ jobs:
             sudo -n security import "$intermediate" -k /Library/Keychains/System.keychain >/dev/null
           fi
 
+      - name: Preflight Developer ID signing identity
+        env:
+          CSC_LINK: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          keychain="$RUNNER_TEMP/markd-signing-preflight-$run_key.keychain-db"
+          p12="$RUNNER_TEMP/markd-signing-preflight-$run_key.p12"
+          probe="$RUNNER_TEMP/markd-signing-preflight-$run_key-probe"
+          test ! -e "$keychain"
+          test ! -e "$p12"
+          test ! -e "$probe"
+          umask 077
+          printf '%s' "$CSC_LINK" | /usr/bin/base64 -D > "$p12"
+          test -s "$p12"
+          keychain_password="$(openssl rand -hex 32)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 300 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$p12" \
+            -k "$keychain" \
+            -P "$CSC_KEY_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security >/dev/null
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain" >/dev/null
+          identity_line="$(security find-identity -v -p codesigning "$keychain" | \
+            awk '/Developer ID Application:/ { print; exit }')"
+          test -n "$identity_line"
+          identity_hash="$(printf '%s\n' "$identity_line" | awk '{ print $2 }')"
+          test "$(printf '%s' "$identity_hash" | wc -c | tr -d ' ')" = "40"
+          security find-key -t private "$keychain" >/dev/null
+          ditto /usr/bin/true "$probe"
+          codesign --force --timestamp=none --sign "$identity_hash" --keychain "$keychain" "$probe"
+          codesign --verify --strict --verbose=2 "$probe"
+
+      - name: Remove signing identity preflight
+        if: always()
+        run: |
+          run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          keychain="$RUNNER_TEMP/markd-signing-preflight-$run_key.keychain-db"
+          p12="$RUNNER_TEMP/markd-signing-preflight-$run_key.p12"
+          probe="$RUNNER_TEMP/markd-signing-preflight-$run_key-probe"
+          failed=0
+          if [ -e "$keychain" ]; then
+            security delete-keychain "$keychain" || failed=1
+          fi
+          # A keychain failure must never strand the raw signing credential.
+          rm -f "$p12" || failed=1
+          rm -f "$probe" || failed=1
+          test ! -e "$keychain" || failed=1
+          test ! -e "$p12" || failed=1
+          test ! -e "$probe" || failed=1
+          exit "$failed"
+
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -137,6 +195,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           dmg="release/electron/$ELECTRON_DMG"
+          codesign --verify --strict --verbose=2 "$dmg"
           xcrun notarytool submit "$dmg" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \

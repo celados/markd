@@ -46,6 +46,9 @@ mac:
       arch: arm64
 artifactName: Markd-${version}-${os}-${arch}.${ext}
 dmg:
+  # electron-builder reuses its Developer ID identity to sign the container
+  # before artifact completion; Gatekeeper's DMG assessment requires that edge.
+  sign: true
   # The notarized DMG is an installer, not an updater payload. Stapling changes
   # its bytes, so publishing pre-staple update metadata would be incorrect.
   writeUpdateInfo: false
