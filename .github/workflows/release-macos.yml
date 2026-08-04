@@ -118,11 +118,18 @@ jobs:
         run: |
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           keychain="$RUNNER_TEMP/markd-signing-preflight-$run_key.keychain-db"
+          keychain_list="$RUNNER_TEMP/markd-signing-preflight-$run_key-keychains.txt"
+          keychain_list_tmp="$keychain_list.tmp"
           p12="$RUNNER_TEMP/markd-signing-preflight-$run_key.p12"
           probe="$RUNNER_TEMP/markd-signing-preflight-$run_key-probe"
           test ! -e "$keychain"
+          test ! -e "$keychain_list"
+          test ! -e "$keychain_list_tmp"
           test ! -e "$p12"
           test ! -e "$probe"
+          security list-keychains -d user > "$keychain_list_tmp"
+          # Publish only a successful snapshot; an empty search list is still valid state.
+          mv "$keychain_list_tmp" "$keychain_list"
           umask 077
           printf '%s' "$CSC_LINK" | /usr/bin/base64 -D > "$p12"
           test -s "$p12"
@@ -146,8 +153,14 @@ jobs:
           identity_hash="$(printf '%s\n' "$identity_line" | awk '{ print $2 }')"
           test "$(printf '%s' "$identity_hash" | wc -c | tr -d ' ')" = "40"
           security find-key -t private "$keychain" >/dev/null
+          existing_keychains=()
+          while IFS= read -r line; do
+            existing_keychains+=("${line//\"/}")
+          done < "$keychain_list"
+          # codesign resolves fingerprint identities through the user search list on this runner.
+          security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
           cp /usr/bin/true "$probe"
-          codesign --force --timestamp=none --sign "$identity_hash" --keychain "$keychain" "$probe"
+          codesign --force --timestamp=none --sign "$identity_hash" "$probe"
           codesign --verify --strict --verbose=2 "$probe"
 
       - name: Remove signing identity preflight
@@ -155,18 +168,31 @@ jobs:
         run: |
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           keychain="$RUNNER_TEMP/markd-signing-preflight-$run_key.keychain-db"
+          keychain_list="$RUNNER_TEMP/markd-signing-preflight-$run_key-keychains.txt"
+          keychain_list_tmp="$keychain_list.tmp"
           p12="$RUNNER_TEMP/markd-signing-preflight-$run_key.p12"
           probe="$RUNNER_TEMP/markd-signing-preflight-$run_key-probe"
           failed=0
+          if [ -f "$keychain_list" ]; then
+            previous_keychains=()
+            while IFS= read -r line; do
+              previous_keychains+=("${line//\"/}")
+            done < "$keychain_list"
+            security list-keychains -d user -s "${previous_keychains[@]}" || failed=1
+          fi
           if [ -e "$keychain" ]; then
             security delete-keychain "$keychain" || failed=1
           fi
           # A keychain failure must never strand the raw signing credential.
           rm -f "$p12" || failed=1
           rm -f "$probe" || failed=1
+          rm -f "$keychain_list_tmp" || failed=1
+          rm -f "$keychain_list" || failed=1
           test ! -e "$keychain" || failed=1
           test ! -e "$p12" || failed=1
           test ! -e "$probe" || failed=1
+          test ! -e "$keychain_list_tmp" || failed=1
+          test ! -e "$keychain_list" || failed=1
           exit "$failed"
 
       - name: Install dependencies

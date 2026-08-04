@@ -2,7 +2,7 @@
   "name": "Markd",
   "private": true,
   "packageManager": "pnpm@11.9.0",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A fast, local-first Markdown notes app",
   "author": "Ethan Huo <huodong.work@gmail.com>",
   "license": "MIT",

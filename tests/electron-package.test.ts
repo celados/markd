@@ -266,22 +266,55 @@ test("release workflow preflights P12 signing and verifies the signed DMG before
   expect(dmgVerification).toBeLessThan(dmgNotarization);
 
   const preflightBlock = workflow.slice(preflight, cleanup);
+  const keychainSnapshot = preflightBlock.indexOf(
+    'security list-keychains -d user > "$keychain_list_tmp"',
+  );
+  const keychainSnapshotReady = preflightBlock.indexOf(
+    'mv "$keychain_list_tmp" "$keychain_list"',
+  );
+  const keychainActivation = preflightBlock.indexOf(
+    'security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"',
+  );
+  const probeSigning = preflightBlock.indexOf(
+    'codesign --force --timestamp=none --sign "$identity_hash" "$probe"',
+  );
+  expect([keychainSnapshot, keychainSnapshotReady, keychainActivation, probeSigning])
+    .not.toContain(-1);
+  expect(keychainSnapshot).toBeLessThan(keychainSnapshotReady);
+  expect(keychainSnapshotReady).toBeLessThan(keychainActivation);
+  expect(keychainActivation).toBeLessThan(probeSigning);
+  expect(preflightBlock).not.toContain('security list-keychains -d user > "$keychain_list"');
+  expect(preflightBlock).not.toContain('test -s "$keychain_list');
   expect(preflightBlock).toContain("security import \"$p12\"");
   expect(preflightBlock).toContain("security find-identity -v -p codesigning");
   expect(preflightBlock).toContain('security find-key -t private "$keychain"');
   expect(preflightBlock).not.toContain("security find-key -t private -s");
   expect(preflightBlock).toContain('cp /usr/bin/true "$probe"');
   expect(preflightBlock).not.toContain("ditto /usr/bin/true");
-  expect(preflightBlock).toContain("codesign --force --timestamp=none");
+  expect(preflightBlock).not.toContain('--keychain "$keychain" "$probe"');
   const cleanupBlock = workflow.slice(cleanup, install);
   expect(cleanupBlock).toContain("if: always()");
   expect(cleanupBlock).toContain("failed=0");
+  expect(cleanupBlock).toContain('if [ -f "$keychain_list" ]; then');
+  expect(cleanupBlock).not.toContain('if [ -f "$keychain_list_tmp" ]; then');
+  const keychainRestore = cleanupBlock.indexOf(
+    'security list-keychains -d user -s "${previous_keychains[@]}" || failed=1',
+  );
+  const keychainDelete = cleanupBlock.indexOf(
+    'security delete-keychain "$keychain" || failed=1',
+  );
+  expect([keychainRestore, keychainDelete]).not.toContain(-1);
+  expect(keychainRestore).toBeLessThan(keychainDelete);
   expect(cleanupBlock).toContain('security delete-keychain "$keychain" || failed=1');
+  expect(cleanupBlock).toContain('rm -f "$keychain_list_tmp" || failed=1');
+  expect(cleanupBlock).toContain('rm -f "$keychain_list" || failed=1');
   expect(cleanupBlock).toContain('rm -f "$p12" || failed=1');
   expect(cleanupBlock).toContain('rm -f "$probe" || failed=1');
   expect(cleanupBlock).toContain('test ! -e "$keychain" || failed=1');
   expect(cleanupBlock).toContain('test ! -e "$p12" || failed=1');
   expect(cleanupBlock).toContain('test ! -e "$probe" || failed=1');
+  expect(cleanupBlock).toContain('test ! -e "$keychain_list_tmp" || failed=1');
+  expect(cleanupBlock).toContain('test ! -e "$keychain_list" || failed=1');
   expect(cleanupBlock).toContain('exit "$failed"');
   expect(cleanupBlock).not.toMatch(/rm -rf [^\n]*\*/u);
 });
