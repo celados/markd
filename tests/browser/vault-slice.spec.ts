@@ -114,7 +114,7 @@ test("live index changes reload clean Notes and preserve dirty drafts", async ({
 test("Vault Changes update the mounted Trees model incrementally", async ({ page }) => {
   await installVaultSliceFixture(page);
   await page.goto("/");
-  const host = page.locator("[data-markd-trees-host] > [data-note-tree]");
+  const host = page.locator("[data-markd-trees-mount] > [data-note-tree]");
   const identity = await host.evaluate((element) => {
     (element as HTMLElement).dataset.testIdentity = "mounted-once";
     return element.tagName;
