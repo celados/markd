@@ -286,10 +286,11 @@ export function TreesFileTree() {
 
   return (
     <div
-      ref={hostRef}
       className="relative min-h-0 flex-1 overflow-hidden"
       data-markd-trees-host
     >
+      {/* Octane owns the overlay sibling; Trees exclusively owns this node's children. */}
+      <div ref={hostRef} className="h-full min-h-0" data-markd-trees-mount />
       {tree.length === 0 ? (
         <p className="pointer-events-none absolute z-1 px-4 pt-3 text-[12.5px] leading-relaxed text-faint">
           No notes yet. Press <kbd className="rounded border border-line bg-bg px-1 font-mono text-[10.5px]">⌘N</kbd> to create one.

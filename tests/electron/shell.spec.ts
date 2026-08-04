@@ -12,8 +12,12 @@ import { runSecureContentJourney } from "../shared/secure-content-journey";
 const execFileAsync = promisify(execFile);
 
 test("secure shell boots with a validated semantic bridge and diagnostics", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-secure-shell-"));
+  const configDir = join(scratch, "config");
+  await mkdir(configDir);
   const application = await launchMarkd({
     env: {
+      MARKD_TEST_CONFIG_DIR: configDir,
       // Inherited upstream-looking variables must never open this fork's
       // production Cloud gate without the source-level test-mode capability.
       MARKD_CLOUD_OWNERSHIP: "verified",
@@ -101,6 +105,7 @@ test("secure shell boots with a validated semantic bridge and diagnostics", asyn
     expect(pageErrors).toEqual([]);
   } finally {
     await application.close();
+    await rm(scratch, { recursive: true, force: true });
   }
 });
 
@@ -416,6 +421,42 @@ function respondJson(
   response.writeHead(status, { "content-type": "application/json" });
   response.end(JSON.stringify(value));
 }
+
+test("onboarding can create the first Note in a logically empty Vault", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-onboarding-vault-"));
+  const configDir = join(scratch, "config");
+  const vault = join(scratch, "vault");
+  await mkdir(configDir, { recursive: true });
+  await mkdir(vault, { recursive: true });
+  const application = await launchMarkd({
+    env: { MARKD_TEST_CONFIG_DIR: configDir },
+  });
+  try {
+    const page = await markdWindow(application, "main");
+    await expect(page.getByRole("button", { name: "Open existing" })).toBeVisible();
+    await application.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+    }, vault);
+
+    await page.getByRole("button", { name: "Open existing" }).click();
+    await expect(page.getByText("No notes yet.", { exact: false })).toBeVisible();
+    await page.evaluate(() => {
+      const state = window as typeof window & { __initialTreesContainer?: Element | null };
+      state.__initialTreesContainer = document.querySelector("file-tree-container");
+    });
+    await page.getByRole("button", { name: "New note" }).click();
+
+    await expect(page.getByRole("treeitem", { name: "Untitled.md" })).toBeVisible();
+    expect(await page.evaluate(() => {
+      const state = window as typeof window & { __initialTreesContainer?: Element | null };
+      return state.__initialTreesContainer?.isConnected === true &&
+        state.__initialTreesContainer === document.querySelector("file-tree-container");
+    })).toBe(true);
+  } finally {
+    await application.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
 
 test("real Vault Engine and native shell complete the first Vault slice", async () => {
   const scratch = await mkdtemp(join(tmpdir(), "markd-electron-vault-"));
@@ -1091,7 +1132,12 @@ test("secure asset protocol and native exports stay inside canonical paths", asy
 });
 
 test("utility crash rejects outstanding calls and spends one restart", async () => {
-  const application = await launchMarkd();
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-crash-"));
+  const configDir = join(scratch, "config");
+  await mkdir(configDir);
+  const application = await launchMarkd({
+    env: { MARKD_TEST_CONFIG_DIR: configDir },
+  });
   try {
     const page = await markdWindow(application, "main");
     await expect(page).toHaveTitle("Markd");
@@ -1157,11 +1203,12 @@ test("utility crash rejects outstanding calls and spends one restart", async () 
       delete process.env.MARKD_ENGINE_READY_DELAY_MS;
     });
     await application.close();
+    await rm(scratch, { recursive: true, force: true });
   }
 });
 
 test("replacement utility publishes a full index snapshot before new changes", async () => {
-  test.setTimeout(15_000);
+  test.setTimeout(30_000);
   const scratch = await mkdtemp(join(tmpdir(), "markd-electron-index-restart-"));
   const configDir = join(scratch, "config");
   const vault = join(scratch, "vault");
@@ -1180,6 +1227,14 @@ test("replacement utility publishes a full index snapshot before new changes", a
   });
   try {
     const page = await markdWindow(application, "main");
+    // Synchronize only after the real engine has opened the Vault; boot duration
+    // is unrelated to the replacement-baseline contract this test exercises.
+    await expect.poll(() => page.evaluate(() => window.markd!.vault.snapshot()), {
+      timeout: 10_000,
+    }).toEqual({
+      ok: true,
+      value: expect.objectContaining({ root: await realpath(vault) }),
+    });
     await page.evaluate(() => {
       const state = window as typeof window & { __indexSnapshots?: string[][] };
       state.__indexSnapshots = [];
@@ -1262,12 +1317,18 @@ test("replacement utility publishes a full index snapshot before new changes", a
 });
 
 test("pre-port generation failure resolves startup and restarts only once", async () => {
-  test.setTimeout(15_000);
+  test.setTimeout(25_000);
+  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-pre-port-"));
+  const configDir = join(scratch, "config");
+  await mkdir(configDir);
   const application = await launchMarkd({
     env: {
+      MARKD_TEST_CONFIG_DIR: configDir,
       MARKD_TEST_ABORT_ENGINE_EPOCH: "1",
-      MARKD_TEST_ABORT_DELAY_MS: "1000",
-      MARKD_TEST_ENGINE_TRANSFER_DELAY_MS: "2000",
+      // The abort must occur after markdWindow's bounded discovery so the
+      // request is certainly outstanding on generation one before it dies.
+      MARKD_TEST_ABORT_DELAY_MS: "6000",
+      MARKD_TEST_ENGINE_TRANSFER_DELAY_MS: "8000",
     },
   });
   const diagnostics: string[] = [];
@@ -1289,7 +1350,7 @@ test("pre-port generation failure resolves startup and restarts only once", asyn
     });
 
     await expect
-      .poll(() => diagnostics.join(""), { timeout: 8_000 })
+      .poll(() => diagnostics.join(""), { timeout: 12_000 })
       .toContain("[markd-main] engine ready epoch=2");
     const output = diagnostics.join("");
     expect(output.match(/restarting engine after epoch=1/g)).toHaveLength(1);
@@ -1297,6 +1358,7 @@ test("pre-port generation failure resolves startup and restarts only once", asyn
     expect(output).not.toContain("engine spawned epoch=3");
   } finally {
     await application.close();
+    await rm(scratch, { recursive: true, force: true });
   }
 });
 
