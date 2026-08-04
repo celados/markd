@@ -312,7 +312,6 @@ function sourceFiles(root) {
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
 if (
   invokedPath &&
-  statSync(invokedPath).isFile() &&
   pathToFileURL(invokedPath).href === import.meta.url
 ) {
   const outputDir = join(process.cwd(), "release", "electron");

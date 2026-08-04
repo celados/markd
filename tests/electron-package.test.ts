@@ -319,6 +319,16 @@ test("release workflow preflights P12 signing and verifies the signed DMG before
   expect(cleanupBlock).not.toMatch(/rm -rf [^\n]*\*/u);
 });
 
+test("release installed journey passes its app through the packaged smoke CLI", async () => {
+  const workflow = await readFile(
+    join(process.cwd(), ".github", "workflows", "release-macos.yml"),
+    "utf8",
+  );
+  expect(workflow).toContain(
+    'run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged -- "$INSTALLED_APP"',
+  );
+});
+
 async function packageFixture(options: {
   includeFff: boolean;
   includeFfi: boolean;
