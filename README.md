@@ -18,7 +18,8 @@ Your notes live on your disk as plain `.md` files. Markd simply makes writing an
 
 ## Installing on macOS
 
-Download the latest `.dmg` from [usemarkd.app](https://usemarkd.app) and drag Markd to Applications.
+Download the latest `.dmg` from the
+[Celados Markd releases](https://github.com/celados/markd/releases/latest) and drag Markd to Applications.
 
 Markd releases are Developer ID signed and notarized by Apple before distribution.
 
