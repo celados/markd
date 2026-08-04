@@ -1,3 +1,5 @@
+import { RELEASE, VERSION } from "./config";
+
 export type ChangelogEntry = {
   version: string;
   date: string;
@@ -9,6 +11,21 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: VERSION,
+    date: "2026-08-04",
+    displayDate: "August 4, 2026",
+    title: "An Electron-native desktop",
+    summary:
+      "Markd now ships on a mature Electron foundation with one coherent local vault index.",
+    changes: [
+      "Run the desktop shell, filesystem authority, secure app bridge, updater, and packaging entirely on Electron.",
+      "Use one ignore-aware native vault index for the file tree, search, backlinks, and external file changes.",
+      "Install a Developer ID signed and Apple-notarized DMG built for Apple Silicon.",
+      "Verify the installed app and signed updater through background desktop journeys before publication.",
+    ],
+    releaseUrl: RELEASE,
+  },
   {
     version: "0.1.9",
     date: "2026-08-02",
