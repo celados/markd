@@ -5,7 +5,9 @@ import { basename, dirname, join, normalize } from "node:path";
 // v0.2.6 writes this handoff before ShipIt replaces the bundle. The target
 // must read that exact file to prove the released Markd -> Riffle upgrade.
 const stateFileName = ".markd-release-e2e.json";
-const rootPrefix = "riffle-release-e2e-";
+// The public v0.2.6 baseline rejects any other prefix before it can hand control
+// to Riffle, so the target must recognize both generations of the release fixture.
+const rootPrefixes = ["riffle-release-e2e-", "markd-release-e2e-"] as const;
 const maximumLifetimeMs = 15 * 60_000;
 
 export type ReleaseE2eState = {
@@ -32,7 +34,7 @@ export function prepareReleaseE2eState(
   const location = releaseE2eLocation(executable);
   if (
     normalize(stateRoot) !== normalize(location.root) ||
-    !location.root.split("/").pop()?.startsWith(rootPrefix) ||
+    !isReleaseE2eRoot(location.root) ||
     normalize(dirname(markerPath)) !== normalize(location.root) ||
     normalize(configDir) !== normalize(join(location.root, "config")) ||
     !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(expectedVersion)
@@ -57,7 +59,7 @@ export function readReleaseE2eState(
   now = Date.now(),
 ): ReleaseE2eState | null {
   const location = releaseE2eLocation(executable);
-  if (!location.root.split("/").pop()?.startsWith(rootPrefix)) return null;
+  if (!isReleaseE2eRoot(location.root)) return null;
   let input: unknown;
   try {
     input = JSON.parse(readFileSync(location.state, "utf8"));
@@ -106,6 +108,11 @@ function releaseE2eLocation(executable: string) {
   const app = dirname(contents);
   const root = dirname(app);
   return { app, root, state: join(root, stateFileName) };
+}
+
+function isReleaseE2eRoot(root: string): boolean {
+  const name = basename(root);
+  return rootPrefixes.some((prefix) => name.startsWith(prefix));
 }
 
 function isReleaseE2eState(input: unknown): input is ReleaseE2eState {

@@ -21,6 +21,9 @@ const bundleId = "app.usemarkd";
 const shipItLabel = `${bundleId}.ShipIt`;
 const updaterCacheNames = new Set(["markd-updater", "riffle-updater"]);
 const stateFileName = "state.json";
+// Public Markd releases validate their original fixture prefix before launch.
+// Riffle accepts that isolated root only to prove the released rename lineage.
+const releaseRootPrefixes = ["riffle-release-e2e-", "markd-release-e2e-"];
 
 export function resolveUpdaterHygienePaths(
   appPath,
@@ -36,7 +39,7 @@ export function resolveUpdaterHygienePaths(
   const allowedParent = realpathSync(resolve(options.runnerTemp ?? process.env.RUNNER_TEMP ?? temporaryRoot));
   if (
     normalize(dirname(resolvedApp)) !== normalize(resolvedStateRoot) ||
-    !basename(resolvedStateRoot).startsWith("riffle-release-e2e-") ||
+    !isReleaseRoot(resolvedStateRoot) ||
     !basename(resolvedBackupRoot).startsWith("riffle-updater-backup-") ||
     !isContainedBy(realpathSync(resolvedStateRoot), allowedParent) ||
     !isContainedBy(realpathSync(dirname(resolvedBackupRoot)), allowedParent)
@@ -171,7 +174,7 @@ function deriveRestorePaths(stateRoot, backupRoot, appName, updaterCacheName, op
   if (
     !["Markd.app", "Riffle.app"].includes(appName) ||
     !updaterCacheNames.has(updaterCacheName) ||
-    !basename(resolvedStateRoot).startsWith("riffle-release-e2e-") ||
+    !isReleaseRoot(resolvedStateRoot) ||
     !basename(resolvedBackupRoot).startsWith("riffle-updater-backup-") ||
     !isContainedBy(resolvedStateRoot, allowedParent) ||
     !isContainedBy(resolvedBackupRoot, allowedParent) ||
@@ -200,6 +203,11 @@ function deriveRestorePaths(stateRoot, backupRoot, appName, updaterCacheName, op
 
 function isContainedBy(candidate, parent) {
   return candidate === parent || candidate.startsWith(`${parent}${sep}`);
+}
+
+function isReleaseRoot(root) {
+  const name = basename(root);
+  return releaseRootPrefixes.some((prefix) => name.startsWith(prefix));
 }
 
 function canonicalizePendingPath(path) {

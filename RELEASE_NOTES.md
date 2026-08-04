@@ -1,12 +1,10 @@
-# Riffle 0.3.0
+# Riffle 0.3.1
 
 Riffle is the independent continuation of the Electron-native local knowledge workspace previously released as Markd.
 
-## Changed
+## Fixed
 
-- Rename the desktop app, repository, packages, artifacts, runtime bridge, diagnostics, tests, website, and Cloud product copy to Riffle.
-- Import an existing Markd Vault selection into Riffle once without overwriting a newer Riffle configuration.
-- Keep the released macOS bundle identifier and `.markd/` Vault App Data format stable so installed clients and existing Markdown asset links continue to work.
+- Repair the release harness so the published Markd 0.2.6 app can launch under its original isolated test contract before upgrading to Riffle.
 - Verify that the signed Markd 0.2.6 public release upgrades in place to the signed Riffle release through Squirrel/ShipIt.
 
 ## Supported platform
