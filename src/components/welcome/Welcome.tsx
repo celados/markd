@@ -12,7 +12,7 @@ export function Welcome() {
 
   return (
     <div
-      data-markd-drag-region
+      data-riffle-drag-region
       className="relative flex h-full flex-col items-center justify-center bg-bg"
     >
       {/* dot grid backdrop */}
@@ -35,7 +35,7 @@ export function Welcome() {
         className="relative flex flex-col items-center"
       >
         <h1 className="text-[64px] font-[680] leading-none tracking-[-0.04em]">
-          Markd
+          Riffle
         </h1>
         <p className="mt-4 text-[15px] text-muted">
           Plain markdown notes. Yours, on disk.

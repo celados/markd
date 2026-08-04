@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Where are my notes stored?",
-    a: "On your Mac, as plain Markdown files in a folder you choose. No database or account is required; open the folder in Finder anytime. Markd only uploads a separate copy when you explicitly publish a note.",
+    a: "On your Mac, as plain Markdown files in a folder you choose. No database or account is required; open the folder in Finder anytime. Riffle only uploads a separate copy when you explicitly publish a note.",
   },
   {
     q: "Is there sync?",
@@ -11,19 +11,19 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Does it work with Obsidian?",
-    a: "Yes. Markd uses the same plain-Markdown vault with real folders, and preserves frontmatter from other tools. Point Markd and Obsidian at the same folder and both just work.",
+    a: "Yes. Riffle uses the same plain-Markdown vault with real folders, and preserves frontmatter from other tools. Point Riffle and Obsidian at the same folder and both just work.",
   },
   {
     q: "Is the macOS download verified?",
-    a: "Yes. Every Markd release is signed with a Developer ID certificate and notarized by Apple before distribution.",
+    a: "Yes. Every Riffle release is signed with a Developer ID certificate and notarized by Apple before distribution.",
   },
   {
     q: "Is it free?",
-    a: "The Markd desktop app is free and open source under the MIT license. Markd Cloud is an optional paid subscription for publishing connected notes and hosted images on the web.",
+    a: "The Riffle desktop app is free and open source under the MIT license. Riffle Cloud is an optional paid subscription for publishing connected notes and hosted images on the web.",
   },
   {
     q: "Which platforms are supported?",
-    a: "Markd is available for Apple Silicon Macs running macOS 12 or newer. Windows support may follow.",
+    a: "Riffle is available for Apple Silicon Macs running macOS 12 or newer. Windows support may follow.",
   },
   {
     q: "What's the AI agent?",

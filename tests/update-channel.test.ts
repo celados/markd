@@ -10,7 +10,7 @@ describe("resolveE2eUpdateChannel", () => {
   });
 
   test.each([
-    "https://github.com/celados/markd/releases/",
+    "https://github.com/celados/riffle/releases/",
     "http://192.168.1.10/releases/",
     "file:///tmp/releases/",
   ])("rejects a non-loopback provider override: %s", (url) => {

@@ -96,7 +96,7 @@ export async function installDesktopFixture(page: Page, options: DesktopFixtureO
     const operations: Array<{ method: string; params: Record<string, unknown> }> = [];
     const success = <T>(value: T) => ({ ok: true as const, value });
     const snapshot = () => ({
-      root: "/private/tmp/markd-browser-fixture",
+      root: "/private/tmp/riffle-browser-fixture",
       name: "Fixture Vault",
       tree,
       theme: "system" as const,
@@ -104,7 +104,7 @@ export async function installDesktopFixture(page: Page, options: DesktopFixtureO
 
     // Browser journeys replace only the secure preload boundary. Product code
     // still consumes the same semantic desktop surface as packaged Electron.
-    window.markd = {
+    window.riffle = {
       app: {
         windowKind: "main",
         onEngineLifecycle: () => () => {},
@@ -194,7 +194,7 @@ export async function installDesktopFixture(page: Page, options: DesktopFixtureO
           tree = tree.filter((node) => node.rel !== rel);
           return success({ snapshot: snapshot() });
         },
-        resolveNotePath: async (rel) => success(`/private/tmp/markd-browser-fixture/${rel}`),
+        resolveNotePath: async (rel) => success(`/private/tmp/riffle-browser-fixture/${rel}`),
         getTheme: async () => success("system" as const),
         setTheme: async () => success(null),
         search: async () => success([
@@ -218,7 +218,7 @@ export async function installDesktopFixture(page: Page, options: DesktopFixtureO
         backlinks: async () => success([]),
         assets: {
           save: async () => success(".markd/assets/fixture.png"),
-          url: (rel) => `markd-asset://vault/${rel}`,
+          url: (rel) => `riffle-asset://vault/${rel}`,
         },
         exportNote: async () => success(null),
         pins: {
@@ -418,7 +418,7 @@ export async function installDesktopFixture(page: Page, options: DesktopFixtureO
       },
     });
     Object.assign(window, {
-      __MARKD_TEST__: { clipboard, operations, notes, openedExternalUrls },
+      __RIFFLE_TEST__: { clipboard, operations, notes, openedExternalUrls },
     });
     function remapTree(
       nodes: import("@/lib/types").TreeNode[],

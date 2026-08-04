@@ -63,7 +63,7 @@ export type DesktopUpdate = {
   rawJson?: Record<string, unknown>;
 };
 
-export type MarkdDesktop = {
+export type RiffleDesktop = {
   app: {
     windowKind: "main" | "quick-capture";
     onEngineLifecycle: (listener: (event: EngineLifecycle) => void) => () => void;
@@ -209,36 +209,36 @@ export class DesktopError extends Error {
 }
 
 export function onQuickCaptureOpen(listener: () => void): () => void {
-  return window.markd?.capture.onOpen(listener) ?? (() => {});
+  return window.riffle?.capture.onOpen(listener) ?? (() => {});
 }
 
 declare global {
   interface Window {
-    markd?: MarkdDesktop;
+    riffle?: RiffleDesktop;
   }
 }
 
 export function getWindowKind(): "main" | "quick-capture" {
-  return window.markd?.app.windowKind ?? "main";
+  return window.riffle?.app.windowKind ?? "main";
 }
 
 export function openWebUrl(url: string): Promise<void> {
-  const operation = window.markd?.app.openWebUrl(url);
+  const operation = window.riffle?.app.openWebUrl(url);
   if (!operation) {
     return Promise.reject(new DesktopError({
       kind: "DESKTOP_UNAVAILABLE",
-      message: "Markd Desktop cannot open this URL.",
+      message: "Riffle Desktop cannot open this URL.",
     }));
   }
   return unwrapDesktopResult(operation).then(() => undefined);
 }
 
 export function revealVaultEntry(rel: string): Promise<void> {
-  const operation = window.markd?.app.revealVaultEntry(rel);
+  const operation = window.riffle?.app.revealVaultEntry(rel);
   if (!operation) {
     return Promise.reject(new DesktopError({
       kind: "DESKTOP_UNAVAILABLE",
-      message: "Markd Desktop cannot reveal this Vault entry.",
+      message: "Riffle Desktop cannot reveal this Vault entry.",
     }));
   }
   return unwrapDesktopResult(operation).then(() => undefined);

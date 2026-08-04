@@ -10,18 +10,18 @@ export type CloudConfigResult =
   | { ok: false; message: string };
 
 export function resolveCloudConfig(env: NodeJS.ProcessEnv): CloudConfigResult {
-  // The Celados fork does not own usemarkd.app. Production Cloud must stay a
+  // Riffle does not own usemarkd.app. Production Cloud must stay a
   // source-level closed gate until that ownership decision changes; inherited
   // upstream environment variables are not authority to publish user Notes.
-  if (env.MARKD_CLOUD_TEST_MODE !== "1") {
+  if (env.RIFFLE_CLOUD_TEST_MODE !== "1") {
     return {
       ok: false,
       message:
         "Cloud publishing is unavailable because this build has not verified ownership of its Cloud API and site.",
     };
   }
-  const apiBase = parseOrigin(env.MARKD_CLOUD_API_BASE);
-  const siteOrigin = parseOrigin(env.MARKD_CLOUD_SITE_ORIGIN);
+  const apiBase = parseOrigin(env.RIFFLE_CLOUD_API_BASE);
+  const siteOrigin = parseOrigin(env.RIFFLE_CLOUD_SITE_ORIGIN);
   if (!apiBase || !siteOrigin || !isLoopback(apiBase) || !isLoopback(siteOrigin)) {
     return {
       ok: false,

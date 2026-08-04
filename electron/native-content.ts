@@ -130,7 +130,7 @@ export async function loadAssetResponse(
   requestUrl: string,
 ): Promise<Response> {
   const url = new URL(requestUrl);
-  if (url.protocol !== "markd-asset:" || url.hostname !== "vault") {
+  if (url.protocol !== "riffle-asset:" || url.hostname !== "vault") {
     throw invalidPath("Asset URL is outside the active Vault.");
   }
   let decoded: string;

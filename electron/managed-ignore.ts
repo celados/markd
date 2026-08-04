@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const BEGIN_MARKER = "# BEGIN MARKD MANAGED IGNORE";
-const END_MARKER = "# END MARKD MANAGED IGNORE";
+const BEGIN_MARKER = "# BEGIN RIFFLE MANAGED IGNORE";
+const END_MARKER = "# END RIFFLE MANAGED IGNORE";
 
-export const MARKD_IGNORED_DIRECTORIES = [
+export const RIFFLE_IGNORED_DIRECTORIES = [
   ".git",
   ".markd",
   ".next",
@@ -19,13 +19,13 @@ export const MARKD_IGNORED_DIRECTORIES = [
   "target",
 ] as const;
 
-export const MARKD_RESERVED_ROOT_FILES = ["AGENTS.md", "CLAUDE.md"] as const;
+export const RIFFLE_RESERVED_ROOT_FILES = ["AGENTS.md", "CLAUDE.md"] as const;
 
-export const MARKD_IGNORE_BLOCK = [
+export const RIFFLE_IGNORE_BLOCK = [
   BEGIN_MARKER,
   ".*",
-  ...MARKD_IGNORED_DIRECTORIES.map((directory) => `${directory}/`),
-  ...MARKD_RESERVED_ROOT_FILES.map((file) => `/${file}`),
+  ...RIFFLE_IGNORED_DIRECTORIES.map((directory) => `${directory}/`),
+  ...RIFFLE_RESERVED_ROOT_FILES.map((file) => `/${file}`),
   END_MARKER,
 ].join("\n");
 
@@ -38,7 +38,7 @@ export function reconcileManagedIgnoreContent(input: string): ReconciledIgnore {
   const begins = markerRanges(input, BEGIN_MARKER);
   const ends = markerRanges(input, END_MARKER);
   if (begins.length !== ends.length || begins.length > 1) {
-    throw new Error("Invalid Markd managed ignore markers.");
+    throw new Error("Invalid Riffle managed ignore markers.");
   }
 
   let userContent = input;
@@ -46,13 +46,13 @@ export function reconcileManagedIgnoreContent(input: string): ReconciledIgnore {
     const begin = begins[0]!;
     const end = ends[0]!;
     if (end.start < begin.end) {
-      throw new Error("Invalid Markd managed ignore markers.");
+      throw new Error("Invalid Riffle managed ignore markers.");
     }
     userContent = input.slice(0, begin.start) + input.slice(end.end);
   }
 
   const separator = userContent.length > 0 && !userContent.endsWith("\n") ? "\n" : "";
-  const content = `${userContent}${separator}${MARKD_IGNORE_BLOCK}\n`;
+  const content = `${userContent}${separator}${RIFFLE_IGNORE_BLOCK}\n`;
   return { changed: content !== input, content };
 }
 
@@ -67,7 +67,7 @@ export async function reconcileManagedIgnore(root: string): Promise<boolean> {
   const reconciled = reconcileManagedIgnoreContent(current);
   if (!reconciled.changed) return false;
 
-  const temporary = join(root, `.markd-ignore-${process.pid}-${randomUUID()}.tmp`);
+  const temporary = join(root, `.riffle-ignore-${process.pid}-${randomUUID()}.tmp`);
   try {
     await writeFile(temporary, reconciled.content, { flag: "wx" });
     await rename(temporary, path);

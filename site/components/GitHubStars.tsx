@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { GitHubIcon } from "./ui/github-icon";
 import { GITHUB, GITHUB_REPO } from "@/lib/config";
 
-const CACHE_KEY = "markd:github-stars";
+const CACHE_KEY = "riffle:github-stars";
 const CACHE_TTL = 60 * 60 * 1000;
 
 type CachedStars = {
@@ -78,7 +78,7 @@ export function GitHubStars() {
       target="_blank"
       rel="noreferrer"
       aria-label={
-        stars === null ? "Markd on GitHub" : `Markd on GitHub, ${stars} stars`
+        stars === null ? "Riffle on GitHub" : `Riffle on GitHub, ${stars} stars`
       }
       className="group inline-flex h-9 items-center gap-2.5 rounded-full border border-border-strong bg-paper px-3.5 text-[13px] font-medium text-foreground shadow-[0_1px_2px_rgba(25,25,23,0.04)] transition-colors hover:bg-hover"
     >

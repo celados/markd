@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 import { writeFileAtomically } from "../electron/atomic-write";
 
 test("failed atomic rename removes its temporary file", async () => {
-  const scratch = await mkdtemp(join(tmpdir(), "markd-atomic-write-"));
+  const scratch = await mkdtemp(join(tmpdir(), "riffle-atomic-write-"));
   const target = join(scratch, "cloud-session.json");
   await mkdir(target);
 

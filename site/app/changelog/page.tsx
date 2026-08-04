@@ -9,13 +9,13 @@ import { GITHUB } from "@/lib/config";
 export const metadata: Metadata = {
   title: "Changelog",
   description:
-    "See what is new in Markd, the local-first Markdown notes app for macOS.",
+    "See what is new in Riffle, the local-first Markdown notes app for macOS.",
   alternates: {
     canonical: "/changelog",
   },
   openGraph: {
-    title: "Markd changelog",
-    description: "New features, refinements, and fixes in every Markd release.",
+    title: "Riffle changelog",
+    description: "New features, refinements, and fixes in every Riffle release.",
     url: "/changelog",
   },
 };
@@ -31,7 +31,7 @@ export default function ChangelogPage() {
           </p>
           <div className="mt-5 grid gap-6 sm:grid-cols-[1fr_18rem] sm:items-end sm:gap-12">
             <h1 className="max-w-2xl text-balance font-serif text-[48px] leading-[0.98] tracking-[-0.035em] text-foreground sm:text-[72px]">
-              What&apos;s new in Markd.
+              What&apos;s new in Riffle.
             </h1>
             <p className="max-w-sm text-pretty text-[15px] leading-7 text-muted-foreground sm:pb-1">
               New features, thoughtful refinements, and the fixes that make
@@ -41,7 +41,7 @@ export default function ChangelogPage() {
         </section>
 
         <section
-          aria-label="Markd releases"
+          aria-label="Riffle releases"
           className="mx-auto mt-20 w-full max-w-5xl sm:mt-28"
         >
           {CHANGELOG.map((entry, index) => (
@@ -59,7 +59,7 @@ export default function ChangelogPage() {
           </p>
           <div className="mt-4 max-w-2xl sm:mt-0">
             <p className="font-serif text-[25px] leading-tight text-foreground">
-              Markd is built in the open.
+              Riffle is built in the open.
             </p>
             <p className="mt-3 max-w-lg text-[14px] leading-6 text-muted-foreground">
               Browse the source, report an issue, or see the full release

@@ -12,9 +12,9 @@ function base64(bytes: Uint8Array): string {
 
 describe("Dodo webhook verification", () => {
   test("accepts a correctly signed Standard Webhooks payload", async () => {
-    const rawSecret = new TextEncoder().encode("markd-webhook-test-secret");
+    const rawSecret = new TextEncoder().encode("riffle-webhook-test-secret");
     const secret = `whsec_${base64(rawSecret)}`;
-    const id = "msg_markd_test";
+    const id = "msg_riffle_test";
     const timestamp = 1_750_000_000;
     const body = JSON.stringify({
       business_id: "bus_test",
@@ -35,7 +35,7 @@ describe("Dodo webhook verification", () => {
   });
 
   test("rejects payload tampering", async () => {
-    const rawSecret = new TextEncoder().encode("markd-webhook-test-secret");
+    const rawSecret = new TextEncoder().encode("riffle-webhook-test-secret");
     const timestamp = 1_750_000_000;
     const headers = new Headers({
       "webhook-id": "msg_test",
@@ -77,7 +77,7 @@ describe("Dodo checkout input", () => {
 });
 
 describe("Dodo checkout session", () => {
-  test("uses minimal address collection and the Markd success page", async () => {
+  test("uses minimal address collection and the Riffle success page", async () => {
     const originalFetch = globalThis.fetch;
     let requestBody: Record<string, unknown> | undefined;
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {

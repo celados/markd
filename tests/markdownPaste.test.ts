@@ -22,7 +22,7 @@ Show every note that links to the active note.
     expect(isMarkdownPaste("> A quoted paragraph")).toBe(true);
     expect(isMarkdownPaste("```ts\nconst value = true\n```")).toBe(true);
     expect(isMarkdownPaste("Read **this carefully**.")).toBe(true);
-    expect(isMarkdownPaste("[Markd](https://usemarkd.app)")).toBe(true);
+    expect(isMarkdownPaste("[Riffle](https://usemarkd.app)")).toBe(true);
   });
 
   test("leaves ordinary prose to native paste handling", () => {

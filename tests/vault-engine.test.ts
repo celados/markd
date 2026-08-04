@@ -180,7 +180,7 @@ describe("Vault Engine search and backlinks", () => {
   });
 
   test("persists access ranking for the same canonical Vault across restarts", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-frecency-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-vault-frecency-"));
     scratchPaths.push(scratch);
     const root = join(scratch, "vault");
     const config = join(scratch, "config");
@@ -222,7 +222,7 @@ describe("Vault Engine transactional open", () => {
   });
 
   test("reuses the active index when an alias resolves to the same Vault", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-same-root-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-vault-same-root-"));
     scratchPaths.push(scratch);
     const root = join(scratch, "vault");
     const alias = join(scratch, "alias");
@@ -239,7 +239,7 @@ describe("Vault Engine transactional open", () => {
   });
 
   test("keeps the old native index operational when candidate commit rolls back", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-rollback-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-vault-rollback-"));
     scratchPaths.push(scratch);
     const root = join(scratch, "vault");
     const otherRoot = join(scratch, "other-vault");
@@ -323,7 +323,7 @@ describe("Vault Engine Pins", () => {
   });
 
   test("removes Pins beneath an entry after native Trash succeeds", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-trash-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-vault-trash-"));
     scratchPaths.push(scratch);
     const root = join(scratch, "vault");
     await mkdir(root);
@@ -345,7 +345,7 @@ describe("Vault Engine Pins", () => {
   });
 
   test("resolves the canonical full path from a symlinked Vault root", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-vault-alias-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-vault-alias-"));
     scratchPaths.push(scratch);
     const root = join(scratch, "real-vault");
     const alias = join(scratch, "vault-alias");
@@ -383,7 +383,7 @@ describe("Vault Engine Quick Capture", () => {
   });
 
   test("rejects append without an active Vault or a non-Note target", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-capture-unavailable-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-capture-unavailable-"));
     scratchPaths.push(scratch);
     const engine = new VaultEngine(join(scratch, "config"), async () => {});
 
@@ -557,7 +557,7 @@ async function setupEngine(
   trashCalls: string[] = [],
   beforeOpen: (root: string) => Promise<void> = async () => {},
 ) {
-  const scratch = await mkdtemp(join(tmpdir(), "markd-vault-engine-"));
+  const scratch = await mkdtemp(join(tmpdir(), "riffle-vault-engine-"));
   scratchPaths.push(scratch);
   const root = join(scratch, "vault");
   const config = join(scratch, "config");

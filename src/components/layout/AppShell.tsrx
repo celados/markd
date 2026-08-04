@@ -116,8 +116,8 @@ export function AppShell() @{
       if (typeof detail?.signedIn !== "boolean") return;
       setCloudSignedIn(detail.signedIn);
     };
-    window.addEventListener("markd:cloud-account", update);
-    return () => window.removeEventListener("markd:cloud-account", update);
+    window.addEventListener("riffle:cloud-account", update);
+    return () => window.removeEventListener("riffle:cloud-account", update);
   }, []);
 
   useEffect(() => {
@@ -131,8 +131,8 @@ export function AppShell() @{
         [detail.rel as string]: detail.published as boolean,
       }));
     };
-    window.addEventListener("markd:publish-status", update);
-    return () => window.removeEventListener("markd:publish-status", update);
+    window.addEventListener("riffle:publish-status", update);
+    return () => window.removeEventListener("riffle:publish-status", update);
   }, []);
 
   <div className="flex h-full bg-bg">
@@ -149,7 +149,7 @@ export function AppShell() @{
             recessed (panel); the active tab takes the content bg so it reads
             as merged with the pane below, code-editor style. */}
         <motion.div
-          data-markd-drag-region
+          data-riffle-drag-region
           className="flex h-11 shrink-0 items-stretch gap-1.5 bg-sunken pr-3"
           animate={{ paddingLeft: sidebarHidden ? 84 : 10 }}
           initial={false}
@@ -343,7 +343,7 @@ type NoteAction =
 
 function dispatchNoteAction(action: NoteAction) {
   window.dispatchEvent(
-    new CustomEvent("markd:note-action", { detail: { action } }),
+    new CustomEvent("riffle:note-action", { detail: { action } }),
   );
 }
 

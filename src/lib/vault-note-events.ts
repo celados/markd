@@ -1,4 +1,4 @@
-export const VAULT_NOTE_CHANGED = "markd:vault-note-changed";
+export const VAULT_NOTE_CHANGED = "riffle:vault-note-changed";
 
 export type VaultNoteChangedDetail = {
   rel: string;

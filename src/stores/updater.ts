@@ -102,7 +102,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
 }));
 
 async function checkForUpdate(): Promise<PendingUpdate | null> {
-  if (!window.markd) return null;
+  if (!window.riffle) return null;
   const update = await updatesDesktop.check();
   if (!update) return null;
   return {

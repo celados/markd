@@ -6,7 +6,7 @@ import { parse } from "yaml";
 import { electronArtifactNames } from "./electron-artifacts.mjs";
 import { inspectUpdateManifest } from "./verify-electron-package.mjs";
 
-const publicReleaseRoot = "https://github.com/celados/markd/releases/download";
+const publicReleaseRoot = "https://github.com/celados/riffle/releases/download";
 
 export async function verifyRemoteRelease(options) {
   const {
@@ -14,8 +14,8 @@ export async function verifyRemoteRelease(options) {
     expectedVersion,
     arch = "arm64",
     baseUrl = `${publicReleaseRoot}/v${expectedVersion}`,
-    apiUrl = `https://api.github.com/repos/celados/markd/releases/tags/v${expectedVersion}`,
-    latestApiUrl = "https://api.github.com/repos/celados/markd/releases/latest",
+    apiUrl = `https://api.github.com/repos/celados/riffle/releases/tags/v${expectedVersion}`,
+    latestApiUrl = "https://api.github.com/repos/celados/riffle/releases/latest",
     fetchImpl = fetch,
   } = options;
   const localManifest = inspectUpdateManifest(outputDir, expectedVersion, arch);
@@ -25,7 +25,7 @@ export async function verifyRemoteRelease(options) {
   const releaseResponse = await fetchImpl(apiUrl, {
     headers: {
       accept: "application/vnd.github+json",
-      "user-agent": "markd-release-verifier",
+      "user-agent": "riffle-release-verifier",
       "x-github-api-version": "2022-11-28",
     },
   });
@@ -36,7 +36,7 @@ export async function verifyRemoteRelease(options) {
   const latestResponse = await fetchImpl(latestApiUrl, {
     headers: {
       accept: "application/vnd.github+json",
-      "user-agent": "markd-release-verifier",
+      "user-agent": "riffle-release-verifier",
       "x-github-api-version": "2022-11-28",
     },
   });
@@ -65,7 +65,7 @@ export async function verifyRemoteRelease(options) {
     if (!existsSync(localPath)) throw new Error(`Local release artifact is missing: ${name}`);
     const response = await fetchImpl(`${baseUrl}/${encodeURIComponent(name)}`, {
       redirect: "follow",
-      headers: { "user-agent": "markd-release-verifier" },
+      headers: { "user-agent": "riffle-release-verifier" },
     });
     if (!response.ok || !response.body) {
       throw new Error(`Anonymous release readback failed for ${name}: HTTP ${response.status}`);

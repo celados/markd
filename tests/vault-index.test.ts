@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { promisify } from "node:util";
-import { MARKD_IGNORE_BLOCK } from "../electron/managed-ignore";
+import { RIFFLE_IGNORE_BLOCK } from "../electron/managed-ignore";
 import { VaultIndex, type VaultIndexEvent } from "../electron/vault-index";
 import type { TreeNode } from "../src/lib/types";
 import type { FileFinderApi, WatchEvent } from "@celados/fff-node";
@@ -185,7 +185,7 @@ describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () 
     ]);
 
     expect(await readFile(join(root, ".ignore"), "utf8")).toBe(
-      `user.md\n!node_modules/package/leak.md\n${MARKD_IGNORE_BLOCK}\n`,
+      `user.md\n!node_modules/package/leak.md\n${RIFFLE_IGNORE_BLOCK}\n`,
     );
   });
 
@@ -297,7 +297,7 @@ describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () 
       "Initial.md",
     ]);
     expect(await readFile(join(root, ".ignore"), "utf8")).toBe(
-      `Later.md\n${MARKD_IGNORE_BLOCK}\n`,
+      `Later.md\n${RIFFLE_IGNORE_BLOCK}\n`,
     );
   });
 
@@ -385,7 +385,7 @@ describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () 
     const scratch = await createScratch();
     const root = join(scratch, "vault");
     await mkdir(root);
-    await writeFile(join(root, ".ignore"), "# BEGIN MARKD MANAGED IGNORE\n");
+    await writeFile(join(root, ".ignore"), "# BEGIN RIFFLE MANAGED IGNORE\n");
 
     await expect(VaultIndex.open(root, "system")).rejects.toThrowError(
       /managed ignore markers/i,
@@ -603,7 +603,7 @@ describe("fff-backed Vault Index", { timeout: VAULT_INDEX_TEST_TIMEOUT_MS }, () 
 });
 
 async function createScratch(): Promise<string> {
-  const scratch = await mkdtemp(join(tmpdir(), "markd-vault-index-"));
+  const scratch = await mkdtemp(join(tmpdir(), "riffle-vault-index-"));
   scratchPaths.push(scratch);
   return scratch;
 }

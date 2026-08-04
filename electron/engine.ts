@@ -22,10 +22,10 @@ import { completeRequest } from "./request-completion";
 
 const parentPort = process.parentPort;
 if (!parentPort) {
-  throw new Error("Markd Engine requires an Electron utility-process parent port");
+  throw new Error("Riffle Engine requires an Electron utility-process parent port");
 }
 
-const abortDelay = Number(process.env.MARKD_ENGINE_TEST_ABORT_DELAY_MS ?? 0);
+const abortDelay = Number(process.env.RIFFLE_ENGINE_TEST_ABORT_DELAY_MS ?? 0);
 if (Number.isFinite(abortDelay) && abortDelay > 0) {
   setTimeout(() => process.abort(), abortDelay);
 }
@@ -60,7 +60,7 @@ parentPort.on("message", (event) => {
         call.reject(
           new VaultEngineError({
             kind: "INVALID_RESPONSE",
-            message: "Markd Desktop returned an invalid native response.",
+            message: "Riffle Desktop returned an invalid native response.",
           }),
         );
         return;
@@ -73,7 +73,7 @@ parentPort.on("message", (event) => {
   const connection = v.safeParse(engineConnectSchema, event.data);
   const port = event.ports[0];
   if (!connection.success || !port) {
-    throw new Error("Markd Engine received an invalid renderer channel");
+    throw new Error("Riffle Engine received an invalid renderer channel");
   }
   const { epoch, configDir, windowKind } = connection.output;
   port.on("close", () => {
@@ -93,14 +93,14 @@ parentPort.on("message", (event) => {
         rendererPort.postMessage({ type: "vault-index", epoch: activeEpoch, event: indexEvent });
       }
     }, undefined, (error) => {
-      console.error("[markd-engine] Vault Index became unavailable", error);
+      console.error("[riffle-engine] Vault Index became unavailable", error);
       process.exit(1);
     });
     cloud = new CloudEngine(configDir, () => vault!.activeRoot(), resolveCloudConfig(process.env));
     initialization = vault.startup().then(() => undefined);
   } else if (epoch !== activeEpoch || configDir !== activeConfigDir) {
     port.close();
-    throw new Error("Markd Engine rejected a renderer from another generation");
+    throw new Error("Riffle Engine rejected a renderer from another generation");
   }
   const activeVault = vault;
   const activeCloud = cloud!;
@@ -109,7 +109,7 @@ parentPort.on("message", (event) => {
     port.on("message", (messageEvent) => {
       const parsed = v.safeParse(engineRequestSchema, messageEvent.data);
       if (!parsed.success) {
-        console.error("[markd-engine] rejected invalid request");
+        console.error("[riffle-engine] rejected invalid request");
         process.exit(1);
         return;
       }
@@ -139,7 +139,7 @@ parentPort.on("message", (event) => {
           });
         },
         onTransportFailure: (error) => {
-          console.error("[markd-engine] response port closed", error);
+          console.error("[riffle-engine] response port closed", error);
         },
         release: () => activeVault.releaseIndexEvents(),
       }));
@@ -155,16 +155,16 @@ parentPort.on("message", (event) => {
       initializationReleased = true;
       activeVault.releaseIndexEvents();
     }
-    console.log(`[markd-engine] ready epoch=${epoch}`);
+    console.log(`[riffle-engine] ready epoch=${epoch}`);
   };
   void initialization
     ?.then(() => {
-      const delay = Number(process.env.MARKD_ENGINE_READY_DELAY_MS ?? 0);
+      const delay = Number(process.env.RIFFLE_ENGINE_READY_DELAY_MS ?? 0);
       if (Number.isFinite(delay) && delay > 0) setTimeout(becomeReady, delay);
       else becomeReady();
     })
     .catch((error: unknown) => {
-      console.error("[markd-engine] failed to restore the active Vault", error);
+      console.error("[riffle-engine] failed to restore the active Vault", error);
       process.exit(1);
     });
 });
@@ -176,7 +176,7 @@ async function handleRequest(
   windowKind: "main" | "quick-capture",
 ): Promise<unknown> {
   if (request.method.startsWith("capture.")) {
-    const delay = Number(process.env.MARKD_ENGINE_TEST_CAPTURE_DELAY_MS ?? 0);
+    const delay = Number(process.env.RIFFLE_ENGINE_TEST_CAPTURE_DELAY_MS ?? 0);
     if (Number.isFinite(delay) && delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

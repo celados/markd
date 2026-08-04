@@ -6,7 +6,7 @@ import { findPackagedApp } from "./verify-electron-package.mjs";
 export function parsePackagedAppArgs(args) {
   const positional = args[0] === "--" ? args.slice(1) : args;
   if (positional.length > 1 || positional[0] === "--" || positional[0] === "") {
-    throw new Error("Usage: run-packaged-smoke.mjs [--] [path/to/Markd.app]");
+    throw new Error("Usage: run-packaged-smoke.mjs [--] [path/to/Riffle.app]");
   }
   return positional[0] ?? null;
 }
@@ -14,8 +14,8 @@ export function parsePackagedAppArgs(args) {
 function runPackagedSmoke(appPath) {
   const executablePath =
     process.platform === "darwin"
-      ? join(appPath, "Contents", "MacOS", "Markd")
-      : join(appPath, "Markd");
+      ? join(appPath, "Contents", "MacOS", "Riffle")
+      : join(appPath, "Riffle");
   const playwrightPath = join(
     process.cwd(),
     "node_modules",
@@ -29,8 +29,8 @@ function runPackagedSmoke(appPath) {
       stdio: "inherit",
       env: {
         ...process.env,
-        MARKD_E2E_BACKGROUND: "1",
-        MARKD_PACKAGED_EXECUTABLE: executablePath,
+        RIFFLE_E2E_BACKGROUND: "1",
+        RIFFLE_PACKAGED_EXECUTABLE: executablePath,
       },
     },
   );

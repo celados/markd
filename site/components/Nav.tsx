@@ -28,7 +28,7 @@ export function Nav() {
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
         className="pointer-events-auto relative z-30 mx-auto flex h-14 w-full max-w-5xl items-center justify-between rounded-full border border-border/50 bg-background/60 px-3 backdrop-blur-xl sm:px-4"
       >
-        <a href="/" aria-label="Markd home" className="px-1">
+        <a href="/" aria-label="Riffle home" className="px-1">
           <Wordmark size={22} />
         </a>
         <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex">

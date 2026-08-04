@@ -1,14 +1,14 @@
 ---
 type: AgentConfig
 title: Domain documentation
-description: Agent 在探索和修改 Markd 前读取 domain context 与 ADR 的规则。
+description: Agent 在探索和修改 Riffle 前读取 domain context 与 ADR 的规则。
 status: active
 generated: { by: codex/gpt-5, at: 2026-08-03T10:50:11+08:00 }
 ---
 
 # Domain docs
 
-Markd 使用 single-context layout。
+Riffle 使用 single-context layout。
 
 ## Before exploring
 

@@ -84,9 +84,9 @@ test("command palette preserves result order and keyboard activation", async ({
   ).toBeVisible();
   await expect.poll(() => page.evaluate(() => {
     const state = window as typeof window & {
-      __MARKD_TEST__?: { operations: Array<{ method: string; params: Record<string, unknown> }> };
+      __RIFFLE_TEST__?: { operations: Array<{ method: string; params: Record<string, unknown> }> };
     };
-    return state.__MARKD_TEST__?.operations.filter(
+    return state.__RIFFLE_TEST__?.operations.filter(
       (call) => call.method === "vault.search.recordAccess",
     ) ?? [];
   })).toEqual([

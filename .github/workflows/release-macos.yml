@@ -117,11 +117,11 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.P12_PASSWORD }}
         run: |
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          keychain="$RUNNER_TEMP/markd-signing-preflight-$run_key.keychain-db"
-          keychain_list="$RUNNER_TEMP/markd-signing-preflight-$run_key-keychains.txt"
+          keychain="$RUNNER_TEMP/riffle-signing-preflight-$run_key.keychain-db"
+          keychain_list="$RUNNER_TEMP/riffle-signing-preflight-$run_key-keychains.txt"
           keychain_list_tmp="$keychain_list.tmp"
-          p12="$RUNNER_TEMP/markd-signing-preflight-$run_key.p12"
-          probe="$RUNNER_TEMP/markd-signing-preflight-$run_key-probe"
+          p12="$RUNNER_TEMP/riffle-signing-preflight-$run_key.p12"
+          probe="$RUNNER_TEMP/riffle-signing-preflight-$run_key-probe"
           test ! -e "$keychain"
           test ! -e "$keychain_list"
           test ! -e "$keychain_list_tmp"
@@ -167,11 +167,11 @@ jobs:
         if: always()
         run: |
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          keychain="$RUNNER_TEMP/markd-signing-preflight-$run_key.keychain-db"
-          keychain_list="$RUNNER_TEMP/markd-signing-preflight-$run_key-keychains.txt"
+          keychain="$RUNNER_TEMP/riffle-signing-preflight-$run_key.keychain-db"
+          keychain_list="$RUNNER_TEMP/riffle-signing-preflight-$run_key-keychains.txt"
           keychain_list_tmp="$keychain_list.tmp"
-          p12="$RUNNER_TEMP/markd-signing-preflight-$run_key.p12"
-          probe="$RUNNER_TEMP/markd-signing-preflight-$run_key-probe"
+          p12="$RUNNER_TEMP/riffle-signing-preflight-$run_key.p12"
+          probe="$RUNNER_TEMP/riffle-signing-preflight-$run_key-probe"
           failed=0
           if [ -f "$keychain_list" ]; then
             previous_keychains=()
@@ -234,7 +234,7 @@ jobs:
 
       - name: Verify signing, notarization, and updater metadata
         run: |
-          app="release/electron/mac-arm64/Markd.app"
+          app="release/electron/mac-arm64/Riffle.app"
           dmg="release/electron/$ELECTRON_DMG"
           test -d "$app"
           test -f "$dmg"
@@ -252,21 +252,21 @@ jobs:
       - name: Install canonical DMG in isolated Applications
         run: |
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          install_parent="$RUNNER_TEMP/markd-installed-$run_key"
+          install_parent="$RUNNER_TEMP/riffle-installed-$run_key"
           install_root="$install_parent/Applications"
-          mount_point="$(mktemp -d "$RUNNER_TEMP/markd-dmg.XXXXXX")"
+          mount_point="$(mktemp -d "$RUNNER_TEMP/riffle-dmg.XXXXXX")"
           test ! -e "$install_parent"
           mkdir -p "$install_root"
           hdiutil attach "release/electron/$ELECTRON_DMG" \
             -nobrowse -readonly -mountpoint "$mount_point"
           trap 'hdiutil detach "$mount_point" -force >/dev/null 2>&1 || true' EXIT
-          test -d "$mount_point/Markd.app"
-          ditto "$mount_point/Markd.app" "$install_root/Markd.app"
+          test -d "$mount_point/Riffle.app"
+          ditto "$mount_point/Riffle.app" "$install_root/Riffle.app"
           hdiutil detach "$mount_point"
           trap - EXIT
           {
-            echo "INSTALLED_APP=$install_root/Markd.app"
-            echo "INSTALLED_EXECUTABLE=$install_root/Markd.app/Contents/MacOS/Markd"
+            echo "INSTALLED_APP=$install_root/Riffle.app"
+            echo "INSTALLED_EXECUTABLE=$install_root/Riffle.app/Contents/MacOS/Riffle"
           } >> "$GITHUB_ENV"
 
       - name: Verify installed app signing and notarization
@@ -278,7 +278,7 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INSTALLED_APP/Contents/Info.plist")" = "$VERSION"
 
       - name: Run installed packaged journeys in background
-        run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged -- "$INSTALLED_APP"
+        run: RIFFLE_E2E_BACKGROUND=1 pnpm run test:packaged -- "$INSTALLED_APP"
 
       - name: Build signed same-base Electron updater baseline
         env:
@@ -290,13 +290,13 @@ jobs:
         run: |
           baseline_version="0.1.10"
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          baseline_output="$RUNNER_TEMP/markd-baseline-$run_key"
+          baseline_output="$RUNNER_TEMP/riffle-baseline-$run_key"
           test ! -e "$baseline_output"
           pnpm exec electron-builder --mac zip --arm64 --publish never \
             -c.directories.output="$baseline_output" \
             -c.extraMetadata.version="$baseline_version" \
             -c.forceCodeSigning=true
-          baseline_app="$baseline_output/mac-arm64/Markd.app"
+          baseline_app="$baseline_output/mac-arm64/Riffle.app"
           test -d "$baseline_app"
           test -f "$baseline_app/Contents/Resources/app-update.yml"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$baseline_app/Contents/Info.plist")" = "$baseline_version"
@@ -308,35 +308,31 @@ jobs:
           test -n "$target_requirement"
           test "$baseline_requirement" = "$target_requirement"
 
-          local_root="$RUNNER_TEMP/markd-release-e2e-local-$run_key"
-          public_root="$RUNNER_TEMP/markd-release-e2e-public-$run_key"
+          local_root="$RUNNER_TEMP/riffle-release-e2e-local-$run_key"
           test ! -e "$local_root"
-          test ! -e "$public_root"
-          mkdir -p "$local_root" "$public_root"
-          ditto "$baseline_app" "$local_root/Markd.app"
-          ditto "$baseline_app" "$public_root/Markd.app"
+          mkdir -p "$local_root"
+          ditto "$baseline_app" "$local_root/Riffle.app"
           {
             echo "BASELINE_VERSION=$baseline_version"
-            echo "LOCAL_BASELINE_APP=$local_root/Markd.app"
-            echo "PUBLIC_BASELINE_APP=$public_root/Markd.app"
+            echo "LOCAL_BASELINE_APP=$local_root/Riffle.app"
           } >> "$GITHUB_ENV"
 
       # PRE-PUBLISH GATE: exact final ZIP must replace the signed same-base app through Squirrel/ShipIt.
       - name: Isolate local updater state
         run: |
           state_root="$(dirname "$LOCAL_BASELINE_APP")"
-          backup_root="$RUNNER_TEMP/markd-updater-backup-local-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          backup_root="$RUNNER_TEMP/riffle-updater-backup-local-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           node scripts/updater-hygiene.mjs prepare "$LOCAL_BASELINE_APP" "$state_root" "$backup_root"
           echo "LOCAL_HYGIENE_BACKUP=$backup_root" >> "$GITHUB_ENV"
 
       - name: Verify local signed updater install and relaunch
         run: |
-          MARKD_BASELINE_EXECUTABLE="$LOCAL_BASELINE_APP/Contents/MacOS/Markd" \
-          MARKD_INSTALLED_APP="$LOCAL_BASELINE_APP" \
-          MARKD_TARGET_VERSION="$VERSION" \
-          MARKD_BASELINE_VERSION="$BASELINE_VERSION" \
-          MARKD_ALLOWED_TEMP_ROOT="$RUNNER_TEMP" \
-          MARKD_UPDATE_CHANNEL_DIR="$GITHUB_WORKSPACE/release/electron" \
+          RIFFLE_BASELINE_EXECUTABLE="$LOCAL_BASELINE_APP/Contents/MacOS/Riffle" \
+          RIFFLE_INSTALLED_APP="$LOCAL_BASELINE_APP" \
+          RIFFLE_TARGET_VERSION="$VERSION" \
+          RIFFLE_BASELINE_VERSION="$BASELINE_VERSION" \
+          RIFFLE_ALLOWED_TEMP_ROOT="$RUNNER_TEMP" \
+          RIFFLE_UPDATE_CHANNEL_DIR="$GITHUB_WORKSPACE/release/electron" \
             pnpm run test:updater
 
       - name: Restore local updater state
@@ -346,7 +342,7 @@ jobs:
       - name: Keep compact verification metadata
         uses: actions/upload-artifact@v7
         with:
-          name: markd-electron-macos-${{ env.VERSION }}
+          name: riffle-electron-macos-${{ env.VERSION }}
           path: |
             release/electron/${{ env.ELECTRON_ZIP_BLOCKMAP }}
             release/electron/${{ env.ELECTRON_MANIFEST }}
@@ -359,14 +355,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: v${{ env.VERSION }}
         run: |
-          metadata="$RUNNER_TEMP/markd-draft-before-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          metadata="$RUNNER_TEMP/riffle-draft-before-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
           releases="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
           resolved="$(printf '%s' "$releases" | \
             node scripts/resolve-draft-release.mjs resolve "$GITHUB_REPOSITORY" "$RELEASE_TAG")"
           if [ "$resolved" = "null" ]; then
             jq -n \
               --arg tag "$RELEASE_TAG" \
-              --arg name "Markd $VERSION" \
+              --arg name "Riffle $VERSION" \
               --rawfile body RELEASE_NOTES.md \
               '{tag_name: $tag, name: $name, body: $body, draft: true, prerelease: false, make_latest: "false"}' | \
               gh api --method POST "repos/$GITHUB_REPOSITORY/releases" --input - > "$metadata"
@@ -378,7 +374,7 @@ jobs:
           initial_release_id="$(jq -er '.release_id' <<< "$identity")"
           jq -n \
             --arg tag "$RELEASE_TAG" \
-            --arg name "Markd $VERSION" \
+            --arg name "Riffle $VERSION" \
             --rawfile body RELEASE_NOTES.md \
             '{tag_name: $tag, name: $name, body: $body, draft: true, prerelease: false, make_latest: "false"}' | \
             gh api --method PATCH \
@@ -401,8 +397,8 @@ jobs:
           DRAFT_RELEASE_ID: ${{ steps.draft_release.outputs.release_id }}
           DRAFT_UPLOAD_URL: ${{ steps.draft_release.outputs.upload_url }}
         run: |
-          metadata="$RUNNER_TEMP/markd-draft-assets-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
-          existing_root="$RUNNER_TEMP/markd-draft-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          metadata="$RUNNER_TEMP/riffle-draft-assets-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          existing_root="$RUNNER_TEMP/riffle-draft-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$existing_root"
           mkdir "$existing_root"
           gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_RELEASE_ID" > "$metadata"
@@ -442,8 +438,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DRAFT_RELEASE_ID: ${{ steps.draft_release.outputs.release_id }}
         run: |
-          readback="$RUNNER_TEMP/markd-draft-readback-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          metadata="$RUNNER_TEMP/markd-draft-final-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          readback="$RUNNER_TEMP/riffle-draft-readback-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          metadata="$RUNNER_TEMP/riffle-draft-final-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
           test ! -e "$readback"
           mkdir "$readback"
           gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_RELEASE_ID" > "$metadata"
@@ -475,22 +471,54 @@ jobs:
           GH_TOKEN: ''
         run: node scripts/verify-remote-release.mjs "$VERSION"
 
+      - name: Prepare released Markd rename baseline
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          baseline_version="0.2.6"
+          run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          download_root="$RUNNER_TEMP/riffle-legacy-download-$run_key"
+          public_root="$RUNNER_TEMP/riffle-release-e2e-public-$run_key"
+          archive="$download_root/Markd-$baseline_version-mac-arm64.zip"
+          test ! -e "$download_root"
+          test ! -e "$public_root"
+          mkdir "$download_root" "$public_root"
+          gh release download "v$baseline_version" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "Markd-$baseline_version-mac-arm64.zip" \
+            --dir "$download_root"
+          test -f "$archive"
+          ditto -x -k "$archive" "$public_root"
+          baseline_app="$public_root/Markd.app"
+          test -d "$baseline_app"
+          test -f "$baseline_app/Contents/Resources/app-update.yml"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$baseline_app/Contents/Info.plist")" = "$baseline_version"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$baseline_app/Contents/Info.plist")" = "app.usemarkd"
+          codesign --verify --deep --strict --verbose=2 "$baseline_app"
+          spctl --assess --type execute --verbose=2 "$baseline_app"
+          xcrun stapler validate "$baseline_app"
+          {
+            echo "PUBLIC_BASELINE_VERSION=$baseline_version"
+            echo "PUBLIC_BASELINE_APP=$baseline_app"
+          } >> "$GITHUB_ENV"
+
       - name: Isolate production updater state
         if: env.PUBLISH == 'true'
         run: |
           state_root="$(dirname "$PUBLIC_BASELINE_APP")"
-          backup_root="$RUNNER_TEMP/markd-updater-backup-public-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          backup_root="$RUNNER_TEMP/riffle-updater-backup-public-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           node scripts/updater-hygiene.mjs prepare "$PUBLIC_BASELINE_APP" "$state_root" "$backup_root"
           echo "PUBLIC_HYGIENE_BACKUP=$backup_root" >> "$GITHUB_ENV"
 
       - name: Verify production GitHub updater relaunch
         if: env.PUBLISH == 'true'
         run: |
-          MARKD_BASELINE_EXECUTABLE="$PUBLIC_BASELINE_APP/Contents/MacOS/Markd" \
-          MARKD_INSTALLED_APP="$PUBLIC_BASELINE_APP" \
-          MARKD_TARGET_VERSION="$VERSION" \
-          MARKD_BASELINE_VERSION="$BASELINE_VERSION" \
-          MARKD_ALLOWED_TEMP_ROOT="$RUNNER_TEMP" \
+          RIFFLE_BASELINE_EXECUTABLE="$PUBLIC_BASELINE_APP/Contents/MacOS/Markd" \
+          RIFFLE_INSTALLED_APP="$PUBLIC_BASELINE_APP" \
+          RIFFLE_TARGET_VERSION="$VERSION" \
+          RIFFLE_BASELINE_VERSION="$PUBLIC_BASELINE_VERSION" \
+          RIFFLE_ALLOWED_TEMP_ROOT="$RUNNER_TEMP" \
             pnpm run test:updater
 
       - name: Restore production updater state
@@ -502,29 +530,31 @@ jobs:
         run: |
           run_key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           for path in \
-            "$RUNNER_TEMP/markd-installed-$run_key" \
-            "$RUNNER_TEMP/markd-baseline-$run_key" \
-            "$RUNNER_TEMP/markd-release-e2e-local-$run_key" \
-            "$RUNNER_TEMP/markd-release-e2e-public-$run_key" \
-            "$RUNNER_TEMP/markd-draft-existing-$run_key" \
-            "$RUNNER_TEMP/markd-draft-readback-$run_key" \
-            "$RUNNER_TEMP/markd-draft-before-$run_key.json" \
-            "$RUNNER_TEMP/markd-draft-assets-$run_key.json" \
-            "$RUNNER_TEMP/markd-draft-final-$run_key.json"; do
+            "$RUNNER_TEMP/riffle-installed-$run_key" \
+            "$RUNNER_TEMP/riffle-baseline-$run_key" \
+            "$RUNNER_TEMP/riffle-release-e2e-local-$run_key" \
+            "$RUNNER_TEMP/riffle-release-e2e-public-$run_key" \
+            "$RUNNER_TEMP/riffle-legacy-download-$run_key" \
+            "$RUNNER_TEMP/riffle-draft-existing-$run_key" \
+            "$RUNNER_TEMP/riffle-draft-readback-$run_key" \
+            "$RUNNER_TEMP/riffle-draft-before-$run_key.json" \
+            "$RUNNER_TEMP/riffle-draft-assets-$run_key.json" \
+            "$RUNNER_TEMP/riffle-draft-final-$run_key.json"; do
             test "$(dirname "$path")" = "$RUNNER_TEMP" || {
               echo "Refusing to clean release path outside RUNNER_TEMP: $path" >&2
               exit 1
             }
             case "$(basename "$path")" in
-              "markd-installed-$run_key" | \
-              "markd-baseline-$run_key" | \
-              "markd-release-e2e-local-$run_key" | \
-              "markd-release-e2e-public-$run_key" | \
-              "markd-draft-existing-$run_key" | \
-              "markd-draft-readback-$run_key" | \
-              "markd-draft-before-$run_key.json" | \
-              "markd-draft-assets-$run_key.json" | \
-              "markd-draft-final-$run_key.json") rm -rf "$path" ;;
+              "riffle-installed-$run_key" | \
+              "riffle-baseline-$run_key" | \
+              "riffle-release-e2e-local-$run_key" | \
+              "riffle-release-e2e-public-$run_key" | \
+              "riffle-legacy-download-$run_key" | \
+              "riffle-draft-existing-$run_key" | \
+              "riffle-draft-readback-$run_key" | \
+              "riffle-draft-before-$run_key.json" | \
+              "riffle-draft-assets-$run_key.json" | \
+              "riffle-draft-final-$run_key.json") rm -rf "$path" ;;
               *) echo "Refusing to clean unexpected release path: $path" >&2; exit 1 ;;
             esac
           done

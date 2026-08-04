@@ -47,10 +47,10 @@ let lastLifecycleKey = "";
 const pending = new Map<string, PendingCall>();
 const portWaiters = new Set<PortWaiter>();
 const lifecycleListeners = new Set<(event: EngineState) => void>();
-const engineUnavailableMessage = "Markd Engine is unavailable.";
+const engineUnavailableMessage = "Riffle Engine is unavailable.";
 const windowKind = v.parse(
   windowKindSchema,
-  ipcRenderer.sendSync("markd:window-kind"),
+  ipcRenderer.sendSync("riffle:window-kind"),
 );
 const captureOpenListeners = new Set<() => void>();
 const indexListeners = new Map<
@@ -77,7 +77,7 @@ function deliverIndexEvent(
   );
 }
 
-ipcRenderer.on("markd:capture-open", () => {
+ipcRenderer.on("riffle:capture-open", () => {
   for (const listener of captureOpenListeners) listener();
 });
 
@@ -185,13 +185,13 @@ function applyEngineState(nextState: EngineState): void {
 function invalidateGeneration(nextPort: MessagePort, message: string): void {
   if (port !== nextPort) return;
   const epoch = activeEpoch;
-  console.error("[markd-preload] invalid engine generation", { epoch, message });
+  console.error("[riffle-preload] invalid engine generation", { epoch, message });
   applyEngineState({
     state: "unavailable",
     epoch,
     error: engineUnavailable().error,
   });
-  ipcRenderer.send("markd:engine-protocol-error", { epoch });
+  ipcRenderer.send("riffle:engine-protocol-error", { epoch });
 }
 
 function attachPort(nextPort: MessagePort, epoch: number): void {
@@ -218,14 +218,14 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
   nextPort.onmessage = (event) => {
     const parsed = v.safeParse(engineMessageSchema, event.data);
     if (!parsed.success || parsed.output.epoch !== activeEpoch) {
-      invalidateGeneration(nextPort, "Markd Engine sent an invalid response.");
+      invalidateGeneration(nextPort, "Riffle Engine sent an invalid response.");
       return;
     }
 
     const message = parsed.output;
     if (message.type === "ready") {
       applyEngineState({ state: "ready", epoch });
-      ipcRenderer.send("markd:engine-ready", { epoch });
+      ipcRenderer.send("riffle:engine-ready", { epoch });
       return;
     }
 
@@ -243,7 +243,7 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
         if (resyncRequestedFor !== key) {
           resyncRequestedFor = key;
           void requestEngine("vault.index.rescan", null).then((result) => {
-            if (!result.ok) console.error("[markd-preload] Vault Index rescan failed");
+            if (!result.ok) console.error("[riffle-preload] Vault Index rescan failed");
           });
         }
         return;
@@ -260,7 +260,7 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
         );
         if (failure) {
           listenerFailed = true;
-          console.error("[markd-preload] Vault Index listener failed", failure);
+          console.error("[riffle-preload] Vault Index listener failed", failure);
         }
       }
       if (listenerFailed) {
@@ -274,7 +274,7 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
     pending.delete(message.id);
     if (message.ok) {
       if (!validateResponseValue(call.method, message.value)) {
-        invalidateGeneration(nextPort, "Markd Engine sent an invalid response value.");
+        invalidateGeneration(nextPort, "Riffle Engine sent an invalid response value.");
         call.resolve(engineUnavailable());
         return;
       }
@@ -297,10 +297,10 @@ function attachPort(nextPort: MessagePort, epoch: number): void {
 }
 
 async function readEngineState(): Promise<DesktopResult<EngineState>> {
-  const rawState: unknown = await ipcRenderer.invoke("markd:engine-state");
+  const rawState: unknown = await ipcRenderer.invoke("riffle:engine-state");
   const state = v.safeParse(engineStateSchema, rawState);
   if (!state.success) {
-    console.error("[markd-preload] invalid engine state", rawState);
+    console.error("[riffle-preload] invalid engine state", rawState);
     if (currentState) {
       applyEngineState({
         state: "unavailable",
@@ -308,7 +308,7 @@ async function readEngineState(): Promise<DesktopResult<EngineState>> {
         error: engineUnavailable().error,
       });
     }
-    ipcRenderer.send("markd:engine-channel-error", {
+    ipcRenderer.send("riffle:engine-channel-error", {
       reason: "invalid-channel",
     });
     return engineUnavailable();
@@ -322,7 +322,7 @@ async function rejectInvalidChannel(nextPort: MessagePort | undefined): Promise<
   nextPort?.close();
   const state = await readEngineState();
   if (state.ok) {
-    console.error("[markd-preload] invalid engine channel", {
+    console.error("[riffle-preload] invalid engine channel", {
       epoch: state.value.epoch,
     });
     applyEngineState({
@@ -331,12 +331,12 @@ async function rejectInvalidChannel(nextPort: MessagePort | undefined): Promise<
       error: engineUnavailable().error,
     });
   }
-  ipcRenderer.send("markd:engine-channel-error", {
+  ipcRenderer.send("riffle:engine-channel-error", {
     reason: "invalid-channel",
   });
 }
 
-ipcRenderer.on("markd:engine-state", (_event, input: unknown) => {
+ipcRenderer.on("riffle:engine-state", (_event, input: unknown) => {
   const state = v.safeParse(engineStateSchema, input);
   if (!state.success) {
     void rejectInvalidChannel(undefined);
@@ -345,7 +345,7 @@ ipcRenderer.on("markd:engine-state", (_event, input: unknown) => {
   applyEngineState(state.output);
 });
 
-ipcRenderer.on("markd:engine-port", (event, data: unknown) => {
+ipcRenderer.on("riffle:engine-port", (event, data: unknown) => {
   const metadata = v.safeParse(enginePortMetadataSchema, data);
   const nextPort = event.ports[0];
   if (!metadata.success || metadata.output.windowKind !== windowKind || !nextPort) {
@@ -392,7 +392,7 @@ async function requestEngine<T>(
   if (!parsedRequest.success) {
     return {
       ok: false,
-      error: { kind: "INVALID_REQUEST", message: "Markd Desktop rejected an invalid request." },
+      error: { kind: "INVALID_REQUEST", message: "Riffle Desktop rejected an invalid request." },
     };
   }
   const request = parsedRequest.output;
@@ -413,14 +413,14 @@ async function requestControl<T>(requestInput: unknown): Promise<DesktopResult<T
       ok: false,
       error: {
         kind: "INVALID_REQUEST",
-        message: "Markd Desktop rejected an invalid request.",
+        message: "Riffle Desktop rejected an invalid request.",
       },
     };
   }
   const request = parsedRequest.output;
   let rawResponse: unknown;
   try {
-    rawResponse = await ipcRenderer.invoke("markd:control", request);
+    rawResponse = await ipcRenderer.invoke("riffle:control", request);
   } catch (error) {
     return {
       ok: false,
@@ -436,7 +436,7 @@ async function requestControl<T>(requestInput: unknown): Promise<DesktopResult<T
       ok: false,
       error: {
         kind: "INVALID_RESPONSE",
-        message: "Markd Desktop returned an invalid response.",
+        message: "Riffle Desktop returned an invalid response.",
       },
     };
   }
@@ -448,7 +448,7 @@ async function requestControl<T>(requestInput: unknown): Promise<DesktopResult<T
       ok: false,
       error: {
         kind: "INVALID_RESPONSE",
-        message: "Markd Desktop returned an invalid response value.",
+        message: "Riffle Desktop returned an invalid response value.",
       },
     };
   }
@@ -475,7 +475,7 @@ async function openFromDialog(create: boolean): Promise<DesktopResult<unknown>> 
   return requestEngine("vault.open", { root: selection.value, create });
 }
 
-contextBridge.exposeInMainWorld("markd", {
+contextBridge.exposeInMainWorld("riffle", {
   app: {
     windowKind,
     openWebUrl: (url: string) =>

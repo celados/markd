@@ -32,21 +32,21 @@ export async function generateMetadata({ params }: SharePageProps): Promise<Meta
   const note = await getPublishedNote(slug, pagePath(path));
   if (!note) {
     return {
-      title: { absolute: "Published note · Markd" },
+      title: { absolute: "Published note · Riffle" },
       robots: { index: false },
     };
   }
 
-  const description = noteDescription(note.markdown) || "A note published with Markd.";
+  const description = noteDescription(note.markdown) || "A note published with Riffle.";
   return {
-    title: { absolute: `${note.title} · Markd` },
+    title: { absolute: `${note.title} · Riffle` },
     description,
     robots: { index: false, follow: false },
     openGraph: {
       title: note.title,
       description,
       type: "article",
-      siteName: "Markd",
+      siteName: "Riffle",
     },
     twitter: { card: "summary", title: note.title, description },
   };
@@ -100,7 +100,7 @@ export default async function SharePage({ params, searchParams }: SharePageProps
               href="/"
               className="rounded-sm text-foreground transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
             >
-              Markd
+              Riffle
             </a>
           </span>
         </footer>

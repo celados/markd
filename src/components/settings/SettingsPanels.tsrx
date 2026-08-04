@@ -77,7 +77,7 @@ export function GeneralSettings() @{
   <div className="space-y-6">
       <SettingsGroup
         title="Vault"
-        description="The folder Markd uses for notes and local app data."
+        description="The folder Riffle uses for notes and local app data."
       >
         <div className="flex items-center gap-3 rounded-xl bg-panel p-3">
           <p
@@ -100,7 +100,7 @@ export function GeneralSettings() @{
 
       <SettingsGroup
         title="Software updates"
-        description="Keep Markd current with the latest fixes and improvements."
+        description="Keep Riffle current with the latest fixes and improvements."
       >
         <div className="flex items-center justify-between gap-4 rounded-xl bg-panel p-3">
             <p aria-live="polite" className="min-w-0 text-[12.5px] text-muted">
@@ -164,7 +164,7 @@ export function CloudSettings() @{
 
       <SettingsGroup
         title="Subscription"
-        description="Your Markd Cloud access for publishing and future sync."
+        description="Your Riffle Cloud access for publishing and future sync."
       >
         <div className="flex items-center gap-3 rounded-xl bg-panel p-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-bg text-muted">
@@ -172,7 +172,7 @@ export function CloudSettings() @{
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-[12.5px] font-semibold text-ink">Markd Cloud</p>
+              <p className="text-[12.5px] font-semibold text-ink">Riffle Cloud</p>
               @if (account?.plan === "cloud") {
                 <StatusBadge tone="success">Active</StatusBadge>
               }
@@ -256,7 +256,7 @@ export function AppearanceSettings() @{
 
   <SettingsGroup
       title="Theme"
-      description="Choose how Markd looks across the editor and navigation."
+      description="Choose how Riffle looks across the editor and navigation."
       aside={
         <span className="flex items-center text-[10.5px] text-faint">
           <ShortcutKeys shortcut={cycleTheme} mac={mac} />

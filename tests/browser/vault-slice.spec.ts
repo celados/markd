@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { installVaultSliceFixture } from "./markd-fixture";
+import { installVaultSliceFixture } from "./riffle-fixture";
 
 test("empty Untitled Note moves to Trash without stale tree or tabs", async ({
   page,
@@ -21,8 +21,8 @@ test("empty Untitled Note moves to Trash without stale tree or tabs", async ({
     .poll(() =>
       page.evaluate(() =>
         (window as Window & {
-          __MARKD_VAULT_TEST__?: { trashCalls: string[] };
-        }).__MARKD_VAULT_TEST__?.trashCalls,
+          __RIFFLE_VAULT_TEST__?: { trashCalls: string[] };
+        }).__RIFFLE_VAULT_TEST__?.trashCalls,
       ),
     )
     .toEqual(["Untitled.md"]);
@@ -34,9 +34,9 @@ test("Electron asset URLs are supplied only by the semantic bridge", async ({ pa
   await page.evaluate(() => {
     const fixture = (
       window as Window & {
-        __MARKD_VAULT_TEST__: { notes: Map<string, string> };
+        __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
       }
-    ).__MARKD_VAULT_TEST__;
+    ).__RIFFLE_VAULT_TEST__;
     fixture.notes.set(
       "Existing.md",
       "![safe](.markd/assets/fixture.png)\n\n![escape](../outside.png)",
@@ -46,7 +46,7 @@ test("Electron asset URLs are supplied only by the semantic bridge", async ({ pa
 
   await expect(page.locator('img[data-vault-src=".markd/assets/fixture.png"]')).toHaveAttribute(
     "src",
-    "markd-asset://vault/fixture.png",
+    "riffle-asset://vault/fixture.png",
   );
   await expect(page.locator('img[data-vault-src="../outside.png"]')).toHaveAttribute("src", "");
 });
@@ -59,11 +59,11 @@ test("live index changes reload clean Notes and preserve dirty drafts", async ({
 
   await page.evaluate(() => {
     const fixture = (window as Window & {
-      __MARKD_VAULT_TEST__: {
+      __RIFFLE_VAULT_TEST__: {
         notes: Map<string, string>;
         emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => void;
       };
-    }).__MARKD_VAULT_TEST__;
+    }).__RIFFLE_VAULT_TEST__;
     fixture.notes.set("Existing.md", "# Clean external edit");
     fixture.emitIndexEvent({
       kind: "changes",
@@ -82,11 +82,11 @@ test("live index changes reload clean Notes and preserve dirty drafts", async ({
   await page.keyboard.type(" local draft");
   await page.evaluate(() => {
     const fixture = (window as Window & {
-      __MARKD_VAULT_TEST__: {
+      __RIFFLE_VAULT_TEST__: {
         notes: Map<string, string>;
         emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => void;
       };
-    }).__MARKD_VAULT_TEST__;
+    }).__RIFFLE_VAULT_TEST__;
     fixture.notes.set("Existing.md", "# Conflicting external edit");
     fixture.emitIndexEvent({
       kind: "changes",
@@ -114,7 +114,7 @@ test("live index changes reload clean Notes and preserve dirty drafts", async ({
 test("Vault Changes update the mounted Trees model incrementally", async ({ page }) => {
   await installVaultSliceFixture(page);
   await page.goto("/");
-  const host = page.locator("[data-markd-trees-mount] > [data-note-tree]");
+  const host = page.locator("[data-riffle-trees-mount] > [data-note-tree]");
   const identity = await host.evaluate((element) => {
     (element as HTMLElement).dataset.testIdentity = "mounted-once";
     return element.tagName;
@@ -122,10 +122,10 @@ test("Vault Changes update the mounted Trees model incrementally", async ({ page
 
   await page.evaluate(() => {
     const fixture = (window as Window & {
-      __MARKD_VAULT_TEST__: {
+      __RIFFLE_VAULT_TEST__: {
         emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => void;
       };
-    }).__MARKD_VAULT_TEST__;
+    }).__RIFFLE_VAULT_TEST__;
     fixture.emitIndexEvent({
       kind: "changes",
       indexEpoch: 1,
@@ -150,11 +150,11 @@ test("external removal closes a clean Note tab and view", async ({ page }) => {
 
   await page.evaluate(() => {
     const fixture = (window as Window & {
-      __MARKD_VAULT_TEST__: {
+      __RIFFLE_VAULT_TEST__: {
         notes: Map<string, string>;
         emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => void;
       };
-    }).__MARKD_VAULT_TEST__;
+    }).__RIFFLE_VAULT_TEST__;
     fixture.notes.delete("Existing.md");
     fixture.emitIndexEvent({
       kind: "changes",
@@ -176,26 +176,26 @@ test("removal during an in-flight save remains visibly missing", async ({ page }
   const editor = page.locator('[data-note-editor="active"] .ProseMirror');
   await page.evaluate(() => {
     (window as Window & {
-      __MARKD_VAULT_TEST__: { deferWrites: { value: boolean } };
-    }).__MARKD_VAULT_TEST__.deferWrites.value = true;
+      __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
+    }).__RIFFLE_VAULT_TEST__.deferWrites.value = true;
   });
   await editor.click();
   await page.keyboard.press("End");
   await page.keyboard.type(" pending save");
   await expect.poll(() => page.evaluate(() =>
     (window as Window & {
-      __MARKD_VAULT_TEST__: { operations: string[] };
-    }).__MARKD_VAULT_TEST__.operations,
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
   )).toEqual(["write:Existing.md"]);
 
   await page.evaluate(() => {
     const fixture = (window as Window & {
-      __MARKD_VAULT_TEST__: {
+      __RIFFLE_VAULT_TEST__: {
         notes: Map<string, string>;
         emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => void;
         succeedNextDeferredWrite: () => void;
       };
-    }).__MARKD_VAULT_TEST__;
+    }).__RIFFLE_VAULT_TEST__;
     fixture.notes.delete("Existing.md");
     fixture.emitIndexEvent({
       kind: "changes",
@@ -226,8 +226,8 @@ test("Vault switch flushes dirty Notes before sending open", async ({ page }) =>
 
   await expect.poll(() => page.evaluate(() =>
     (window as Window & {
-      __MARKD_VAULT_TEST__: { operations: string[] };
-    }).__MARKD_VAULT_TEST__.operations,
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
   )).toEqual(["write:Existing.md", "choose"]);
 });
 
@@ -241,16 +241,16 @@ test("failed dirty flush prevents Vault switch", async ({ page }) => {
   await page.keyboard.type(" conflicting draft");
   await page.evaluate(() => {
     (window as Window & {
-      __MARKD_VAULT_TEST__: { failWrites: { value: boolean } };
-    }).__MARKD_VAULT_TEST__.failWrites.value = true;
+      __RIFFLE_VAULT_TEST__: { failWrites: { value: boolean } };
+    }).__RIFFLE_VAULT_TEST__.failWrites.value = true;
   });
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Change" }).click();
 
   await expect.poll(() => page.evaluate(() =>
     (window as Window & {
-      __MARKD_VAULT_TEST__: { operations: string[] };
-    }).__MARKD_VAULT_TEST__.operations,
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
   )).toEqual(["write:Existing.md"]);
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(page.getByRole("tab", { name: /Existing/ })).toBeVisible();
@@ -264,16 +264,16 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
   const editor = page.locator('[data-note-editor="active"] .ProseMirror');
   await page.evaluate(() => {
     (window as Window & {
-      __MARKD_VAULT_TEST__: { deferWrites: { value: boolean } };
-    }).__MARKD_VAULT_TEST__.deferWrites.value = true;
+      __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
+    }).__RIFFLE_VAULT_TEST__.deferWrites.value = true;
   });
   await editor.click();
   await page.keyboard.press("End");
   await page.keyboard.type(" draft one");
   await expect.poll(() => page.evaluate(() =>
     (window as Window & {
-      __MARKD_VAULT_TEST__: { operations: string[] };
-    }).__MARKD_VAULT_TEST__.operations,
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
   )).toEqual(["write:Existing.md"]);
   await page.keyboard.type(" draft two");
   await page.waitForTimeout(600);
@@ -281,15 +281,15 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
   await page.getByRole("button", { name: "Change" }).click();
   await page.evaluate(() => {
     (window as Window & {
-      __MARKD_VAULT_TEST__: { failNextDeferredWrite: () => void };
-    }).__MARKD_VAULT_TEST__.failNextDeferredWrite();
+      __RIFFLE_VAULT_TEST__: { failNextDeferredWrite: () => void };
+    }).__RIFFLE_VAULT_TEST__.failNextDeferredWrite();
   });
   await page.getByRole("button", { name: "Close settings" }).click();
 
   await page.evaluate(() => {
     (window as Window & {
-      __MARKD_VAULT_TEST__: { deferWrites: { value: boolean } };
-    }).__MARKD_VAULT_TEST__.deferWrites.value = false;
+      __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
+    }).__RIFFLE_VAULT_TEST__.deferWrites.value = false;
   });
   await editor.click();
   await page.keyboard.press("End");
@@ -299,12 +299,12 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
 
   await expect.poll(() => page.evaluate(() =>
     (window as Window & {
-      __MARKD_VAULT_TEST__: { operations: string[] };
-    }).__MARKD_VAULT_TEST__.operations,
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
   )).toEqual(["write:Existing.md", "write:Existing.md", "choose"]);
   expect(await page.evaluate(() =>
     (window as Window & {
-      __MARKD_VAULT_TEST__: { notes: Map<string, string> };
-    }).__MARKD_VAULT_TEST__.notes.get("Existing.md"),
+      __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
+    }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
   )).toContain("draft one draft two newest");
 });

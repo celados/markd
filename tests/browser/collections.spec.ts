@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { installVaultSliceFixture } from "./markd-fixture";
+import { installVaultSliceFixture } from "./riffle-fixture";
 
 test.beforeEach(async ({ page }) => {
   await installVaultSliceFixture(page);
@@ -25,7 +25,7 @@ test("Todos and Bookmarks CRUD use the semantic Collections bridge", async ({ pa
   await page.getByRole("button", { name: "Delete bookmark" }).click();
   await expect(page.getByText("example.com/read", { exact: true })).toHaveCount(0);
 
-  expect(await page.evaluate(() => window.markd!.collections.snapshot())).toEqual({
+  expect(await page.evaluate(() => window.riffle!.collections.snapshot())).toEqual({
     ok: true,
     value: { todos: [], todoTags: [], bookmarks: [], bookmarkTags: [] },
   });

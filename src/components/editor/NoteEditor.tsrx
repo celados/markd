@@ -825,8 +825,8 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         toast.error(err instanceof Error ? err.message : String(err));
       }
     };
-    window.addEventListener("markd:note-action", handle);
-    return () => window.removeEventListener("markd:note-action", handle);
+    window.addEventListener("riffle:note-action", handle);
+    return () => window.removeEventListener("riffle:note-action", handle);
   }, [
     active,
     debouncedPersist,

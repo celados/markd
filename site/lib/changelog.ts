@@ -15,13 +15,14 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: VERSION,
     date: "2026-08-04",
     displayDate: "August 4, 2026",
-    title: "First-note onboarding fixed",
+    title: "Meet Riffle",
     summary:
-      "Opening an empty Vault now keeps its file tree ready for the first note.",
+      "The independent Electron-native app now has a name and identity of its own.",
     changes: [
-      "Show Untitled.md in the sidebar immediately after creating the first note in an empty Vault.",
-      "Keep the native file tree mounted while the empty-state message is removed.",
-      "Verify the onboarding path in the real Electron app before publishing.",
+      "Rename the desktop app, repository, packages, artifacts, website, and runtime surface to Riffle.",
+      "Carry an existing Vault selection forward without overwriting newer Riffle state.",
+      "Keep existing Vault assets and installed updater identity intact across the rename.",
+      "Verify the public Markd 0.2.6 app upgrades in place to Riffle before publication.",
     ],
     releaseUrl: RELEASE,
   },
@@ -38,7 +39,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Install a Developer ID signed and Apple-notarized DMG built for Apple Silicon.",
       "Verify the installed app and signed updater through background desktop journeys before publication.",
     ],
-    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.2.5",
+    releaseUrl: "https://github.com/celados/riffle/releases/tag/v0.2.5",
   },
   {
     version: "0.1.9",
@@ -51,7 +52,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Hide each property delete action again when the pointer leaves its row.",
       "Expose property delete and draft-cancel actions to assistive technology.",
     ],
-    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.1.9",
+    releaseUrl: "https://github.com/celados/riffle/releases/tag/v0.1.9",
   },
   {
     version: "0.1.8",
@@ -66,7 +67,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Unpin a note or folder directly from its sidebar row.",
       "Read folded and multiline YAML frontmatter values correctly in note properties.",
     ],
-    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.1.8",
+    releaseUrl: "https://github.com/celados/riffle/releases/tag/v0.1.8",
   },
   {
     version: "0.1.7",
@@ -81,7 +82,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Ship Apple Developer ID signed and notarized macOS builds from the Celados release pipeline.",
       "Verify future in-app updates with a Celados-owned updater signing key.",
     ],
-    releaseUrl: "https://github.com/celados/markd/releases/tag/v0.1.7",
+    releaseUrl: "https://github.com/celados/riffle/releases/tag/v0.1.7",
   },
   {
     version: "0.1.6",

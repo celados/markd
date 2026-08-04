@@ -227,7 +227,7 @@ export function CommandPalette() @{
         // Opening the Note must not wait on a secondary ranking signal, but a
         // failed access record stays observable instead of becoming silent success.
         void vaultDesktop.search.recordAccess(hit.rel).catch((error) => {
-          console.error("[markd] failed to record search access", error);
+          console.error("[riffle] failed to record search access", error);
         });
         vault.expandTo(hit.rel);
         vault.setView({ type: "note", rel: hit.rel });

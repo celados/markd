@@ -1,11 +1,11 @@
 import type { Page } from "@playwright/test";
 
-export async function installMarkdFixture(page: Page): Promise<void> {
+export async function installRiffleFixture(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const success = <T>(value: T) => ({ ok: true as const, value });
     const fixtureAssetUrl = (rel: string) =>
       rel.startsWith(".markd/assets/") && !rel.slice(".markd/assets/".length).includes("/")
-        ? `markd-asset://vault/${rel.slice(".markd/assets/".length)}`
+        ? `riffle-asset://vault/${rel.slice(".markd/assets/".length)}`
         : null;
     let collectionsSnapshot = {
       todos: [] as import("@/lib/types").Todo[],
@@ -13,7 +13,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
       bookmarks: [] as import("@/lib/types").Bookmark[],
       bookmarkTags: [] as string[],
     };
-    const collections: import("@/lib/desktop").MarkdDesktop["collections"] = {
+    const collections: import("@/lib/desktop").RiffleDesktop["collections"] = {
       snapshot: async () => success(collectionsSnapshot),
       todos: {
         create: async (text, tags = []) => {
@@ -157,7 +157,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
         },
       },
     };
-    window.markd = {
+    window.riffle = {
       app: {
         windowKind: "main",
         onEngineLifecycle: () => () => {},
@@ -170,7 +170,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
         create: async (title, content) => success({
           rel: `${title}.md`,
           snapshot: {
-            root: "/tmp/markd-fixture",
+            root: "/tmp/riffle-fixture",
             name: "Fixture Vault",
             tree: [],
             theme: "system" as const,
@@ -179,7 +179,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
         append: async (rel) => success({
           rel,
           snapshot: {
-            root: "/tmp/markd-fixture",
+            root: "/tmp/riffle-fixture",
             name: "Fixture Vault",
             tree: [],
             theme: "system" as const,
@@ -194,7 +194,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
         create: async () => success(null),
         snapshot: async () =>
           success({
-            root: "/tmp/markd-fixture",
+            root: "/tmp/riffle-fixture",
             name: "Fixture Vault",
             tree: [],
             theme: "system" as const,
@@ -203,7 +203,7 @@ export async function installMarkdFixture(page: Page): Promise<void> {
           success({
             rel: "Untitled.md",
             snapshot: {
-              root: "/tmp/markd-fixture",
+              root: "/tmp/riffle-fixture",
               name: "Fixture Vault",
               tree: [],
               theme: "system" as const,
@@ -211,32 +211,32 @@ export async function installMarkdFixture(page: Page): Promise<void> {
           }),
         openDailyNote: async (date) => success({
           rel: `${date}.md`,
-          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+          snapshot: { root: "/tmp/riffle-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
         }),
         createFolder: async (_dir, name) => success({
           rel: name,
-          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+          snapshot: { root: "/tmp/riffle-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
         }),
         renameEntry: async (rel) => success({
           rel,
-          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+          snapshot: { root: "/tmp/riffle-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
         }),
         moveEntry: async (rel) => success({
           rel,
-          snapshot: { root: "/tmp/markd-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
+          snapshot: { root: "/tmp/riffle-fixture", name: "Fixture Vault", tree: [], theme: "system" as const },
         }),
         readNote: async () => success(""),
         writeNote: async (_rel, content) => success(content),
         moveToTrash: async () =>
           success({
             snapshot: {
-              root: "/tmp/markd-fixture",
+              root: "/tmp/riffle-fixture",
               name: "Fixture Vault",
               tree: [],
               theme: "system" as const,
             },
           }),
-        resolveNotePath: async (rel) => success(`/tmp/markd-fixture/${rel}`),
+        resolveNotePath: async (rel) => success(`/tmp/riffle-fixture/${rel}`),
         getTheme: async () => success("system" as const),
         setTheme: async () => success(null),
         search: async () => success([]),
@@ -278,9 +278,9 @@ export async function installMarkdFixture(page: Page): Promise<void> {
 }
 
 export async function installVaultSliceFixture(page: Page): Promise<void> {
-  await installMarkdFixture(page);
+  await installRiffleFixture(page);
   await page.addInitScript(() => {
-    const root = "/tmp/markd-semantic-vault";
+    const root = "/tmp/riffle-semantic-vault";
     let tree = [
       {
         name: "Existing.md",
@@ -299,7 +299,7 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
     const success = <T>(value: T) => ({ ok: true as const, value });
     const fixtureAssetUrl = (rel: string) =>
       rel.startsWith(".markd/assets/") && !rel.slice(".markd/assets/".length).includes("/")
-        ? `markd-asset://vault/${rel.slice(".markd/assets/".length)}`
+        ? `riffle-asset://vault/${rel.slice(".markd/assets/".length)}`
         : null;
     const trashCalls: string[] = [];
     const operations: string[] = [];
@@ -315,9 +315,9 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
     const indexListeners = new Set<(
       event: import("@/lib/desktop").VaultIndexEvent,
     ) => void>();
-    const collections = window.markd!.collections;
+    const collections = window.riffle!.collections;
 
-    window.markd = {
+    window.riffle = {
       app: {
         windowKind: "main",
         onEngineLifecycle: () => () => {},
@@ -421,7 +421,7 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
       },
     };
     Object.assign(window, {
-      __MARKD_VAULT_TEST__: {
+      __RIFFLE_VAULT_TEST__: {
         trashCalls,
         notes,
         operations,

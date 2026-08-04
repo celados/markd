@@ -43,7 +43,7 @@ const VaultImage = (vaultRoot: string) =>
       const vaultSrc = HTMLAttributes.vaultSrc ?? HTMLAttributes.src;
       const src =
         vaultRoot && vaultSrc && !isRemoteSource(vaultSrc)
-          ? window.markd?.vault.assets.url(vaultSrc) ?? ""
+          ? window.riffle?.vault.assets.url(vaultSrc) ?? ""
           : HTMLAttributes.src;
       return ["img", { ...HTMLAttributes, src, "data-vault-src": vaultSrc }];
     },

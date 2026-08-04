@@ -1,19 +1,14 @@
-# Markd 0.2.6
+# Riffle 0.3.0
 
-Markd 0.2.6 fixes the empty-Vault onboarding path in the Electron-native app.
+Riffle is the independent continuation of the Electron-native local knowledge workspace previously released as Markd.
 
-## Fixed
+## Changed
 
-- Creating the first note after opening an empty Vault keeps the file tree mounted and immediately shows
-  `Untitled.md` in the sidebar.
-- Electron regression tests use isolated Markd configuration directories instead of reading the user's real
-  Vault selection.
+- Rename the desktop app, repository, packages, artifacts, runtime bridge, diagnostics, tests, website, and Cloud product copy to Riffle.
+- Import an existing Markd Vault selection into Riffle once without overwriting a newer Riffle configuration.
+- Keep the released macOS bundle identifier and `.markd/` Vault App Data format stable so installed clients and existing Markdown asset links continue to work.
+- Verify that the signed Markd 0.2.6 public release upgrades in place to the signed Riffle release through Squirrel/ShipIt.
 
 ## Supported platform
 
 This release supports macOS on Apple Silicon (`arm64`). Intel macOS, Windows, and Linux are not release targets.
-
-## Upgrade boundary
-
-The public Tauri 0.1.9 build is not an Electron updater baseline. The release workflow proves an Electron
-same-bundle upgrade through Squirrel/ShipIt and verifies the anonymous GitHub stable channel after publication.

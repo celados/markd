@@ -73,7 +73,7 @@ test.each([
 
 test("source inventory rejects every retired desktop path and dependency", async () => {
   expect(inspectElectronOnlySource()).toMatchObject({ retiredPaths: [] });
-  const root = await mkdtemp(join(tmpdir(), "markd-electron-only-test-"));
+  const root = await mkdtemp(join(tmpdir(), "riffle-electron-only-test-"));
   scratch.push(root);
   await mkdir(join(root, "src-tauri"));
   for (const path of [
@@ -158,18 +158,18 @@ test("artifact inspection rejects updater metadata for another repository", asyn
   const fixture = await packageFixture({
     includeFff: true,
     includeFfi: true,
-    updateRepo: "upstream/markd",
+    updateRepo: "upstream/riffle",
   });
   expect(() => inspectElectronPackage(fixture, "arm64")).toThrow(
-    /target celados\/markd/u,
+    /target celados\/riffle/u,
   );
 });
 
 test("updater manifest verifies every artifact size and SHA-512", async () => {
   const output = await manifestFixture();
   expect(inspectUpdateManifest(output, "1.0.0", "arm64")).toMatchObject({
-    artifacts: ["Markd-1.0.0-mac-arm64.zip"],
-    primaryArtifact: "Markd-1.0.0-mac-arm64.zip",
+    artifacts: ["Riffle-1.0.0-mac-arm64.zip"],
+    primaryArtifact: "Riffle-1.0.0-mac-arm64.zip",
   });
 });
 
@@ -187,10 +187,10 @@ test("updater manifest rejects a missing artifact and wrong digest", async () =>
 });
 
 test("updater manifest rejects stale, x64, and mismatched top-level metadata", async () => {
-  const stale = await manifestFixture({ artifactName: "Markd-0.9.0-mac-arm64.zip" });
+  const stale = await manifestFixture({ artifactName: "Riffle-0.9.0-mac-arm64.zip" });
   expect(() => inspectUpdateManifest(stale, "1.0.0", "arm64")).toThrow(/primary path/u);
 
-  const x64 = await manifestFixture({ artifactName: "Markd-1.0.0-mac-x64.zip" });
+  const x64 = await manifestFixture({ artifactName: "Riffle-1.0.0-mac-x64.zip" });
   expect(() => inspectUpdateManifest(x64, "1.0.0", "arm64")).toThrow(/primary path/u);
 
   const wrongVersion = await manifestFixture({ manifestVersion: "0.9.0" });
@@ -202,7 +202,7 @@ test("updater manifest rejects stale, x64, and mismatched top-level metadata", a
   );
 
   const staleOutput = await manifestFixture({
-    extraArtifactName: "Markd-0.9.0-mac-arm64.dmg",
+    extraArtifactName: "Riffle-0.9.0-mac-arm64.dmg",
   });
   expect(() => inspectUpdateManifest(staleOutput, "1.0.0", "arm64")).toThrow(
     /release payload must contain exactly/u,
@@ -211,9 +211,9 @@ test("updater manifest rejects stale, x64, and mismatched top-level metadata", a
 
 test("artifact names share one canonical macOS arm64 contract", () => {
   expect(electronArtifactNames("1.2.3", "arm64")).toEqual({
-    dmg: "Markd-1.2.3-mac-arm64.dmg",
-    zip: "Markd-1.2.3-mac-arm64.zip",
-    zipBlockmap: "Markd-1.2.3-mac-arm64.zip.blockmap",
+    dmg: "Riffle-1.2.3-mac-arm64.dmg",
+    zip: "Riffle-1.2.3-mac-arm64.zip",
+    zipBlockmap: "Riffle-1.2.3-mac-arm64.zip.blockmap",
     manifest: "latest-mac.yml",
   });
   expect(() => electronArtifactNames("1.2.3", "x64")).toThrow(/arm64/u);
@@ -225,22 +225,22 @@ test("release workflow removes every exact draft transaction readback target", a
     "utf8",
   );
   expect(workflow).toContain(
-    'existing_root="$RUNNER_TEMP/markd-draft-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"',
+    'existing_root="$RUNNER_TEMP/riffle-draft-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"',
   );
   expect(workflow).toContain('existing="$existing_root/$name"');
   const cleanup = workflow.slice(workflow.indexOf("- name: Remove isolated release roots"));
   expect(cleanup).not.toMatch(/rm -rf [^\n]*\*/u);
   expect(cleanup).toContain('rm -rf "$path"');
   for (const target of [
-    "markd-draft-existing-$run_key",
-    "markd-draft-readback-$run_key",
-    "markd-draft-before-$run_key.json",
-    "markd-draft-assets-$run_key.json",
-    "markd-draft-final-$run_key.json",
+    "riffle-draft-existing-$run_key",
+    "riffle-draft-readback-$run_key",
+    "riffle-draft-before-$run_key.json",
+    "riffle-draft-assets-$run_key.json",
+    "riffle-draft-final-$run_key.json",
   ]) {
     expect(cleanup).toContain(`"$RUNNER_TEMP/${target}"`);
   }
-  expect(workflow).not.toContain("markd-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$name");
+  expect(workflow).not.toContain("riffle-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$name");
 });
 
 test("release draft transaction uses one stable release ID", async () => {
@@ -379,8 +379,21 @@ test("release installed journey passes its app through the packaged smoke CLI", 
     "utf8",
   );
   expect(workflow).toContain(
-    'run: MARKD_E2E_BACKGROUND=1 pnpm run test:packaged -- "$INSTALLED_APP"',
+    'run: RIFFLE_E2E_BACKGROUND=1 pnpm run test:packaged -- "$INSTALLED_APP"',
   );
+});
+
+test("release proves the published Markd baseline can become Riffle", async () => {
+  const workflow = await readFile(
+    join(process.cwd(), ".github", "workflows", "release-macos.yml"),
+    "utf8",
+  );
+  expect(workflow).toContain('gh release download "v$baseline_version"');
+  expect(workflow).toContain('baseline_app="$public_root/Markd.app"');
+  expect(workflow).toContain(
+    'RIFFLE_BASELINE_EXECUTABLE="$PUBLIC_BASELINE_APP/Contents/MacOS/Markd"',
+  );
+  expect(workflow).toContain('RIFFLE_BASELINE_VERSION="$PUBLIC_BASELINE_VERSION"');
 });
 
 async function packageFixture(options: {
@@ -395,10 +408,10 @@ async function packageFixture(options: {
   fffNativeVersion?: string;
   ffiNativeVersion?: string;
 }): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "markd-package-test-"));
+  const root = await mkdtemp(join(tmpdir(), "riffle-package-test-"));
   scratch.push(root);
   const arch = options.arch ?? "arm64";
-  const app = join(root, "Markd.app");
+  const app = join(root, "Riffle.app");
   const resources = join(app, "Contents", "Resources");
   const source = join(root, "asar-source");
   for (const path of [
@@ -455,7 +468,7 @@ async function packageFixture(options: {
     // Production only unpacks the two supported arm64 packages; extras must stay visible to the verifier.
     unpackDir: "node_modules/{@celados/fff-bin-darwin-arm64,@yuuang/ffi-rs-darwin-arm64}",
   });
-  const [owner, repo] = (options.updateRepo ?? "celados/markd").split("/");
+  const [owner, repo] = (options.updateRepo ?? "celados/riffle").split("/");
   await writeFile(
     join(resources, "app-update.yml"),
     `provider: github\nowner: ${owner}\nrepo: ${repo}\n`,
@@ -476,10 +489,10 @@ async function manifestFixture(options: {
   topLevelSha512?: string;
   extraArtifactName?: string;
 } = {}): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "markd-manifest-test-"));
+  const root = await mkdtemp(join(tmpdir(), "riffle-manifest-test-"));
   scratch.push(root);
-  const actualName = "Markd-1.0.0-mac-arm64.zip";
-  const dmgName = "Markd-1.0.0-mac-arm64.dmg";
+  const actualName = "Riffle-1.0.0-mac-arm64.zip";
+  const dmgName = "Riffle-1.0.0-mac-arm64.dmg";
   const body = Buffer.from("artifact");
   const dmgBody = Buffer.from("dmg");
   await writeFile(join(root, actualName), body);

@@ -19,7 +19,7 @@ import { parse } from "yaml";
 
 const bundleId = "app.usemarkd";
 const shipItLabel = `${bundleId}.ShipIt`;
-const updaterCacheName = "markd-updater";
+const updaterCacheNames = new Set(["markd-updater", "riffle-updater"]);
 const stateFileName = "state.json";
 
 export function resolveUpdaterHygienePaths(
@@ -36,8 +36,8 @@ export function resolveUpdaterHygienePaths(
   const allowedParent = realpathSync(resolve(options.runnerTemp ?? process.env.RUNNER_TEMP ?? temporaryRoot));
   if (
     normalize(dirname(resolvedApp)) !== normalize(resolvedStateRoot) ||
-    !basename(resolvedStateRoot).startsWith("markd-release-e2e-") ||
-    !basename(resolvedBackupRoot).startsWith("markd-updater-backup-") ||
+    !basename(resolvedStateRoot).startsWith("riffle-release-e2e-") ||
+    !basename(resolvedBackupRoot).startsWith("riffle-updater-backup-") ||
     !isContainedBy(realpathSync(resolvedStateRoot), allowedParent) ||
     !isContainedBy(realpathSync(dirname(resolvedBackupRoot)), allowedParent)
   ) {
@@ -45,8 +45,9 @@ export function resolveUpdaterHygienePaths(
   }
   const configPath = join(resolvedApp, "Contents", "Resources", "app-update.yml");
   const config = parse(readFileSync(configPath, "utf8"));
-  if (config?.updaterCacheDirName !== updaterCacheName) {
-    throw new Error(`Packaged updaterCacheDirName must be ${updaterCacheName}.`);
+  const updaterCacheName = config?.updaterCacheDirName;
+  if (!updaterCacheNames.has(updaterCacheName)) {
+    throw new Error("Packaged updaterCacheDirName must belong to the released rename lineage.");
   }
   const cacheRoot = join(home, "Library", "Caches");
   return {
@@ -56,6 +57,7 @@ export function resolveUpdaterHygienePaths(
     allowedParent,
     temporaryRoot,
     configPath,
+    updaterCacheName,
     updaterCache: join(cacheRoot, updaterCacheName),
     shipItCache: join(cacheRoot, shipItLabel),
     updaterId: join(resolvedStateRoot, "config", ".updaterId"),
@@ -73,7 +75,7 @@ export function prepareUpdaterHygiene(appPath, stateRoot, backupRoot, options = 
   accessSync(paths.appPath, constants.W_OK);
   accessSync(paths.stateRoot, constants.W_OK);
   assertBundleId(paths.appPath, options);
-  assertNoMarkdProcess(options);
+  assertNoProductProcess(options);
   if (
     launchdJobExists(`gui/${process.getuid()}`, paths.launchdLabel, options) ||
     launchdJobExists("system", paths.launchdLabel, options)
@@ -113,12 +115,18 @@ export function prepareUpdaterHygiene(appPath, stateRoot, backupRoot, options = 
 
 export function restoreUpdaterHygiene(backupRoot, options = {}) {
   const resolvedBackupRoot = canonicalizePendingPath(backupRoot);
-  if (!basename(resolvedBackupRoot).startsWith("markd-updater-backup-")) {
+  if (!basename(resolvedBackupRoot).startsWith("riffle-updater-backup-")) {
     throw new Error("Updater hygiene restore rejected an invalid backup root.");
   }
   if (!existsSync(resolvedBackupRoot)) return;
   const state = JSON.parse(readFileSync(join(resolvedBackupRoot, stateFileName), "utf8"));
-  const expected = deriveRestorePaths(state.stateRoot, resolvedBackupRoot, options);
+  const expected = deriveRestorePaths(
+    state.stateRoot,
+    resolvedBackupRoot,
+    basename(state.appPath),
+    state.updaterCacheName,
+    options,
+  );
   for (const key of Object.keys(expected)) {
     if (state[key] !== expected[key]) {
       throw new Error(`Updater hygiene backup contains invalid restore target: ${key}`);
@@ -154,15 +162,17 @@ export function restoreUpdaterHygiene(backupRoot, options = {}) {
   rmSync(resolvedBackupRoot, { recursive: true, force: true });
 }
 
-function deriveRestorePaths(stateRoot, backupRoot, options) {
+function deriveRestorePaths(stateRoot, backupRoot, appName, updaterCacheName, options) {
   const resolvedStateRoot = canonicalizePendingPath(stateRoot);
   const resolvedBackupRoot = canonicalizePendingPath(backupRoot);
   const home = resolve(options.home ?? homedir());
   const temporaryRoot = realpathSync(resolve(options.temporaryRoot ?? tmpdir()));
   const allowedParent = realpathSync(resolve(options.runnerTemp ?? process.env.RUNNER_TEMP ?? temporaryRoot));
   if (
-    !basename(resolvedStateRoot).startsWith("markd-release-e2e-") ||
-    !basename(resolvedBackupRoot).startsWith("markd-updater-backup-") ||
+    !["Markd.app", "Riffle.app"].includes(appName) ||
+    !updaterCacheNames.has(updaterCacheName) ||
+    !basename(resolvedStateRoot).startsWith("riffle-release-e2e-") ||
+    !basename(resolvedBackupRoot).startsWith("riffle-updater-backup-") ||
     !isContainedBy(resolvedStateRoot, allowedParent) ||
     !isContainedBy(resolvedBackupRoot, allowedParent) ||
     realpathSync(dirname(resolvedStateRoot)) !== allowedParent ||
@@ -170,7 +180,7 @@ function deriveRestorePaths(stateRoot, backupRoot, options) {
   ) {
     throw new Error("Updater hygiene restore paths escaped the allowed temporary root.");
   }
-  const appPath = join(resolvedStateRoot, "Markd.app");
+  const appPath = join(resolvedStateRoot, appName);
   const cacheRoot = join(home, "Library", "Caches");
   return {
     appPath,
@@ -179,6 +189,7 @@ function deriveRestorePaths(stateRoot, backupRoot, options) {
     allowedParent,
     temporaryRoot,
     configPath: join(appPath, "Contents", "Resources", "app-update.yml"),
+    updaterCacheName,
     updaterCache: join(cacheRoot, updaterCacheName),
     shipItCache: join(cacheRoot, shipItLabel),
     updaterId: join(resolvedStateRoot, "config", ".updaterId"),
@@ -207,13 +218,13 @@ function assertBundleId(appPath, options) {
   }
 }
 
-function assertNoMarkdProcess(options) {
+function assertNoProductProcess(options) {
   const result = run("ps", ["-axo", "pid=,command="], options);
   const running = result.stdout.split("\n").filter((line) =>
-    /\/Markd\.app\/Contents\/MacOS\/Markd(?:\s|$)/u.test(line),
+    /\/(?:Markd|Riffle)\.app\/Contents\/MacOS\/(?:Markd|Riffle)(?:\s|$)/u.test(line),
   );
   if (running.length > 0) {
-    throw new Error("A Markd app process is already running; updater hygiene refused to mutate shared state.");
+    throw new Error("A released app process is already running; updater hygiene refused to mutate shared state.");
   }
 }
 

@@ -1,11 +1,11 @@
-# Markd
+# Riffle
 
-Markd is a local-first knowledge workspace whose durable source of truth is a user-selected folder of portable Markdown files. Product language describes user-visible data and behavior independently of the current desktop runtime.
+Riffle is a local-first knowledge workspace whose durable source of truth is a user-selected folder of portable Markdown files. Product language describes user-visible data and behavior independently of the current desktop runtime.
 
 ## Language
 
 **Vault**:
-The user-selected folder whose Markdown files and real subfolders form one Markd knowledge workspace.
+The user-selected folder whose Markdown files and real subfolders form one Riffle knowledge workspace.
 _Avoid_: Repository, project, workspace root
 
 **Note**:
@@ -13,7 +13,7 @@ A Markdown file inside a Vault, identified by its Vault-relative path rather tha
 _Avoid_: Document record, page entity
 
 **Vault App Data**:
-Markd-owned data stored below `<vault>/.markd/`, including collections and pasted assets; it is not part of the user's Note tree.
+Riffle-owned data stored below `<vault>/.markd/`, including collections and pasted assets; it is not part of the user's Note tree. The directory name is a stable on-disk format identifier, not the product name.
 _Avoid_: Hidden notes, internal vault
 
 **Vault Index**:
@@ -33,7 +33,7 @@ A user-maintained shortcut to an existing Note or folder; it does not move or du
 _Avoid_: Favorite copy, pinned note record
 
 **Collection**:
-Markd-owned structured items stored in Vault App Data, currently Todos and Bookmarks.
+Riffle-owned structured items stored in Vault App Data, currently Todos and Bookmarks.
 _Avoid_: Note metadata, database table
 
 **Quick Capture**:

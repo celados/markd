@@ -55,7 +55,7 @@ export function TabBar() @{
         />
       }
       <div
-        data-markd-drag-region
+        data-riffle-drag-region
         data-tab-strip-drag-region
         aria-hidden="true"
         className="min-w-12 flex-1 shrink-0"
@@ -143,7 +143,7 @@ function Tab(props: {
 
     <div
       role="tab"
-      data-markd-no-drag
+      data-riffle-no-drag
       aria-selected={active}
       tabIndex={focusable ? 0 : -1}
       title={rel}

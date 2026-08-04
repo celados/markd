@@ -15,8 +15,8 @@ afterEach(async () => {
   await Promise.all(scratch.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-test("updater hygiene resolves only exact Markd cache, ShipIt, and user-data paths", async () => {
-  const fixture = await hygieneFixture("markd-updater");
+test("updater hygiene resolves only exact Riffle cache, ShipIt, and user-data paths", async () => {
+  const fixture = await hygieneFixture("riffle-updater");
   const canonicalParent = await realpath(fixture.parent);
   expect(resolveUpdaterHygienePaths(
     fixture.app,
@@ -26,15 +26,29 @@ test("updater hygiene resolves only exact Markd cache, ShipIt, and user-data pat
   )).toMatchObject({
     allowedParent: canonicalParent,
     temporaryRoot: await realpath(fixture.temporaryRoot),
-    updaterCache: join(fixture.home, "Library", "Caches", "markd-updater"),
+    updaterCache: join(fixture.home, "Library", "Caches", "riffle-updater"),
     shipItCache: join(fixture.home, "Library", "Caches", "app.usemarkd.ShipIt"),
-    updaterId: join(canonicalParent, "markd-release-e2e-local-fixture", "config", ".updaterId"),
+    updaterId: join(canonicalParent, "riffle-release-e2e-local-fixture", "config", ".updaterId"),
     launchdLabel: "app.usemarkd.ShipIt",
     preferencesDomain: "app.usemarkd.ShipIt",
   });
 });
 
-test.each(["../escape", "markd-updater-old", "app.usemarkd.ShipIt"])(
+test("updater hygiene accepts the released Markd cache during the rename upgrade", async () => {
+  const fixture = await hygieneFixture("markd-updater", {}, "Markd.app");
+  expect(resolveUpdaterHygienePaths(
+    fixture.app,
+    fixture.root,
+    fixture.backup,
+    fixture.options,
+  )).toMatchObject({
+    appPath: await realpath(fixture.app),
+    updaterCacheName: "markd-updater",
+    updaterCache: join(fixture.home, "Library", "Caches", "markd-updater"),
+  });
+});
+
+test.each(["../escape", "riffle-updater-old", "app.usemarkd.ShipIt"])(
   "updater hygiene rejects an unexpected cache contract: %s",
   async (name) => {
     const fixture = await hygieneFixture(name);
@@ -48,7 +62,7 @@ test.each(["../escape", "markd-updater-old", "app.usemarkd.ShipIt"])(
 );
 
 test("prepare and restore roundtrip exact updater state and remove only new ShipIt temp entries", async () => {
-  const fixture = await hygieneFixture("markd-updater");
+  const fixture = await hygieneFixture("riffle-updater");
   const paths = resolveUpdaterHygienePaths(
     fixture.app,
     fixture.root,
@@ -81,7 +95,7 @@ test("prepare and restore roundtrip exact updater state and remove only new Ship
 });
 
 test("prepare rejects an existing system ShipIt launchd job", async () => {
-  const fixture = await hygieneFixture("markd-updater", { systemJob: true });
+  const fixture = await hygieneFixture("riffle-updater", { systemJob: true });
   expect(() => prepareUpdaterHygiene(
     fixture.app,
     fixture.root,
@@ -91,7 +105,7 @@ test("prepare rejects an existing system ShipIt launchd job", async () => {
 });
 
 test("prepare and restore export, clear, and re-import existing currentHost preferences", async () => {
-  const fixture = await hygieneFixture("markd-updater", { preferences: true });
+  const fixture = await hygieneFixture("riffle-updater", { preferences: true });
   prepareUpdaterHygiene(fixture.app, fixture.root, fixture.backup, fixture.options);
   expect(fixture.commandState.preferences).toBe(false);
   fixture.commandState.userJob = true;
@@ -104,7 +118,7 @@ test("prepare and restore export, clear, and re-import existing currentHost pref
 });
 
 test("restore rejects tampered state instead of deleting attacker-selected paths", async () => {
-  const fixture = await hygieneFixture("markd-updater");
+  const fixture = await hygieneFixture("riffle-updater");
   prepareUpdaterHygiene(fixture.app, fixture.root, fixture.backup, fixture.options);
   const statePath = join(fixture.backup, "state.json");
   const state = JSON.parse(await readFile(statePath, "utf8"));
@@ -118,12 +132,13 @@ test("restore rejects tampered state instead of deleting attacker-selected paths
 async function hygieneFixture(
   cacheName: string,
   initial: { preferences?: boolean; systemJob?: boolean } = {},
+  appName = "Riffle.app",
 ) {
-  const parent = await mkdtemp(join(tmpdir(), "markd-hygiene-fixture-"));
+  const parent = await mkdtemp(join(tmpdir(), "riffle-hygiene-fixture-"));
   scratch.push(parent);
-  const root = join(parent, "markd-release-e2e-local-fixture");
-  const app = join(root, "Markd.app");
-  const backup = join(parent, "markd-updater-backup-fixture");
+  const root = join(parent, "riffle-release-e2e-local-fixture");
+  const app = join(root, appName);
+  const backup = join(parent, "riffle-updater-backup-fixture");
   const home = join(parent, "home");
   const temporaryRoot = join(parent, "native-temp");
   await mkdir(join(app, "Contents", "Resources"), { recursive: true });

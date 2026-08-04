@@ -72,7 +72,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    return window.markd?.vault.onIndexEvent((event) => {
+    return window.riffle?.vault.onIndexEvent((event) => {
       applyIndexEvent(event);
       if (event.kind === "replacement" || event.changes.some((change) => change.kind === "removed")) {
         void usePins.getState().load();
@@ -163,7 +163,7 @@ export default function App() {
 }
 
 function toggleSidebarEditorFocus() {
-  const sidebar = document.querySelector<HTMLElement>("[data-markd-sidebar]");
+  const sidebar = document.querySelector<HTMLElement>("[data-riffle-sidebar]");
   if (sidebar?.contains(document.activeElement)) {
     document
       .querySelector<HTMLElement>(

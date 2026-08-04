@@ -39,9 +39,9 @@ test("the rich editor receives only the body and resolves long YAML values", asy
   await page.evaluate(() => {
     const fixture = (
       window as Window & {
-        __MARKD_TEST__: { notes: Map<string, string> };
+        __RIFFLE_TEST__: { notes: Map<string, string> };
       }
-    ).__MARKD_TEST__;
+    ).__RIFFLE_TEST__;
     fixture.notes.set(
       "README.md",
       "---\nfixture: preserved\nsummary: >-\n  A long field value loaded through the semantic Electron bridge.\n---\n# README\n\nOctane + pnpm verification.",
@@ -77,9 +77,9 @@ test("dirty editor wins an external-change conflict and selection survives tabs"
   await page.evaluate(() => {
     const fixture = (
       window as Window & {
-        __MARKD_TEST__: { notes: Map<string, string> };
+        __RIFFLE_TEST__: { notes: Map<string, string> };
       }
-    ).__MARKD_TEST__;
+    ).__RIFFLE_TEST__;
     fixture.notes.set("README.md", "# External replacement");
     window.dispatchEvent(new Event("focus"));
   });
@@ -103,9 +103,9 @@ test("clean editor reloads an external body without exposing its frontmatter", a
   await page.evaluate(() => {
     const fixture = (
       window as Window & {
-        __MARKD_TEST__: { notes: Map<string, string> };
+        __RIFFLE_TEST__: { notes: Map<string, string> };
       }
-    ).__MARKD_TEST__;
+    ).__RIFFLE_TEST__;
     fixture.notes.set(
       "README.md",
       "---\nsource: external\n---\n# Reloaded\n\nClean disk change.",
@@ -159,7 +159,7 @@ test("tab context menu manages tabs, pins, and both path forms", async ({
   await page.getByRole("menuitem", { name: "Copy path" }).click();
   await expect
     .poll(() => clipboardText(page))
-    .toBe("/private/tmp/markd-browser-fixture/README.md");
+    .toBe("/private/tmp/riffle-browser-fixture/README.md");
 
   await readmeTab.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy relative path" }).click();
@@ -176,7 +176,7 @@ test("tab strip blank space is draggable while tabs and menus stay interactive",
 }) => {
   const blank = page.locator("[data-tab-strip-drag-region]");
   await expect(blank).toHaveCSS("-webkit-app-region", "drag");
-  await expect(page.locator("[data-markd-drag-region]").first()).toHaveCSS(
+  await expect(page.locator("[data-riffle-drag-region]").first()).toHaveCSS(
     "-webkit-app-region",
     "drag",
   );
@@ -310,9 +310,9 @@ async function clearCommands(page: Page) {
   await page.evaluate(() => {
     const fixture = (
       window as unknown as {
-        __MARKD_TEST__: { operations: unknown[] };
+        __RIFFLE_TEST__: { operations: unknown[] };
       }
-    ).__MARKD_TEST__;
+    ).__RIFFLE_TEST__;
     fixture.operations.length = 0;
   });
 }
@@ -321,9 +321,9 @@ async function clipboardText(page: Page) {
   return page.evaluate(() => {
     const fixture = (
       window as unknown as {
-        __MARKD_TEST__: { clipboard: string[] };
+        __RIFFLE_TEST__: { clipboard: string[] };
       }
-    ).__MARKD_TEST__;
+    ).__RIFFLE_TEST__;
     return fixture.clipboard.at(-1);
   });
 }
@@ -332,14 +332,14 @@ async function latestWrite(page: Page, rel: string) {
   return page.evaluate((targetRel) => {
     const fixture = (
       window as unknown as {
-        __MARKD_TEST__: {
+        __RIFFLE_TEST__: {
           operations: Array<{
             method: string;
             params: Record<string, unknown>;
           }>;
         };
       }
-    ).__MARKD_TEST__;
+    ).__RIFFLE_TEST__;
     const writes = fixture.operations.filter(
       (entry) =>
         entry.method === "vault.notes.write" && String(entry.params.rel) === targetRel,

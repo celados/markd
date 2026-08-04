@@ -34,7 +34,7 @@ const PAGES: Array<{
   },
   {
     id: "cloud",
-    label: "Markd Cloud",
+    label: "Riffle Cloud",
     description: "Account, publishing, and sync",
     icon: Cloud,
   },
@@ -109,7 +109,7 @@ export function SettingsModal() @{
               <h2 className="text-[14px] font-semibold tracking-[-0.01em]">
                 Settings
               </h2>
-              <p className="mt-0.5 text-[10.5px] text-faint">Markd preferences</p>
+              <p className="mt-0.5 text-[10.5px] text-faint">Riffle preferences</p>
             </div>
           </div>
 

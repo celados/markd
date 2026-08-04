@@ -300,17 +300,17 @@ function TagRail({ tags, active }: { tags: string[]; active: string | null }) {
   );
 }
 
-const TODO_TAGS = ["work", "personal", "markd"];
+const TODO_TAGS = ["work", "personal", "riffle"];
 const TODOS = [
   { done: false, text: "Reply to design feedback", tag: "work" },
   { done: false, text: "Book flights for the offsite", tag: "personal" },
-  { done: true, text: "Ship v0.1.1 to the updater", tag: "markd" },
-  { done: false, text: "Draft the Q3 roadmap", tag: "markd" },
-  { done: false, text: "Review agent ACP notes", tag: "markd" },
+  { done: true, text: "Ship v0.1.1 to the updater", tag: "riffle" },
+  { done: false, text: "Draft the Q3 roadmap", tag: "riffle" },
+  { done: false, text: "Review agent ACP notes", tag: "riffle" },
 ];
 
 function TodosPane() {
-  const active = "markd";
+  const active = "riffle";
   const rows = TODOS.filter((t) => t.tag === active);
   const open = rows.filter((r) => !r.done).length;
   return (

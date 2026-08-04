@@ -64,14 +64,14 @@ test("nested row wins over the root drop zone", async ({ page }) => {
     .poll(() =>
       page.evaluate(() => {
         const state = window as Window & {
-          __MARKD_TEST__?: {
+          __RIFFLE_TEST__?: {
             operations: Array<{
               method: string;
               params: Record<string, unknown>;
             }>;
           };
         };
-        return state.__MARKD_TEST__?.operations.filter(
+        return state.__RIFFLE_TEST__?.operations.filter(
           ({ method }) => method === "vault.entries.move",
         );
       }),

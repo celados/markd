@@ -1,27 +1,27 @@
 ---
 type: AgentConfig
 title: GitHub issue tracker
-description: Markd 工程 skills 创建、读取、依赖连接和关闭工作项的统一合同。
+description: Riffle 工程 skills 创建、读取、依赖连接和关闭工作项的统一合同。
 status: active
-resource: https://github.com/celados/markd/issues
+resource: https://github.com/celados/riffle/issues
 generated: { by: codex/gpt-5, at: 2026-08-03T10:50:11+08:00 }
 ---
 
 # Issue tracker
 
-Issues 和 PRD 使用 `celados/markd` GitHub Issues，通过 `gh --repo celados/markd` 操作。这个 checkout
+Issues 和 PRD 使用 `celados/riffle` GitHub Issues，通过 `gh --repo celados/riffle` 操作。这个 checkout
 同时配置了 fork origin 和只读 upstream，禁止依赖 `gh` 的 remote 自动推断。
 
 ## Operations
 
-- 创建：`gh issue create --repo celados/markd`
-- 读取：`gh issue view <number> --repo celados/markd --comments`
-- 查询：`gh issue list --repo celados/markd --state open --json number,title,body,labels,comments`
-- 评论：`gh issue comment <number> --repo celados/markd`
-- 标签：`gh issue edit <number> --repo celados/markd --add-label/--remove-label`
-- 关闭：`gh issue close <number> --repo celados/markd --comment "..."`
+- 创建：`gh issue create --repo celados/riffle`
+- 读取：`gh issue view <number> --repo celados/riffle --comments`
+- 查询：`gh issue list --repo celados/riffle --state open --json number,title,body,labels,comments`
+- 评论：`gh issue comment <number> --repo celados/riffle`
+- 标签：`gh issue edit <number> --repo celados/riffle --add-label/--remove-label`
+- 关闭：`gh issue close <number> --repo celados/riffle --comment "..."`
 
-GitHub API 和 native dependency 调用也必须显式使用 `repos/celados/markd/...`。
+GitHub API 和 native dependency 调用也必须显式使用 `repos/celados/riffle/...`。
 
 ## Pull requests
 

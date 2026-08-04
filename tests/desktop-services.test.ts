@@ -4,7 +4,7 @@ import {
   cloudDesktop,
   updatesDesktop,
 } from "../src/lib/desktop-services";
-import { DesktopError, type MarkdDesktop } from "../src/lib/desktop";
+import { DesktopError, type RiffleDesktop } from "../src/lib/desktop";
 
 afterEach(() => {
   Reflect.deleteProperty(globalThis, "window");
@@ -56,13 +56,13 @@ describe("desktop capability services", () => {
   });
 });
 
-function installWindow(markd: {
+function installWindow(riffle: {
   app: { windowKind: "main" | "quick-capture" };
   capture: Record<string, unknown>;
 }): void {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { markd: markd as unknown as MarkdDesktop },
+    value: { riffle: riffle as unknown as RiffleDesktop },
   });
 }
 

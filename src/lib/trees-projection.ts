@@ -21,7 +21,7 @@ export function createTreesProjection(
     for (const node of nodes) {
       if (hiddenRoots.has(node.rel)) continue;
       byRel.set(node.rel, node);
-      // Trees uses a trailing slash only as its directory type marker. Markd's
+      // Trees uses a trailing slash only as its directory type marker. Riffle's
       // Vault-relative path remains the identity on both sides of this seam.
       paths.push(toTreesPath(node));
       if (node.children) visit(node.children);

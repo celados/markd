@@ -6,7 +6,7 @@ export type FindMatch = { from: number; to: number };
 
 type FindHighlightState = { matches: FindMatch[]; activeIndex: number };
 
-const findHighlightKey = new PluginKey<FindHighlightState>("markd-find");
+const findHighlightKey = new PluginKey<FindHighlightState>("riffle-find");
 
 export const FindHighlightExtension = Extension.create({
   name: "findHighlight",
@@ -37,8 +37,8 @@ export const FindHighlightExtension = Extension.create({
                 Decoration.inline(match.from, match.to, {
                   class:
                     index === pluginState.activeIndex
-                      ? "markd-find-match markd-find-match-active"
-                      : "markd-find-match",
+                      ? "riffle-find-match riffle-find-match-active"
+                      : "riffle-find-match",
                 }),
               ),
             ) as never;

@@ -1,8 +1,8 @@
 import { GITHUB, VERSION } from "@/lib/config";
 
 export const SITE_URL = "https://usemarkd.app";
-export const SITE_NAME = "Markd";
-export const SITE_TITLE = "Markd: local-first Markdown notes for macOS";
+export const SITE_NAME = "Riffle";
+export const SITE_TITLE = "Riffle: local-first Markdown notes for macOS";
 export const SITE_DESCRIPTION =
   "A fast, local-first Markdown notes app for macOS. Keep plain .md files in folders you own, with rich editing, backlinks, search, and optional publishing.";
 

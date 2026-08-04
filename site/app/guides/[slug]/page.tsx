@@ -57,7 +57,7 @@ export default async function GuidePage({ params }: GuidePageProps) {
         datePublished: guide.publishedAt,
         dateModified: guide.updatedAt,
         mainEntityOfPage: url,
-        author: { "@type": "Organization", name: "Markd", url: absoluteUrl() },
+        author: { "@type": "Organization", name: "Riffle", url: absoluteUrl() },
         publisher: { "@id": `${absoluteUrl()}#organization` },
         about: { "@id": `${absoluteUrl()}#software` },
       },
@@ -152,13 +152,13 @@ export default async function GuidePage({ params }: GuidePageProps) {
 
           <section className="mt-14 rounded-2xl border border-border p-6 sm:flex sm:items-center sm:justify-between sm:gap-8">
             <div>
-              <h2 className="font-serif text-[26px] text-foreground">Try Markd with your files.</h2>
+              <h2 className="font-serif text-[26px] text-foreground">Try Riffle with your files.</h2>
               <p className="mt-2 text-[13.5px] leading-6 text-muted-foreground">
                 Free, open source, and built around portable Markdown.
               </p>
             </div>
             <div className="mt-5 flex flex-wrap gap-2 sm:mt-0 sm:shrink-0">
-              <ButtonLink href="/download" size="sm">Download Markd</ButtonLink>
+              <ButtonLink href="/download" size="sm">Download Riffle</ButtonLink>
               <ButtonLink href={GITHUB} target="_blank" rel="noreferrer" size="sm" variant="outline">
                 Source <ArrowUpRight className="size-3.5" aria-hidden />
               </ButtonLink>

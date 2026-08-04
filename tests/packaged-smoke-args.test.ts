@@ -5,8 +5,8 @@ describe("packaged smoke CLI arguments", () => {
   test.each([
     [[], null],
     [["--"], null],
-    [["/Applications/Markd.app"], "/Applications/Markd.app"],
-    [["--", "/Applications/Markd.app"], "/Applications/Markd.app"],
+    [["/Applications/Riffle.app"], "/Applications/Riffle.app"],
+    [["--", "/Applications/Riffle.app"], "/Applications/Riffle.app"],
   ])("parses %j", (args, expected) => {
     expect(parsePackagedAppArgs(args)).toBe(expected);
   });

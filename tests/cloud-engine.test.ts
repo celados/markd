@@ -11,9 +11,9 @@ const validPng =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
 const verified = resolveCloudConfig({
-  MARKD_CLOUD_TEST_MODE: "1",
-  MARKD_CLOUD_API_BASE: "http://127.0.0.1:3001",
-  MARKD_CLOUD_SITE_ORIGIN: "http://127.0.0.1:3002",
+  RIFFLE_CLOUD_TEST_MODE: "1",
+  RIFFLE_CLOUD_API_BASE: "http://127.0.0.1:3001",
+  RIFFLE_CLOUD_SITE_ORIGIN: "http://127.0.0.1:3002",
 });
 
 describe("Cloud Engine", () => {
@@ -24,11 +24,11 @@ describe("Cloud Engine", () => {
       throw new Error("network must stay closed");
     };
     const engine = new CloudEngine(
-      "/tmp/markd-cloud-disabled",
+      "/tmp/riffle-cloud-disabled",
       () => "/tmp/vault",
       resolveCloudConfig({
-        MARKD_CLOUD_API_BASE: "https://api.usemarkd.app",
-        MARKD_CLOUD_SITE_ORIGIN: "https://usemarkd.app",
+        RIFFLE_CLOUD_API_BASE: "https://api.usemarkd.app",
+        RIFFLE_CLOUD_SITE_ORIGIN: "https://usemarkd.app",
       }),
       fetch,
     );
@@ -49,7 +49,7 @@ describe("Cloud Engine", () => {
   });
 
   test("persists, refreshes, and revokes an account session with tagged failures", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-account-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-account-"));
     const requests: Array<{ url: string; method: string; authorization: string | null }> = [];
     const fetch: typeof globalThis.fetch = async (input, init) => {
       const url = String(input);
@@ -105,7 +105,7 @@ describe("Cloud Engine", () => {
   });
 
   test("publishes, updates, and revokes a Note without storing a Cloud copy", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-publish-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-publish-"));
     const config = join(scratch, "config");
     const vault = join(scratch, "vault");
     await mkdir(join(vault, ".markd", "assets"), { recursive: true });
@@ -178,7 +178,7 @@ describe("Cloud Engine", () => {
   });
 
   test("rejects remote errors and untrusted billing URLs as tagged data", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-errors-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-errors-"));
     await mkdir(scratch, { recursive: true });
     await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
       accessToken: "token_123",
@@ -217,16 +217,16 @@ describe("Cloud Engine", () => {
       response.writeHead(307, { location: `${target.origin}/stolen` });
       response.end();
     });
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-control-redirect-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-control-redirect-"));
     await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
       accessToken: "token_123",
       expiresAt: Date.now() + 60_000,
       account: { email: "reader@example.com", plan: "cloud" },
     }));
     const config = resolveCloudConfig({
-      MARKD_CLOUD_TEST_MODE: "1",
-      MARKD_CLOUD_API_BASE: source.origin,
-      MARKD_CLOUD_SITE_ORIGIN: source.origin,
+      RIFFLE_CLOUD_TEST_MODE: "1",
+      RIFFLE_CLOUD_API_BASE: source.origin,
+      RIFFLE_CLOUD_SITE_ORIGIN: source.origin,
     });
 
     try {
@@ -241,7 +241,7 @@ describe("Cloud Engine", () => {
   });
 
   test("rejects the complete upload plan before sending any object bytes", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-upload-trust-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-upload-trust-"));
     const vault = join(scratch, "vault");
     await mkdir(join(vault, ".markd", "assets"), { recursive: true });
     await writeFile(join(vault, "Home.md"), "# Home");
@@ -296,7 +296,7 @@ describe("Cloud Engine", () => {
       response.end();
     });
     let api: Awaited<ReturnType<typeof listen>> | undefined;
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-upload-redirect-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-upload-redirect-"));
     const vault = join(scratch, "vault");
     await mkdir(join(vault, ".markd", "assets"), { recursive: true });
     await writeFile(join(vault, "Home.md"), "# Home");
@@ -325,9 +325,9 @@ describe("Cloud Engine", () => {
         }, 201);
       });
       const config = resolveCloudConfig({
-        MARKD_CLOUD_TEST_MODE: "1",
-        MARKD_CLOUD_API_BASE: api.origin,
-        MARKD_CLOUD_SITE_ORIGIN: api.origin,
+        RIFFLE_CLOUD_TEST_MODE: "1",
+        RIFFLE_CLOUD_API_BASE: api.origin,
+        RIFFLE_CLOUD_SITE_ORIGIN: api.origin,
       });
       const canonicalVault = await realpath(vault);
       await expect(
@@ -350,7 +350,7 @@ describe("Cloud Engine", () => {
   });
 
   test("rejects publish assets that the save and protocol contract reject", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-invalid-asset-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-invalid-asset-"));
     const vault = join(scratch, "vault");
     await mkdir(join(vault, ".markd", "assets"), { recursive: true });
     await writeFile(join(vault, "Home.md"), "# Home");
@@ -386,7 +386,7 @@ describe("Cloud Engine", () => {
   });
 
   test("remote sign-out failure still removes the authoritative local session", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "markd-cloud-signout-"));
+    const scratch = await mkdtemp(join(tmpdir(), "riffle-cloud-signout-"));
     await writeFile(join(scratch, "cloud-session.json"), JSON.stringify({
       accessToken: "token_123",
       expiresAt: Date.now() + 60_000,

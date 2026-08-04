@@ -44,7 +44,7 @@ describe("session restoration", () => {
 
   test("resets the width for sessions saved before width persistence", () => {
     storage.setItem(
-      "markd:session:/legacy-vault",
+      "riffle:session:/legacy-vault",
       JSON.stringify({
         tabs: [],
         view: null,
@@ -60,7 +60,7 @@ describe("session restoration", () => {
 
   test("restores a vault's saved width", () => {
     storage.setItem(
-      "markd:session:/saved-vault",
+      "riffle:session:/saved-vault",
       JSON.stringify({
         tabs: [],
         view: null,

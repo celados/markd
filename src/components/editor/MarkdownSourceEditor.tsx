@@ -19,7 +19,7 @@ import {
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "octane";
 
-const markdTheme = EditorView.theme({
+const riffleTheme = EditorView.theme({
   "&": {
     height: "100%",
     backgroundColor: "transparent",
@@ -46,7 +46,7 @@ const markdTheme = EditorView.theme({
   ".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--hover) 55%, transparent)" },
 });
 
-const markdHighlight = HighlightStyle.define([
+const riffleHighlight = HighlightStyle.define([
   { tag: tags.heading, color: "var(--ink)", fontWeight: "700" },
   { tag: [tags.strong, tags.emphasis], color: "var(--ink)" },
   { tag: tags.strong, fontWeight: "700" },
@@ -86,9 +86,9 @@ export function MarkdownSourceEditor({
           highlightActiveLine(),
           keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
           markdown(),
-          syntaxHighlighting(markdHighlight),
+          syntaxHighlighting(riffleHighlight),
           EditorView.lineWrapping,
-          markdTheme,
+          riffleTheme,
           EditorView.updateListener.of((update) => {
             if (update.docChanged && !syncingRef.current) {
               onChangeRef.current(update.state.doc.toString());

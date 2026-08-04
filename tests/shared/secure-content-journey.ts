@@ -6,7 +6,7 @@ import { join } from "node:path";
 type LaunchSecureContentApp = (configDir: string) => Promise<ElectronApplication>;
 
 export async function runSecureContentJourney(launch: LaunchSecureContentApp): Promise<void> {
-  const scratch = await mkdtemp(join(tmpdir(), "markd-electron-content-"));
+  const scratch = await mkdtemp(join(tmpdir(), "riffle-electron-content-"));
   const configDir = join(scratch, "config");
   const vault = join(scratch, "vault");
   const noteExport = join(scratch, "Draft export.md");
@@ -23,21 +23,21 @@ export async function runSecureContentJourney(launch: LaunchSecureContentApp): P
   try {
     application = await launch(configDir);
     const page = await application.firstWindow();
-    await expect.poll(() => page.evaluate(() => window.markd!.vault.startup())).toEqual({
+    await expect.poll(() => page.evaluate(() => window.riffle!.vault.startup())).toEqual({
       ok: true,
       value: expect.objectContaining({ root: await realpath(vault) }),
     });
 
     const png =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-    const saved = await page.evaluate((data) => window.markd!.vault.assets.save(data, "png"), png);
+    const saved = await page.evaluate((data) => window.riffle!.vault.assets.save(data, "png"), png);
     expect(saved).toEqual({ ok: true, value: expect.stringMatching(/^\.markd\/assets\//) });
     if (!saved.ok) throw new Error(saved.error.message);
     expect(await readFile(join(vault, saved.value))).toEqual(
       Buffer.from(png.slice(png.indexOf(",") + 1), "base64"),
     );
     expect(await page.evaluate(async (rel) => {
-      const url = window.markd!.vault.assets.url(rel);
+      const url = window.riffle!.vault.assets.url(rel);
       if (!url) return null;
       const response = await fetch(url);
       const image = new Image();
@@ -63,12 +63,12 @@ export async function runSecureContentJourney(launch: LaunchSecureContentApp): P
       });
     }, [noteExport, bookmarkExport]);
     expect(await page.evaluate(() =>
-      window.markd!.vault.exportNote("Draft.md", "live editor body"),
+      window.riffle!.vault.exportNote("Draft.md", "live editor body"),
     )).toEqual({ ok: true, value: join(await realpath(scratch), "Draft export.md") });
     expect(await readFile(noteExport, "utf8")).toBe("live editor body");
 
-    await page.evaluate(() => window.markd!.collections.bookmarks.create("example.com", ["read"]));
-    expect(await page.evaluate(() => window.markd!.collections.bookmarks.export())).toEqual({
+    await page.evaluate(() => window.riffle!.collections.bookmarks.create("example.com", ["read"]));
+    expect(await page.evaluate(() => window.riffle!.collections.bookmarks.export())).toEqual({
       ok: true,
       value: join(await realpath(scratch), "Bookmarks export.md"),
     });
@@ -81,14 +81,14 @@ export async function runSecureContentJourney(launch: LaunchSecureContentApp): P
     await writeFile(outside, "outside");
     await symlink(outside, escape);
     expect(await page.evaluate(() => ({
-      traversalUrl: window.markd!.vault.assets.url("../outside.png"),
-      symlinkUrl: window.markd!.vault.assets.url(".markd/assets/escape.png"),
-    }))).toEqual({ traversalUrl: null, symlinkUrl: "markd-asset://vault/escape.png" });
+      traversalUrl: window.riffle!.vault.assets.url("../outside.png"),
+      symlinkUrl: window.riffle!.vault.assets.url(".markd/assets/escape.png"),
+    }))).toEqual({ traversalUrl: null, symlinkUrl: "riffle-asset://vault/escape.png" });
     expect(await page.evaluate(async () =>
-      fetch("markd-asset://vault/..%2Foutside.png").then((response) => response.status),
+      fetch("riffle-asset://vault/..%2Foutside.png").then((response) => response.status),
     )).toBe(400);
     expect(await page.evaluate(async () =>
-      fetch("markd-asset://vault/escape.png").then((response) => response.status),
+      fetch("riffle-asset://vault/escape.png").then((response) => response.status),
     )).toBe(400);
 
     const outsideExport = join(scratch, "outside.md");
@@ -99,7 +99,7 @@ export async function runSecureContentJourney(launch: LaunchSecureContentApp): P
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
     }, exportAlias);
     expect(await page.evaluate(() =>
-      window.markd!.vault.exportNote("Draft.md", "overwrite"),
+      window.riffle!.vault.exportNote("Draft.md", "overwrite"),
     )).toEqual({
       ok: false,
       error: expect.objectContaining({ kind: "INVALID_PATH" }),

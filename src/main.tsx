@@ -21,7 +21,7 @@ document.addEventListener("focusin", (event) => {
 const Root = getWindowKind() === "quick-capture" ? QuickCaptureWindow : App;
 
 const root = document.getElementById("root");
-if (!root) throw new Error("Markd requires a #root element");
+if (!root) throw new Error("Riffle requires a #root element");
 
 createRoot(root).render(
   <ErrorBoundary>
