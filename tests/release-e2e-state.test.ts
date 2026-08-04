@@ -31,11 +31,10 @@ test("release E2E state survives an in-place bundle replacement and is consumed"
   expect(readReleaseE2eState(executable, 2_000)).toBeNull();
 });
 
-test("accepts the released Markd executable becoming Riffle inside the same bundle", async () => {
+test("accepts Squirrel renaming the released Markd bundle to Riffle", async () => {
   const root = await fixtureRoot("markd-release-e2e-public-fixture");
-  const app = join(root, "Markd.app", "Contents", "MacOS");
-  const legacyExecutable = join(app, "Markd");
-  const currentExecutable = join(app, "Riffle");
+  const legacyExecutable = join(root, "Markd.app", "Contents", "MacOS", "Markd");
+  const currentExecutable = join(root, "Riffle.app", "Contents", "MacOS", "Riffle");
   const markerPath = join(root, "evidence.json");
   const state = prepareReleaseE2eState({
     RIFFLE_E2E_BACKGROUND: "1",
@@ -48,6 +47,22 @@ test("accepts the released Markd executable becoming Riffle inside the same bund
   expect(readReleaseE2eState(currentExecutable, 2_000)).toEqual(state);
   consumeReleaseE2eState(currentExecutable, state!.nonce, 2_000);
   expect(readReleaseE2eState(currentExecutable, 2_000)).toBeNull();
+});
+
+test("rejects bundle renames outside the released Markd to Riffle lineage", async () => {
+  const root = await fixtureRoot();
+  const executable = join(root, "Riffle.app", "Contents", "MacOS", "Riffle");
+  const state = prepareReleaseE2eState({
+    RIFFLE_E2E_BACKGROUND: "1",
+    RIFFLE_E2E_EXPECTED_VERSION: "0.3.2",
+    RIFFLE_E2E_RELEASE_MARKER: join(root, "evidence.json"),
+    RIFFLE_E2E_STATE_ROOT: root,
+    RIFFLE_TEST_CONFIG_DIR: join(root, "config"),
+  }, executable, 1_000);
+
+  const unexpectedExecutable = join(root, "Other.app", "Contents", "MacOS", "Riffle");
+  expect(state).not.toBeNull();
+  expect(readReleaseE2eState(unexpectedExecutable, 2_000)).toBeNull();
 });
 
 test("release E2E state rejects arbitrary roots and expired evidence", async () => {

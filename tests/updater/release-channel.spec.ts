@@ -16,7 +16,12 @@ test("signed baseline upgrades and relaunches through the real release channel",
   const channelDir = process.env.RIFFLE_UPDATE_CHANNEL_DIR;
   const allowedTempRoot = requiredEnv("RIFFLE_ALLOWED_TEMP_ROOT");
   const stateRoot = dirname(installedApp);
-  const targetExecutable = join(installedApp, "Contents", "MacOS", "Riffle");
+  // Squirrel adopts the update bundle name when the user has not renamed the
+  // app, so the released Markd.app becomes Riffle.app during installation.
+  const targetApp = basename(installedApp) === "Markd.app"
+    ? join(stateRoot, "Riffle.app")
+    : installedApp;
+  const targetExecutable = join(targetApp, "Contents", "MacOS", "Riffle");
   const marker = join(stateRoot, "release-evidence.json");
   const configDir = join(stateRoot, "config");
   let server: Server | null = null;
@@ -124,7 +129,7 @@ test("signed baseline upgrades and relaunches through the real release channel",
     expect(replacementPid).not.toBe(baselinePid);
     process.kill(replacementPid, 0);
 
-    const plist = join(installedApp, "Contents", "Info.plist");
+    const plist = join(targetApp, "Contents", "Info.plist");
     const [{ stdout: version }, { stdout: bundleId }] = await Promise.all([
       execFileAsync("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleShortVersionString", plist]),
       execFileAsync("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleIdentifier", plist]),
