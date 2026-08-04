@@ -146,7 +146,7 @@ jobs:
           identity_hash="$(printf '%s\n' "$identity_line" | awk '{ print $2 }')"
           test "$(printf '%s' "$identity_hash" | wc -c | tr -d ' ')" = "40"
           security find-key -t private "$keychain" >/dev/null
-          ditto /usr/bin/true "$probe"
+          cp /usr/bin/true "$probe"
           codesign --force --timestamp=none --sign "$identity_hash" --keychain "$keychain" "$probe"
           codesign --verify --strict --verbose=2 "$probe"
 
