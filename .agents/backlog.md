@@ -31,6 +31,7 @@ status: active
 - `@celados/fff-node` 通过 `ffi-rs` 加载平台 `@celados/fff-bin-darwin-*` cdylib。#13 已对 unsigned local
   artifact 验证 ASAR header、exact unpacked native payload、updater metadata 与 packaged utility smoke；
   Developer ID 签名、公证和 Gatekeeper 验证只能由 tag release workflow 使用真实 Apple credentials 闭环。
-- 网站下载入口仍属于 #15 的发布闭环，但不能在实现 PR 中提前切换。`v0.2.0` canonical assets 通过匿名
-  readback 与 production updater smoke 后，必须用 follow-up commit/PR 更新 `site/lib/config.ts` 和
-  changelog，并验证公开下载按钮；在此之前继续链接已发布的 `v0.1.9` legacy DMG。
+- `v0.2.5` 的 canonical assets、匿名 readback 与 production updater smoke 已通过，网站源码也已切到
+  该版本。Celados fork 不拥有 `usemarkd.app`，当前 Cloudflare 凭据可见的账户均不包含该 zone，因此
+  不能把源码更新宣称为线上部署。只有产品域名 ownership 完成裁决、对应账户明确授权后，才能绑定并
+  验证 fork 的公开网站；在此之前以公开 GitHub Release 作为正式下载入口。
