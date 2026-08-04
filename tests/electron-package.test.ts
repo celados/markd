@@ -270,6 +270,8 @@ test("release workflow preflights P12 signing and verifies the signed DMG before
   expect(preflightBlock).toContain("security find-identity -v -p codesigning");
   expect(preflightBlock).toContain('security find-key -t private "$keychain"');
   expect(preflightBlock).not.toContain("security find-key -t private -s");
+  expect(preflightBlock).toContain('cp /usr/bin/true "$probe"');
+  expect(preflightBlock).not.toContain("ditto /usr/bin/true");
   expect(preflightBlock).toContain("codesign --force --timestamp=none");
   const cleanupBlock = workflow.slice(cleanup, install);
   expect(cleanupBlock).toContain("if: always()");
