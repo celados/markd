@@ -1,11 +1,11 @@
-# Riffle 0.3.1
+# Riffle 0.3.2
 
 Riffle is the independent continuation of the Electron-native local knowledge workspace previously released as Markd.
 
 ## Fixed
 
-- Repair the release harness so the published Markd 0.2.6 app can launch under its original isolated test contract before upgrading to Riffle.
-- Verify that the signed Markd 0.2.6 public release upgrades in place to the signed Riffle release through Squirrel/ShipIt.
+- Preserve the updater handoff when Squirrel natively renames the installed bundle from `Markd.app` to `Riffle.app`.
+- Verify that the signed Markd 0.2.6 public release upgrades, renames, and relaunches as the signed Riffle release through Squirrel/ShipIt.
 
 ## Supported platform
 

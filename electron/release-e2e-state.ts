@@ -68,8 +68,8 @@ export function readReleaseE2eState(
   }
   if (!isReleaseE2eState(input)) return null;
   if (
-    normalize(input.installedApp) !== normalize(location.app) ||
-    !isExpectedExecutable(input.executable, executable, location.app) ||
+    !isExpectedInstalledApp(input.installedApp, location.app) ||
+    !isExpectedExecutable(input.executable, executable) ||
     normalize(dirname(input.markerPath)) !== normalize(location.root) ||
     normalize(input.configDir) !== normalize(join(location.root, "config")) ||
     input.expiresAt <= now ||
@@ -80,14 +80,23 @@ export function readReleaseE2eState(
   return input;
 }
 
-function isExpectedExecutable(stored: string, current: string, app: string): boolean {
+function isExpectedInstalledApp(stored: string, current: string): boolean {
   if (normalize(stored) === normalize(current)) return true;
-  const executableRoot = join(app, "Contents", "MacOS");
   return (
-    normalize(dirname(stored)) === normalize(executableRoot) &&
-    normalize(dirname(current)) === normalize(executableRoot) &&
-    basename(stored) === "Markd" &&
-    basename(current) === "Riffle"
+    normalize(dirname(stored)) === normalize(dirname(current)) &&
+    basename(stored) === "Markd.app" &&
+    basename(current) === "Riffle.app"
+  );
+}
+
+function isExpectedExecutable(stored: string, current: string): boolean {
+  if (normalize(stored) === normalize(current)) return true;
+  const storedApp = dirname(dirname(dirname(stored)));
+  const currentApp = dirname(dirname(dirname(current)));
+  return (
+    isExpectedInstalledApp(storedApp, currentApp) &&
+    normalize(stored) === normalize(join(storedApp, "Contents", "MacOS", "Markd")) &&
+    normalize(current) === normalize(join(currentApp, "Contents", "MacOS", "Riffle"))
   );
 }
 
