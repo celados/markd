@@ -306,6 +306,7 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
     const failWrites = { value: false };
     const deferWrites = { value: false };
     const deferredWrites: Array<{
+      rel: string;
       content: string;
       resolve: (result: { ok: true; value: string } | {
         ok: false;
@@ -364,7 +365,7 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         writeNote: async (rel, content) => {
           operations.push(`write:${rel}`);
           if (deferWrites.value) {
-            return new Promise((resolve) => deferredWrites.push({ content, resolve }));
+            return new Promise((resolve) => deferredWrites.push({ rel, content, resolve }));
           }
           if (failWrites.value) {
             return {
@@ -434,6 +435,13 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
         succeedNextDeferredWrite: () => {
           const write = deferredWrites.shift();
           write?.resolve(success(write.content));
+        },
+        succeedNextDeferredWriteWithAppend: (append: string) => {
+          const write = deferredWrites.shift();
+          if (!write) return;
+          const committed = `${write.content}${append}`;
+          notes.set(write.rel, committed);
+          write.resolve(success(committed));
         },
         emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => {
           for (const listener of indexListeners) listener(event);

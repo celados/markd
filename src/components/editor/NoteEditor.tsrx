@@ -23,7 +23,7 @@ import { cx, debounce, noteTitle } from "@/lib/utils";
 import { useTabs } from "@/stores/tabs";
 import { useUi } from "@/stores/ui";
 import { useVault } from "@/stores/vault";
-import { SerialNoteWrites } from "@/lib/serial-note-writes";
+import { rebaseAppendOnly, SerialNoteWrites } from "@/lib/serial-note-writes";
 import { ReadonlyMarkdownView } from "@/markdown/readonly-markdown-view";
 import { FindReplaceBar } from "./FindReplaceBar.tsrx";
 import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
@@ -76,7 +76,10 @@ function NoteEditorComponent(props: NoteEditorProps) @{
 
   const performPersist = useCallback(
     async (source: string, targetRel: string): Promise<boolean> => {
-      if (relRef.current === targetRel && pending.current === source) {
+      const draft = relRef.current === targetRel && pending.current !== null
+        ? pending.current
+        : source;
+      if (relRef.current === targetRel && pending.current === draft) {
         pending.current = null;
       }
       let writer = writers.current.get(targetRel);
@@ -86,13 +89,25 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       }
       savesInFlight.current += 1;
       try {
-        const { committed } = await writer.save(source, (content, expectedContent) =>
-          vaultDesktop.notes.write(targetRel, content, expectedContent),
+        const { desired, committed } = await writer.save(
+          draft,
+          (content, expectedContent) =>
+            vaultDesktop.notes.write(targetRel, content, expectedContent),
         );
         invalidatePublishStatus();
         notifyBacklinksChanged();
         if (relRef.current === targetRel) {
           lastSaved.current = committed;
+          if (committed !== desired) {
+            const reconciled = rebaseAppendOnly(
+              desired,
+              latestSource.current,
+              committed,
+            );
+            const hasNewerDraft = pending.current !== null;
+            acceptSource(reconciled);
+            if (hasNewerDraft) pending.current = reconciled;
+          }
           if (pending.current === null && savesInFlight.current === 1) {
             setSaveState("idle");
           }
@@ -114,7 +129,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
         savesInFlight.current -= 1;
       }
     },
-    [setSaveState],
+    [acceptSource, setSaveState],
   );
 
   const persist = useCallback((source: string, targetRel: string) => {

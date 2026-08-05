@@ -299,6 +299,59 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
   )).toContain("draft one draft two newest");
 });
 
+test("a committed external append stays visible and survives the next Source edit", async ({
+  page,
+}) => {
+  await installVaultSliceFixture(page);
+  await page.goto("/");
+  await page.getByRole("treeitem", { name: "Existing.md" }).click();
+  const source = await openSource(page);
+  await page.evaluate(() => {
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
+    }).__RIFFLE_VAULT_TEST__.deferWrites.value = true;
+  });
+
+  await appendToSource(page, source, " local edit");
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
+  )).toEqual(["write:Existing.md"]);
+  await page.keyboard.insertText(" newer draft");
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    const fixture = (window as Window & {
+      __RIFFLE_VAULT_TEST__: {
+        deferWrites: { value: boolean };
+        succeedNextDeferredWriteWithAppend: (append: string) => void;
+      };
+    }).__RIFFLE_VAULT_TEST__;
+    fixture.deferWrites.value = false;
+    fixture.succeedNextDeferredWriteWithAppend("\nexternal append");
+  });
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
+    }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
+  )).toBe("# Existing local edit newer draft\nexternal append");
+  await expect(source).toContainText("external append");
+
+  await page.getByRole("button", { name: "Show Readonly View" }).click();
+  await expect(page.locator('[data-note-editor="active"] .prose-note')).toContainText(
+    "external append",
+  );
+  await page.getByRole("button", { name: "Show Markdown source" }).click();
+  const reconciledSource = page.locator('[data-note-editor="active"] .cm-content');
+  await appendToSource(page, reconciledSource, " subsequent edit");
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
+    }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
+  )).toBe("# Existing local edit newer draft\nexternal append subsequent edit");
+});
+
 async function openSource(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Show Markdown source" }).click();
   const source = page.locator('[data-note-editor="active"] .cm-content');
