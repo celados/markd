@@ -16,6 +16,9 @@ status: active
   Vaultwarden 到支持 2026.7.0+ client 的版本，再删除这个临时版本 pin。
 - production bundle 仍报告大 chunk，尤其 editor 与 AppShell；这是 code-splitting/performance
   follow-up，不是 build correctness failure。
+- Readonly View 本轮只支持受约束的 Embedded Markup，不执行 Note 内代码。未来若引入 MDX、完整 HTML 或其它
+  可执行文档格式，必须单独设计 document type、trust、sandbox、navigation、resource 与 Riffle capability
+  边界；不能通过放宽 Markdown renderer allowlist 偷渡实现。
 - Playwright browser journeys 仍绑定固定 preview port `4173`；并行 agent 同时运行 suite 时可能因端口
   已占用而在用例开始前失败。单独复跑已通过 35/35，确认这不是产品 bug；后续应由测试编排分配隔离端口，
   不能通过杀掉其他 agent 的进程来掩盖冲突。
