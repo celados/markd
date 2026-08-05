@@ -19,9 +19,6 @@ status: active
 - Playwright browser journeys 仍绑定固定 preview port `4173`；并行 agent 同时运行 suite 时可能因端口
   已占用而在用例开始前失败。单独复跑已通过 35/35，确认这不是产品 bug；后续应由测试编排分配隔离端口，
   不能通过杀掉其他 agent 的进程来掩盖冲突。
-- Octane 2026-07-31 release train 为消费已审计的上游修复而加入了精确
-  `minimumReleaseAgeExclude`。这些版本通过普通 install/build/browser 门禁后，待其自然满足 pnpm
-  release-age policy 时删除该临时例外列表；不要把例外扩成 package-name wildcard。
 - `@octanejs/base-ui` 已正式发布 Menu/Menubar/ContextMenu subpaths，但 Riffle 仍保留现有
   ContextMenu。后续 adoption 需要把 Root/Trigger owner 移入 FileTree/PinnedNotes callers，并以
   browser journey 验证右键、键盘导航、dismissal 和 focus restore；不要复制 binding source。
