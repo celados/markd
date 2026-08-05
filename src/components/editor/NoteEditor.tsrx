@@ -6,7 +6,6 @@ import {
   type VaultNoteChangedDetail,
 } from "@/lib/vault-note-events";
 import { vaultDesktop } from "@/lib/desktop-services";
-import { openWebUrl } from "@/lib/desktop";
 import { invalidatePublishStatus } from "@/lib/queryClient";
 import {
   joinFrontmatter,
@@ -18,7 +17,6 @@ import {
 } from "@/lib/frontmatter";
 import { decideExternalNoteChange } from "@/lib/editor-conflict";
 import { registerNoteWriteFlush } from "@/lib/note-write-barrier";
-import { hrefToRel } from "@/lib/noteLinks";
 import { cx, debounce, noteTitle } from "@/lib/utils";
 import { useTabs } from "@/stores/tabs";
 import { useUi } from "@/stores/ui";
@@ -360,31 +358,6 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     return () => window.removeEventListener("riffle:note-action", handle);
   }, [active, flushPending, markdownSource, noteFind.openFind]);
 
-  useEffect(() => {
-    const root = scrollRef.current;
-    if (!root) return;
-    const onClick = (event: MouseEvent) => {
-      const anchor = (event.target as HTMLElement | null)?.closest("a[href]");
-      if (!anchor) return;
-      const href = anchor.getAttribute("href");
-      if (!href) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (/^https?:\/\//i.test(href)) {
-        void openWebUrl(href);
-        return;
-      }
-      const target = hrefToRel(href);
-      if (!target) return;
-      const vault = useVault.getState();
-      vault.expandTo(target);
-      vault.setView({ type: "note", rel: target });
-      useTabs.getState().requestScrollTop(target);
-    };
-    root.addEventListener("click", onClick, true);
-    return () => root.removeEventListener("click", onClick, true);
-  }, []);
-
   const { body } = splitFrontmatter(rawText);
 
   <div
@@ -453,6 +426,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
             <ReadonlyMarkdownView
               markdown={body}
               source={{ kind: "vault-note", rel }}
+              active={active}
             />
           </>
         }

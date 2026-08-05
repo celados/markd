@@ -218,7 +218,9 @@ export async function installDesktopFixture(page: Page, options: DesktopFixtureO
         backlinks: async () => success([]),
         assets: {
           save: async () => success(".markd/assets/fixture.png"),
-          url: (rel) => `riffle-asset://vault/${rel}`,
+          url: (rel) => rel === ".markd/assets/fixture.png"
+            ? "riffle-asset://vault/fixture.png"
+            : null,
         },
         exportNote: async () => success(null),
         pins: {

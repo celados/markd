@@ -28,7 +28,7 @@ test("empty Untitled Note moves to Trash without stale tree or tabs", async ({
     .toEqual(["Untitled.md"]);
 });
 
-test("Readonly View keeps asset sources inert until the asset policy lands", async ({ page }) => {
+test("Readonly View routes approved assets through the Vault protocol", async ({ page }) => {
   await installVaultSliceFixture(page);
   await page.goto("/");
   await page.evaluate(() => {
@@ -48,7 +48,10 @@ test("Readonly View keeps asset sources inert until the asset policy lands", asy
     "data-markdown-src",
     ".markd/assets/fixture.png",
   );
-  await expect(page.locator('img[alt="safe"]')).not.toHaveAttribute("src", /.+/);
+  await expect(page.locator('img[alt="safe"]')).toHaveAttribute(
+    "src",
+    "riffle-asset://vault/fixture.png",
+  );
   await expect(page.locator('img[alt="escape"]')).not.toHaveAttribute("src", /.+/);
 });
 
