@@ -21,7 +21,11 @@ import { cx, debounce, noteTitle } from "@/lib/utils";
 import { useTabs } from "@/stores/tabs";
 import { useUi } from "@/stores/ui";
 import { useVault } from "@/stores/vault";
-import { rebaseAppendOnly, SerialNoteWrites } from "@/lib/serial-note-writes";
+import {
+  rebaseAppendOnly,
+  SerialNoteWrites,
+  type NoteSourceMutation,
+} from "@/lib/serial-note-writes";
 import { ReadonlyMarkdownView } from "@/markdown/readonly-markdown-view";
 import { FindReplaceBar } from "./FindReplaceBar.tsrx";
 import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
@@ -59,6 +63,7 @@ function NoteEditorComponent(props: NoteEditorProps) @{
   const latestSource = useRef("");
   const lastSaved = useRef("");
   const pending = useRef<string | null>(null);
+  const pendingMutation = useRef<NoteSourceMutation | null>(null);
   const savesInFlight = useRef(0);
   const activePersists = useRef(new Set<Promise<boolean>>());
   const writers = useRef(new Map<string, SerialNoteWrites>());
@@ -106,7 +111,10 @@ function NoteEditorComponent(props: NoteEditorProps) @{
             acceptSource(reconciled);
             if (hasNewerDraft) pending.current = reconciled;
           }
-          if (pending.current === null && savesInFlight.current === 1) {
+          if (
+            pending.current === null && pendingMutation.current === null &&
+            savesInFlight.current === 1
+          ) {
             setSaveState("idle");
           }
         }
@@ -137,6 +145,79 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     return operation;
   }, [performPersist]);
 
+  const performMutation = useCallback(
+    async (mutation: NoteSourceMutation, targetRel: string): Promise<boolean> => {
+      let writer = writers.current.get(targetRel);
+      if (!writer) {
+        writer = new SerialNoteWrites(lastSaved.current);
+        writers.current.set(targetRel, writer);
+      }
+      savesInFlight.current += 1;
+      try {
+        const { committed } = await writer.mutateLatest(
+          mutation,
+          () => vaultDesktop.notes.read(targetRel),
+          (content, expectedContent) =>
+            vaultDesktop.notes.write(targetRel, content, expectedContent),
+        );
+        invalidatePublishStatus();
+        notifyBacklinksChanged();
+        if (relRef.current === targetRel) {
+          lastSaved.current = committed;
+          if (pending.current === null && pendingMutation.current === null) {
+            acceptSource(committed);
+          }
+          if (
+            pending.current === null && pendingMutation.current === null &&
+            savesInFlight.current === 1
+          ) {
+            setSaveState("idle");
+          }
+        }
+        toast.dismiss(`save-${targetRel}`);
+        return true;
+      } catch (error) {
+        if (relRef.current === targetRel) {
+          pendingMutation.current = pendingMutation.current
+            ? composeMutations(mutation, pendingMutation.current)
+            : mutation;
+        }
+        setSaveState("error");
+        toast.error("Note could not be saved", {
+          id: `save-${targetRel}`,
+          description: error instanceof Error ? error.message : String(error),
+          duration: Infinity,
+        });
+        return false;
+      } finally {
+        savesInFlight.current -= 1;
+      }
+    },
+    [acceptSource, setSaveState],
+  );
+
+  const persistMutation = useCallback(
+    (mutation: NoteSourceMutation, targetRel: string) => {
+      const operation = performMutation(mutation, targetRel);
+      activePersists.current.add(operation);
+      void operation.finally(() => activePersists.current.delete(operation));
+      return operation;
+    },
+    [performMutation],
+  );
+
+  const persistPendingMutation = useCallback(() => {
+    const mutation = pendingMutation.current;
+    if (mutation === null) return;
+    pendingMutation.current = null;
+    void persistMutation(mutation, relRef.current);
+  }, [persistMutation]);
+
+  const debouncedPersistMutation = useMemo(
+    () => debounce(persistPendingMutation, 500),
+    [persistPendingMutation],
+  );
+
   const debouncedPersist = useMemo(
     () => debounce((source: string) => void persist(source, relRef.current), 500),
     [persist],
@@ -154,15 +235,24 @@ function NoteEditorComponent(props: NoteEditorProps) @{
 
   const flushPending = useCallback(async () => {
     debouncedPersist.cancel();
-    while (pending.current !== null || activePersists.current.size > 0) {
+    debouncedPersistMutation.cancel();
+    while (
+      pending.current !== null || pendingMutation.current !== null ||
+      activePersists.current.size > 0
+    ) {
       const source = pending.current;
       if (source !== null) void persist(source, relRef.current);
+      const mutation = pendingMutation.current;
+      if (mutation !== null) {
+        pendingMutation.current = null;
+        void persistMutation(mutation, relRef.current);
+      }
       const results = await Promise.all([...activePersists.current]);
       if (results.some((saved) => !saved)) {
         throw new Error(`Could not save ${relRef.current} before continuing.`);
       }
     }
-  }, [debouncedPersist, persist]);
+  }, [debouncedPersist, debouncedPersistMutation, persist, persistMutation]);
 
   useEffect(() => registerNoteWriteFlush(flushPending), [flushPending]);
 
@@ -170,10 +260,17 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     let cancelled = false;
     const previousRel = loadedRel.current;
     debouncedPersist.cancel();
+    debouncedPersistMutation.cancel();
     if (previousRel && previousRel !== rel && pending.current !== null) {
       void persist(pending.current, previousRel);
     }
+    if (previousRel && previousRel !== rel && pendingMutation.current !== null) {
+      const mutation = pendingMutation.current;
+      pendingMutation.current = null;
+      void persistMutation(mutation, previousRel);
+    }
     pending.current = null;
+    pendingMutation.current = null;
     relRef.current = rel;
     setMissing(false);
     setPreserveMissingDraft(false);
@@ -198,14 +295,27 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     return () => {
       cancelled = true;
     };
-  }, [acceptSource, debouncedPersist, persist, rel]);
+  }, [
+    acceptSource,
+    debouncedPersist,
+    debouncedPersistMutation,
+    persist,
+    persistMutation,
+    rel,
+  ]);
 
   useEffect(() => {
     return () => {
       debouncedPersist.cancel();
+      debouncedPersistMutation.cancel();
       if (pending.current !== null) void persist(pending.current, relRef.current);
+      if (pendingMutation.current !== null) {
+        const mutation = pendingMutation.current;
+        pendingMutation.current = null;
+        void persistMutation(mutation, relRef.current);
+      }
     };
-  }, [debouncedPersist, persist]);
+  }, [debouncedPersist, debouncedPersistMutation, persist, persistMutation]);
 
   const reloadIfChanged = useCallback(async () => {
     const currentRel = relRef.current;
@@ -215,7 +325,9 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       const decision = decideExternalNoteChange({
         disk,
         lastSaved: lastSaved.current,
-        dirty: pending.current !== null || savesInFlight.current > 0,
+        dirty:
+          pending.current !== null || pendingMutation.current !== null ||
+          savesInFlight.current > 0,
       });
       if (decision === "reload") {
         setMissing(false);
@@ -248,7 +360,10 @@ function NoteEditorComponent(props: NoteEditorProps) @{
       if (event.detail.rel !== relRef.current) return;
       if (event.detail.kind === "modified") {
         void reloadIfChanged();
-      } else if (pending.current !== null || savesInFlight.current > 0) {
+      } else if (
+        pending.current !== null || pendingMutation.current !== null ||
+        savesInFlight.current > 0
+      ) {
         setMissing(true);
         setPreserveMissingDraft(true);
         event.preventDefault();
@@ -275,30 +390,40 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [rel, scrollTopReq]);
 
-  const applyFrontmatter = useCallback(
-    (nextFrontmatter: string) => {
-      const { body } = splitFrontmatter(latestSource.current);
-      applyRawTextChange(joinFrontmatter(nextFrontmatter, body));
+  const applySourceMutation = useCallback(
+    (mutation: NoteSourceMutation) => {
+      const queuedMutation = pendingMutation.current
+        ? composeMutations(pendingMutation.current, mutation)
+        : mutation;
+      acceptSource(queuedMutation(latestSource.current));
+      pendingMutation.current = queuedMutation;
+      setSaveState("saving");
+      debouncedPersistMutation();
     },
-    [applyRawTextChange],
+    [acceptSource, debouncedPersistMutation, setSaveState],
   );
 
   const upsertProperty = useCallback(
     (previousKey: string | null, property: Property) => {
-      const { frontmatter } = splitFrontmatter(latestSource.current);
-      applyFrontmatter(
-        upsertFrontmatterProperty(frontmatter, previousKey, property),
-      );
+      applySourceMutation((source) => {
+        const { frontmatter, body } = splitFrontmatter(source);
+        return joinFrontmatter(
+          upsertFrontmatterProperty(frontmatter, previousKey, property),
+          body,
+        );
+      });
     },
-    [applyFrontmatter],
+    [applySourceMutation],
   );
 
   const removeProperty = useCallback(
     (key: string) => {
-      const { frontmatter } = splitFrontmatter(latestSource.current);
-      applyFrontmatter(removeFrontmatterProperty(frontmatter, key));
+      applySourceMutation((source) => {
+        const { frontmatter, body } = splitFrontmatter(source);
+        return joinFrontmatter(removeFrontmatterProperty(frontmatter, key), body);
+      });
     },
-    [applyFrontmatter],
+    [applySourceMutation],
   );
 
   const consumePropertyAddRequest = useCallback(
@@ -458,4 +583,11 @@ export const NoteEditor = memo(NoteEditorComponent);
 function countWords(markdown: string) {
   const text = markdown.trim();
   return text ? text.split(/\s+/).filter(Boolean).length : 0;
+}
+
+function composeMutations(
+  first: NoteSourceMutation,
+  second: NoteSourceMutation,
+): NoteSourceMutation {
+  return (source) => second(first(source));
 }
