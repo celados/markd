@@ -4,11 +4,9 @@ import { useTabs } from "@/stores/tabs";
 import { useVault } from "@/stores/vault";
 
 /**
- * One live editor pane per open note. Inactive panes stay mounted behind
- * display:none, so switching tabs is a pure class toggle — no parse, no
- * remount, cursor/undo/scroll intact. The whole workspace likewise just hides
- * (not unmounts) while todos/bookmarks are showing, so returning to notes is
- * instant too. The tab strip itself lives in the top bar (see AppShell).
+ * One live Note pane per open tab. Keeping inactive Source Editors mounted
+ * preserves their CodeMirror undo state; Readonly Views remain a projection of
+ * the same pane source rather than a second document owner.
  */
 export function NotesWorkspace(props: { visible: boolean }) @{
   const { visible } = props;

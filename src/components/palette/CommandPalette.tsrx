@@ -134,7 +134,7 @@ export function CommandPalette() @{
   const close = () => setOpen(false);
 
   // Defer the action past the next paint so close feedback can render before
-  // heavier work such as mounting a fresh Tiptap editor.
+  // heavier work such as parsing the newly selected Note.
   const runDeferred = (run: () => void) => {
     close();
     setTimeout(run, 0);

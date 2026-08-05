@@ -196,14 +196,14 @@ export function AppShell() @{
               }
               @if (view?.type === "note") {
                 <Tooltip
-                  label={markdownSource ? "Show rich editor" : "Show Markdown source"}
+                  label={markdownSource ? "Show Readonly View" : "Show Markdown source"}
                   side="bottom"
                 >
                   <button
                     type="button"
                     aria-label={
                       markdownSource
-                        ? "Show rich editor"
+                        ? "Show Readonly View"
                         : "Show Markdown source"
                     }
                     aria-pressed={markdownSource}

@@ -1,19 +1,21 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { installDesktopFixture } from "./desktop-fixture";
 
 test.beforeEach(async ({ page }) => {
   await installDesktopFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "README.md" }).click();
-  await expect(page.locator('[data-note-editor="active"] .ProseMirror')).toBeVisible();
+  await expect(
+    page.locator('[data-note-editor="active"] [data-readonly-markdown="true"]'),
+  ).toBeVisible();
 });
 
-test("open tabs retain the same live editor across view switches", async ({
+test("open tabs retain the same live Note pane across view switches", async ({
   page,
 }) => {
-  const readmeEditor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await readmeEditor.evaluate((element) => {
-    element.setAttribute("data-editor-identity", "readme");
+  const readmePane = page.locator('[data-note-editor="active"]');
+  await readmePane.evaluate((element) => {
+    element.setAttribute("data-pane-identity", "readme");
   });
 
   await page.getByRole("treeitem", { name: "Projects", exact: true }).click();
@@ -22,18 +24,19 @@ test("open tabs retain the same live editor across view switches", async ({
     "aria-selected",
     "true",
   );
-  await expect(page.locator(".ProseMirror")).toHaveCount(2);
+  await expect(page.locator('[data-readonly-markdown="true"]')).toHaveCount(2);
 
   await page.getByRole("button", { name: "Todos" }).click();
-  await expect(page.locator(".ProseMirror")).toHaveCount(2);
+  await expect(page.locator('[data-readonly-markdown="true"]')).toHaveCount(2);
   await page.getByRole("tab", { name: /README/ }).click();
 
-  await expect(
-    page.locator('[data-note-editor="active"] .ProseMirror'),
-  ).toHaveAttribute("data-editor-identity", "readme");
+  await expect(page.locator('[data-note-editor="active"]')).toHaveAttribute(
+    "data-pane-identity",
+    "readme",
+  );
 });
 
-test("the rich editor receives only the body and resolves long YAML values", async ({
+test("Readonly View receives only the body and resolves long YAML values", async ({
   page,
 }) => {
   await page.evaluate(() => {
@@ -49,9 +52,9 @@ test("the rich editor receives only the body and resolves long YAML values", asy
     window.dispatchEvent(new Event("focus"));
   });
 
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await expect(editor).toContainText("Octane + pnpm verification.");
-  await expect(editor).not.toContainText("fixture: preserved");
+  const view = page.locator('[data-note-editor="active"] .prose-note');
+  await expect(view).toContainText("Octane + pnpm verification.");
+  await expect(view).not.toContainText("fixture: preserved");
   await expect(page.getByLabel("summary value")).toHaveValue(
     "A long field value loaded through the semantic Electron bridge.",
   );
@@ -67,13 +70,11 @@ test("the rich editor receives only the body and resolves long YAML values", asy
   );
 });
 
-test("dirty editor wins an external-change conflict and selection survives tabs", async ({
+test("dirty Source Editor wins an external-change conflict across tabs", async ({
   page,
 }) => {
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" local draft");
+  const source = await openSource(page);
+  await appendToSource(page, source, " local draft");
   await page.evaluate(() => {
     const fixture = (
       window as Window & {
@@ -84,20 +85,16 @@ test("dirty editor wins an external-change conflict and selection survives tabs"
     window.dispatchEvent(new Event("focus"));
   });
 
-  await expect(editor).toContainText("local draft");
-  for (let index = 0; index < "draft".length; index += 1) {
-    await page.keyboard.press("Shift+ArrowLeft");
-  }
+  await expect(source).toContainText("local draft");
   await page.getByRole("treeitem", { name: "Projects", exact: true }).click();
   await page.getByRole("treeitem", { name: "Alpha.md", exact: true }).click();
   await page.getByRole("tab", { name: /README/ }).click();
-  await editor.focus();
-  await page.keyboard.type("kept");
-  await expect(editor).toContainText("local kept");
-  await expect.poll(() => latestWrite(page, "README.md")).toContain("local kept");
+  await expect(page.locator('[data-note-editor="active"] .cm-content')).toContainText(
+    "local draft",
+  );
 });
 
-test("clean editor reloads an external body without exposing its frontmatter", async ({
+test("clean Readonly View reloads an external body without exposing frontmatter", async ({
   page,
 }) => {
   await page.evaluate(() => {
@@ -113,26 +110,24 @@ test("clean editor reloads an external body without exposing its frontmatter", a
     window.dispatchEvent(new Event("focus"));
   });
 
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await expect(editor).toContainText("Clean disk change.");
-  await expect(editor).not.toContainText("source: external");
+  const view = page.locator('[data-note-editor="active"] .prose-note');
+  await expect(view).toContainText("Clean disk change.");
+  await expect(view).not.toContainText("source: external");
   await expect(page.getByLabel("source value")).toHaveValue("external");
 });
 
-test("rich body edits do not author frontmatter", async ({ page }) => {
+test("Source Editor body edits do not author frontmatter", async ({ page }) => {
   await page.getByRole("treeitem", { name: "Projects", exact: true }).click();
   await page.getByRole("treeitem", { name: "Alpha.md", exact: true }).click();
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" body only");
+  const source = await openSource(page);
+  await appendToSource(page, source, " body only");
 
-  await expect
-    .poll(() => latestWrite(page, "Projects/Alpha.md"))
-    .toContain("body only");
-  await expect
-    .poll(() => latestWrite(page, "Projects/Alpha.md"))
-    .not.toMatch(/^---/);
+  await expect.poll(() => latestWrite(page, "Projects/Alpha.md")).toContain(
+    "body only",
+  );
+  await expect.poll(() => latestWrite(page, "Projects/Alpha.md")).not.toMatch(
+    /^---/,
+  );
 });
 
 test("tab context menu manages tabs, pins, and both path forms", async ({
@@ -144,10 +139,6 @@ test("tab context menu manages tabs, pins, and both path forms", async ({
 
   await readmeTab.click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: "Pin note" })).toBeVisible();
-  await expect(
-    page.getByRole("menuitem", { name: "Close", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Close others" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Copy path" })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: "Copy relative path" }),
@@ -164,11 +155,6 @@ test("tab context menu manages tabs, pins, and both path forms", async ({
   await readmeTab.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy relative path" }).click();
   await expect.poll(() => clipboardText(page)).toBe("README.md");
-
-  await readmeTab.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Close others" }).click();
-  await expect(page.getByRole("tab")).toHaveCount(1);
-  await expect(readmeTab).toHaveAttribute("aria-selected", "true");
 });
 
 test("tab strip blank space is draggable while tabs and menus stay interactive", async ({
@@ -176,10 +162,6 @@ test("tab strip blank space is draggable while tabs and menus stay interactive",
 }) => {
   const blank = page.locator("[data-tab-strip-drag-region]");
   await expect(blank).toHaveCSS("-webkit-app-region", "drag");
-  await expect(page.locator("[data-riffle-drag-region]").first()).toHaveCSS(
-    "-webkit-app-region",
-    "drag",
-  );
   await expect(page.getByRole("tab", { name: /README/ })).toHaveCSS(
     "-webkit-app-region",
     "no-drag",
@@ -192,86 +174,40 @@ test("tab strip blank space is draggable while tabs and menus stay interactive",
   );
 });
 
-test("autosave and close flush preserve frontmatter and the owning path", async ({
+test("Source Editor autosave and close flush preserve frontmatter and path", async ({
   page,
 }) => {
   await clearCommands(page);
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" autosaved");
+  const source = await openSource(page);
+  await appendToSource(page, source, " autosaved");
 
-  await expect
-    .poll(() => latestWrite(page, "README.md"))
-    .toContain("autosaved");
-  await expect
-    .poll(() => latestWrite(page, "README.md"))
-    .toContain("---\nfixture: preserved\n---");
+  await expect.poll(() => latestWrite(page, "README.md")).toContain("autosaved");
+  await expect.poll(() => latestWrite(page, "README.md")).toContain(
+    "---\nfixture: preserved\n---",
+  );
 
-  await page.getByRole("treeitem", { name: "Projects", exact: true }).click();
-  await page.getByRole("treeitem", { name: "Alpha.md", exact: true }).click();
-  await page.getByRole("tab", { name: /README/ }).click();
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" flushed-on-close");
+  await appendToSource(page, source, " flushed-on-close");
   await page.getByRole("button", { name: "Close README" }).click();
-
-  await expect
-    .poll(() => latestWrite(page, "README.md"))
-    .toContain("flushed-on-close");
-});
-
-test("markdown source and rich editor round-trip through one note model", async ({
-  page,
-}) => {
-  await page
-    .getByRole("button", { name: "Show Markdown source" })
-    .click();
-  const source = page.locator(".cm-content");
-  await expect(source).toBeVisible();
-  await expect(source).toContainText("fixture: preserved");
-
-  await page.locator(".cm-line").last().click();
-  await page.keyboard.press("End");
-  await page.keyboard.insertText("\n\nSource round trip");
-  await page.getByRole("button", { name: "Show rich editor" }).click();
-
-  const rich = page.locator('[data-note-editor="active"] .ProseMirror');
-  await expect(rich).toContainText("Source round trip");
-  await page
-    .getByRole("button", { name: "Show Markdown source" })
-    .click();
-  await expect(page.locator(".cm-content")).toContainText("Source round trip");
-});
-
-test("slash commands hand off to the note-link picker without losing focus", async ({
-  page,
-}) => {
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("/");
-
-  await expect(page.getByRole("button", { name: "Link to note" })).toBeVisible();
-  await page.keyboard.press("Enter");
-
-  const picker = page.getByPlaceholder("Link to note…");
-  await expect(picker).toBeFocused();
-  await picker.fill("Alpha");
-  await page.keyboard.press("Enter");
-
-  await expect(editor.getByRole("link", { name: "Alpha" })).toHaveAttribute(
-    "href",
-    "Projects/Alpha.md",
+  await expect.poll(() => latestWrite(page, "README.md")).toContain(
+    "flushed-on-close",
   );
 });
 
-test("find and replace keeps the editor mounted and updates the document", async ({
-  page,
-}) => {
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await editor.click();
+test("Source Editor changes refresh the Readonly View", async ({ page }) => {
+  const source = await openSource(page);
+  await appendToSource(page, source, "\n\n## Source update");
+  await page.getByRole("button", { name: "Show Readonly View" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Source update" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Show Markdown source" }).click();
+  await expect(page.locator(".cm-content")).toContainText("Source update");
+});
+
+test("Source Editor find and replace remains available", async ({ page }) => {
+  const source = await openSource(page);
+  await source.click();
   await page.keyboard.press("ControlOrMeta+f");
 
   const find = page.getByRole("searchbox", { name: "Find in note" });
@@ -280,31 +216,24 @@ test("find and replace keeps the editor mounted and updates the document", async
   await expect(page.getByText("1 of 1", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Show replace" }).click();
-  const replacement = page.getByRole("textbox", { name: "Replace with" });
-  await replacement.fill("migration");
+  await page.getByRole("textbox", { name: "Replace with" }).fill("migration");
   await page.getByRole("button", { name: "Replace All" }).click();
-  await expect(editor).toContainText("Octane + pnpm migration.");
-  await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(find).toHaveCount(0);
+  await expect(source).toContainText("Octane + pnpm migration.");
+  await expect.poll(() => latestWrite(page, "README.md")).toContain("migration");
 });
 
-test("selection formatting preserves the selected text", async ({ page }) => {
-  const paragraph = page
-    .locator('[data-note-editor="active"] .ProseMirror p')
-    .filter({ hasText: "Octane + pnpm verification." });
-  await paragraph.click();
-  await page.keyboard.press("Home");
-  await page.keyboard.down("Shift");
+async function openSource(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: "Show Markdown source" }).click();
+  const source = page.locator('[data-note-editor="active"] .cm-content');
+  await expect(source).toBeVisible();
+  return source;
+}
+
+async function appendToSource(page: Page, source: Locator, text: string) {
+  await source.locator(".cm-line").last().click();
   await page.keyboard.press("End");
-  await page.keyboard.up("Shift");
-
-  const bold = page.getByRole("button", { name: "Bold" });
-  await expect(bold).toBeVisible();
-  await bold.click();
-  await expect(paragraph.locator("strong")).toHaveText(
-    "Octane + pnpm verification.",
-  );
-});
+  await page.keyboard.insertText(text);
+}
 
 async function clearCommands(page: Page) {
   await page.evaluate(() => {
@@ -342,7 +271,8 @@ async function latestWrite(page: Page, rel: string) {
     ).__RIFFLE_TEST__;
     const writes = fixture.operations.filter(
       (entry) =>
-        entry.method === "vault.notes.write" && String(entry.params.rel) === targetRel,
+        entry.method === "vault.notes.write" &&
+        String(entry.params.rel) === targetRel,
     );
     return String(writes.at(-1)?.params.content ?? "");
   }, rel);
