@@ -33,11 +33,8 @@ export function TabBar() @{
     rel: string;
     position: MenuPosition;
   } | null>(null);
-  // Octane #333 currently cannot lower a key that refers to an @for index
-  // binding, so positional focus identity is materialized before rendering.
-  const entries = tabs.map((rel, index) => ({ rel, index }));
 
-  @if (entries.length > 0) {
+  @if (tabs.length > 0) {
     <>
     // layoutRoot scopes the sliding active-tab fill to this strip so the
     // horizontal scroll offset can't smear its projection.
@@ -46,12 +43,12 @@ export function TabBar() @{
       role="tablist"
       className="flex min-w-0 flex-1 items-stretch overflow-x-auto [scrollbar-width:none]"
     >
-      @for (const entry of entries; key entry.rel) {
+      @for (const rel of tabs; index index; key rel) {
         <Tab
-          rel={entry.rel}
-          active={entry.rel === active}
-          focusable={entry.rel === active || (!active && entry.index === 0)}
-          openMenu={(position) => setMenu({ rel: entry.rel, position })}
+          rel={rel}
+          active={rel === active}
+          focusable={rel === active || (!active && index === 0)}
+          openMenu={(position) => setMenu({ rel, position })}
         />
       }
       <div

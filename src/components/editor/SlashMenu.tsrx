@@ -190,12 +190,6 @@ export function SlashMenu(props: SlashMenuProps) @{
   }, [editor, filtered, menu, onClose, onLinkToNote, selected]);
 
   if (!menu || !editor || filtered.length === 0) return null;
-  // Position is materialized before keyed rendering to avoid compiler issue #333.
-  const visibleCommands = filtered.map((command, index) => ({
-    command,
-    icon: command.icon,
-    index,
-  }));
 
   <motion.div
       ref={menuRef}
@@ -205,29 +199,29 @@ export function SlashMenu(props: SlashMenuProps) @{
       className="fixed z-90 max-h-[264px] w-[208px] overflow-y-auto rounded-lg border border-line bg-bg p-1 shadow-lg shadow-black/8 dark:shadow-black/40"
       style={{ left: menu.position.left, top: menu.position.top }}
     >
-      @for (const item of visibleCommands; key item.command.id) {
+      @for (const command of filtered; index index; key command.id) {
         <button
           type="button"
-          data-selected={item.index === selected}
+          data-selected={index === selected}
           className={cx(
             "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors duration-75",
-            item.index === selected ? "bg-hover text-ink" : "text-muted",
+            index === selected ? "bg-hover text-ink" : "text-muted",
           )}
           onMouseDown={(event) => {
             event.preventDefault();
-            if (item.command.id === "note-link") {
+            if (command.id === "note-link") {
               onLinkToNote(menu.range);
               onClose();
               return;
             }
             editor.chain().focus().deleteRange(menu.range).run();
-            item.command.run?.(editor);
+            command.run?.(editor);
             onClose();
           }}
-          onMouseEnter={() => setSelected(item.index)}
+          onMouseEnter={() => setSelected(index)}
         >
-          <item.icon size={14.5} strokeWidth={1.75} className="shrink-0" />
-          {item.command.label}
+          <command.icon size={14.5} strokeWidth={1.75} className="shrink-0" />
+          {command.label}
         </button>
       }
     </motion.div>

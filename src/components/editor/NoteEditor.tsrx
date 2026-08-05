@@ -906,24 +906,25 @@ function NoteEditorComponent(props: NoteEditorProps) @{
           />
         }
         <div className={cx(missing && !preserveMissingDraft && "hidden")}>
-          <div className={cx(!markdownSource && "hidden")}>
+          @if (markdownSource) {
             <MarkdownSourceEditor
               value={rawText}
               onChange={applyRawTextChange}
               selection={noteFind.sourceSelection}
               active={active && markdownSource}
             />
-          </div>
-          <div className={cx(markdownSource && "hidden")}>
-            <NoteProperties
-              properties={properties}
-              addRequest={propertyAddRequest}
-              onAddRequestHandled={consumePropertyAddRequest}
-              onUpsert={upsertProperty}
-              onRemove={removeProperty}
-            />
-            <EditorContent editor={editor} />
-          </div>
+          } @else {
+            <>
+              <NoteProperties
+                properties={properties}
+                addRequest={propertyAddRequest}
+                onAddRequestHandled={consumePropertyAddRequest}
+                onUpsert={upsertProperty}
+                onRemove={removeProperty}
+              />
+              <EditorContent editor={editor} />
+            </>
+          }
         </div>
         @if (active && editor && !markdownSource && !noteFind.open) {
           <SelectionMenu editor={editor} />

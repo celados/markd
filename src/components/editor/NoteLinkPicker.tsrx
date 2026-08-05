@@ -67,12 +67,6 @@ export function NoteLinkPicker(props: NoteLinkPickerProps) @{
     const note = filtered[index];
     if (note) onPick(note.rel, relToLabel(note.rel, currentRel));
   };
-  // Materializing position identity avoids the compiler's keyed-index lowering bug.
-  const visibleNotes = filtered.map((note, index) => ({
-    note,
-    index,
-    route: folderRoute(note.rel),
-  }));
 
   <motion.div
       initial={{ opacity: 0, y: state.side === "bottom" ? -4 : 4 }}
@@ -107,25 +101,26 @@ export function NoteLinkPicker(props: NoteLinkPickerProps) @{
         onBlur={onClose}
       />
       <div className="max-h-[240px] overflow-y-auto">
-        @for (const item of visibleNotes; key item.note.rel) {
+        @for (const note of filtered; index index; key note.rel) {
+          const route = folderRoute(note.rel);
             <button
               type="button"
               className={cx(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors duration-75",
-                item.index === selected ? "bg-hover text-ink" : "text-muted",
+                index === selected ? "bg-hover text-ink" : "text-muted",
               )}
               // mousedown (not click) so it fires before the input's blur closes us
               onMouseDown={(event) => {
                 event.preventDefault();
-                choose(item.index);
+                choose(index);
               }}
-              onMouseEnter={() => setSelected(item.index)}
+              onMouseEnter={() => setSelected(index)}
             >
               <FileText size={14} strokeWidth={1.75} className="shrink-0" />
-              <span className="truncate">{noteTitle(item.note.rel)}</span>
-              @if (item.route) {
+              <span className="truncate">{noteTitle(note.rel)}</span>
+              @if (route) {
                 <span className="ml-auto shrink-0 truncate pl-2 text-[11px] text-faint">
-                  {item.route}
+                  {route}
                 </span>
               }
             </button>

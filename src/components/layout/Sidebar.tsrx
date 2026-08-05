@@ -214,12 +214,6 @@ function ShortcutHint(props: {
   const { shortcut, active = false, boxed = false } = props;
   const mac = isMac();
   const parts = formatShortcutParts(shortcut, mac);
-  // https://github.com/octanejs/octane/issues/333 requires position-derived
-  // keys to be materialized before the template is lowered.
-  const entries = parts.map((part, index) => ({
-    part,
-    key: `${part}-${index}`,
-  }));
   <kbd
       aria-label={parts.join(" ")}
       className={cx(
@@ -228,14 +222,14 @@ function ShortcutHint(props: {
         active ? "text-muted" : "text-faint",
       )}
     >
-      @for (const entry of entries; key entry.key) {
-        @if (entry.part === "⌘") {
+      @for (const part of parts; key part) {
+        @if (part === "⌘") {
           <Command size={10.5} strokeWidth={1.8} />
         } @else {
-          @if (entry.part === "⇧") {
+          @if (part === "⇧") {
             <ArrowBigUp size={10.5} strokeWidth={1.8} />
           } @else {
-            <span>{entry.part}</span>
+            <span>{part}</span>
           }
         }
       }

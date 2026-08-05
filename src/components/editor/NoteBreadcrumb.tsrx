@@ -9,19 +9,16 @@ import { noteTitle } from "@/lib/utils";
  */
 export function NoteBreadcrumb(props: { rel: string }) @{
   const { rel } = props;
-  const folders = rel
-    .split("/")
-    .slice(0, -1)
-    .map((folder, index) => ({ folder, index }));
+  const folders = rel.split("/").slice(0, -1);
 
   <div
       aria-label="Current note"
       className="flex min-w-0 items-center gap-1.5 text-[13.5px]"
     >
-      @for (const entry of folders; key entry.index) {
+      @for (const folder of folders; index index; key index) {
         <>
           <span className="max-w-[140px] shrink-0 truncate text-muted">
-            {entry.folder}
+            {folder}
           </span>
           <ChevronRight
             size={13}

@@ -104,7 +104,7 @@ export function MarkdownSourceEditor({
       viewRef.current = null;
     };
     // The view owns its document after mount; prop synchronization is handled
-    // separately so React renders never recreate editor state or undo history.
+    // separately so component renders never recreate editor state or undo history.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

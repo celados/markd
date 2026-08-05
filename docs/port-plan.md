@@ -5,8 +5,8 @@ description: >
   在保留 Markd Tauri/Rust 数据合同的前提下，以真实桌面编辑器场景验证 Octane runtime、TSRX
   compiler 和生态 bindings 的可用性。
 status: completed
-version: 0.5
-timestamp: 2026-07-28T00:00:00+08:00
+version: 0.6
+timestamp: 2026-08-05T10:00:00+08:00
 resource: https://github.com/starc007/markd
 tags: [octane, markd, tauri, tsrx, migration, reliability]
 ---
@@ -181,7 +181,6 @@ Rust command/event contract 未改名。当前 Octane CLI 位于源码仓库的�
 理由的 TSX 和 3 个删除项；现代 dnd、native events、ErrorBoundary、ref、Base UI
 Dialog/Popover/Tooltip 和 Tiptap 3.28 dependency boundary 已落地。
 
-最终证据：严格 typecheck 只接受 `octanejs/octane#332` 的 28 条精确 dependency diagnostics；
-41 个逻辑测试、Vite production build、14 个 system-Chrome Playwright journeys、59 个 Rust
-tests 与 Tauri debug no-bundle host build通过。release bundle、签名、公证以及真实 vault 的
-人工视觉/交互验收不属于此次自动门禁；它们没有被宣称为已验证。
+当前证据：严格 typecheck 无 dependency diagnostic allowlist；迁移时依赖 `#333/#335` 的本地绕行
+已在正式修复发布后删除。Vitest、Vite production build、system-Chrome Playwright 与真实 Electron
+journeys 均通过。历史 Tauri/Rust 门禁只描述迁移阶段，不再是当前 Electron 产品的验收合同。

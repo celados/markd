@@ -142,9 +142,7 @@ export function ActionSwapText(props: ActionSwapTextProps) @{
   });
 
   const cascade = animation === "cascade" && !reduce;
-  const letters = text
-    .split("")
-    .map((char, index) => ({ char, index }));
+  const letters = text.split("");
   const coreAnimation: CoreAnimation =
     animation === "cascade" ? "roll" : animation;
 
@@ -178,13 +176,13 @@ export function ActionSwapText(props: ActionSwapTextProps) @{
             exit="exit"
             className="absolute left-0 top-0 inline-block whitespace-pre"
           >
-            @for (const letter of letters; key letter.index) {
+            @for (const letter of letters; index index; key index) {
               <motion.span
-                custom={letter.index * CASCADE_STAGGER}
+                custom={index * CASCADE_STAGGER}
                 variants={CASCADE_LETTER_VARIANTS}
                 className="inline-block whitespace-pre will-change-[opacity,filter,transform]"
               >
-                {letter.char}
+                {letter}
               </motion.span>
             }
           </motion.span>

@@ -4,8 +4,8 @@ title: Markd TSRX 迁移逐文件 manifest
 description: >
   冻结 51 个 render 文件及其唯一 owner、TSRX 决策、前置行为修复、可执行 oracle 和并行 wave。
 status: completed
-version: 0.6
-timestamp: 2026-07-28T00:00:00+08:00
+version: 0.7
+timestamp: 2026-08-05T10:00:00+08:00
 resource: ./tsrx-rewrite-plan.md
 tags: [octane, markd, tsrx, manifest, migration]
 ---
@@ -40,9 +40,8 @@ property save/focus、unused Motion cleanup 与 system-Chrome baseline 已完成
    开工前必须先有对应 spec。
 
 Wave 0 发现的 Motion transparent-wrapper defect 已提交
-[`octanejs/octane#331`](https://github.com/octanejs/octane/pull/331)，app 通过
-`patches/@octanejs%2Fmotion@0.1.16.patch` 重放。4 个 browser journeys、41 个 logic tests、
-typecheck 与 production build 均通过。
+[`octanejs/octane#331`](https://github.com/octanejs/octane/pull/331)，并已进入当前正式 binding；旧
+pnpm patch 已删除。production browser journeys、logic tests、typecheck 与 build 均通过。
 
 # Ownership and file decisions
 
@@ -74,7 +73,7 @@ A 的 browser owner 是 `tests/browser/shared-ui.spec.ts`；逻辑 gate 是 `pnp
 | `tree/RenameInput.tsx` | keep TSX | 单 input + effect。验证 Enter+blur 单次提交、Escape/empty no-op。 |
 | `tree/FolderMorphIcon.tsx` | keep TSX | 静态 Motion leaf，无结构控制流收益。 |
 | `tree/treeMenu.ts` | keep TS | 纯 command/data builder，不是 render file。补 item order/callback unit tests。 |
-| `layout/Sidebar.tsrx` | converted TSRX | view/update/shortcut branches；shortcut parts 在 setup 中物化 position key，规避 `octane#333`。 |
+| `layout/Sidebar.tsrx` | converted TSRX | view/update/shortcut branches；`#333` 修复发布后直接使用 keyed `@for`。 |
 | `layout/ResizableSidebar.tsx` | keep TSX | pointer-capture state machine 是核心，模板收益低；沿用 `sidebarResize` unit tests。 |
 | `bookmarks/BookmarksPage.tsrx` | converted TSRX | rows 使用 `@for key bookmark.id`；保留 edit/image fallback/AnimatePresence identity。 |
 | `todos/TodosPage.tsrx` | converted TSRX | rows 使用 `@for key todo.id`；保留 optimistic/edit/filter/AnimatePresence identity。 |
@@ -110,8 +109,8 @@ page switching/focus restore，以及 Property rename 的 portal dismissal paths
 | `editor/CodeBlock.tsx` | keep TSX | Tiptap NodeView/ProseMirror-owned DOM seam；模板收益低。 |
 | `editor/FindReplaceBar.tsrx` | converted TSRX | toolbar 分支用 `@if`；replace pane 仍常驻，只切 grid/inert/ARIA；find/replace browser journey 已通过。 |
 | `editor/LinkedMentions.tsrx` | converted TSRX | `@for key sourceRel:line:occurrence`；保留 request-id 防竞态。 |
-| `editor/MarkdownSourceEditor.tsx` | keep TSX | 命令式 CodeMirror owner；EditorView 创建一次并显式 destroy。因 `octane#335`，rich/source owner 都常驻，只切 `hidden`，source 仅在 active 时 focus。 |
-| `editor/NoteBreadcrumb.tsrx` | converted TSRX | folder list 使用 materialized position identity；ActionSwap API 不变。 |
+| `editor/MarkdownSourceEditor.tsx` | keep TSX | 命令式 CodeMirror owner；EditorView 按 source branch mount 创建并在 unmount 显式 destroy。 |
+| `editor/NoteBreadcrumb.tsrx` | converted TSRX | folder list 直接使用 indexed keyed `@for`；ActionSwap API 不变。 |
 | `editor/NoteEditor.tsrx` | converted TSRX | 只改 render/control-flow；editor lifecycle、effects、IPC、autosave 与 refs 保持原合同。 |
 | `editor/NoteLinkPicker.tsrx` | converted TSRX | `@for key note.rel`；mousedown-before-blur 与 insertion range 由 slash→picker journey 验证。 |
 | `editor/NoteProperties.tsrx` | converted TSRX | `@for key property.key`；draft/addFocusNonce identity 保持。 |
@@ -137,16 +136,16 @@ paste branches、selection/BubbleMenu、NodeView cleanup、source/rich 往返以
 当前 `tests/browser/editor.spec.ts` 已机械覆盖 live editor 跨 tab/view identity、500ms autosave、
 close flush 与 owning path、frontmatter 保留、source/rich 双向往返、slash→note-link picker、
 find/replace 和 selection formatting。该 oracle 先暴露 icon-only source toggle 缺少 accessible
-name，再暴露 Octane branch marker/runtime crash；前者已修正，后者跟踪为
-[`octanejs/octane#335`](https://github.com/octanejs/octane/issues/335)，并通过常驻双 owner
-模型消除。markdown paste 由逻辑测试覆盖；NodeView seam 由 Tiptap 类型门禁和真实 Tauri host
+name，再暴露 Octane branch marker/runtime crash；前者已修正，后者由
+[`octanejs/octane#335`](https://github.com/octanejs/octane/issues/335) 的正式修复解决，rich/source
+恢复互斥 branch mount。markdown paste 由逻辑测试覆盖；NodeView seam 由 Tiptap 类型门禁和真实 Tauri host
 编译覆盖，仍需在用户视觉验收中观察实际 code block mount/copy/unmount。
 
 ## E — motion
 
 | file | decision | frozen reason / oracle |
 | --- | --- | --- |
-| `motion/action-swap.tsrx` | converted TSRX | cascade chars 使用 materialized position-keyed `@for`（避开 `octane#333`）；Text/Icon 改为显式 `text`/`icon` 输入，避免 opaque children 被测量层与 Motion 层重复消费。 |
+| `motion/action-swap.tsrx` | converted TSRX | cascade chars 在 `#333` 修复发布后直接使用 indexed keyed `@for`；Text/Icon 保持显式 `text`/`icon` 输入，避免 opaque children 被测量层与 Motion 层重复消费。 |
 | `motion/popover-morph.tsrx` | converted TSRX | Wave 2 browser oracle 证明 TSX opaque-child wrapper 会把 TSRX slot 当普通 node 并崩溃；现收敛为显式 `trigger`/`content` 的单一 Base UI composition。 |
 | `motion/morphing-modal.tsx` | delete | 无 caller；手工 focus/scroll/modal primitive 已被 Base UI Dialog 路线取代。 |
 | `motion/shared-layout-bg.tsx` | delete | 无 caller；显式 API 没有真实 consumer，`layoutRoot` 当前也无 binding 语义。 |
@@ -180,7 +179,7 @@ breadcrumb 和 AppShell 观察首帧、快速切换、不同长度、reduced mot
 ```text
 pnpm install --frozen-lockfile
 pnpm test
-pnpm run typecheck  # 精确 allowlist octanejs/octane#332，其余 diagnostics 仍失败
+pnpm run typecheck  # strict consumer check, no dependency diagnostic allowlist
 pnpm run build
 pnpm exec playwright test
 rg React runtime / cloneElement / Children / forwardRef / legacy @dnd-kit imports

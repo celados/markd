@@ -284,12 +284,6 @@ export function ShortcutSettings() @{
   const resetAll = useShortcuts((state) => state.resetAll);
   const [editing, setEditing] = useState<ShortcutAction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The compiler's positional @for lowering is tracked in octane#333, so the
-  // stable shortcut id remains the key while position is ordinary data.
-  const shortcutEntries = SHORTCUT_DEFINITIONS.map((shortcut, index) => ({
-    shortcut,
-    index,
-  }));
 
   const onCapture = (action: ShortcutAction, event: KeyboardEvent) => {
     event.preventDefault();
@@ -338,30 +332,30 @@ export function ShortcutSettings() @{
       }
     >
       <div className="overflow-hidden rounded-xl bg-panel">
-        @for (const entry of shortcutEntries; key entry.shortcut.id) {
+        @for (const shortcut of SHORTCUT_DEFINITIONS; index index; key shortcut.id) {
           <div
             className={cx(
               "flex min-h-10 items-center justify-between gap-4 px-3.5 py-2 text-[12.5px] text-muted",
-              entry.index > 0 && "border-t border-line-soft",
+              index > 0 && "border-t border-line-soft",
             )}
           >
-            <span>{entry.shortcut.label}</span>
+            <span>{shortcut.label}</span>
             <div className="flex shrink-0 items-center gap-1.5">
               <ShortcutCapture
-                label={entry.shortcut.label}
-                shortcut={bindings[entry.shortcut.id]}
+                label={shortcut.label}
+                shortcut={bindings[shortcut.id]}
                 mac={mac}
-                editing={editing === entry.shortcut.id}
+                editing={editing === shortcut.id}
                 onStart={() => {
-                  setEditing(entry.shortcut.id);
+                  setEditing(shortcut.id);
                   setError(null);
                 }}
               />
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={`Reset ${entry.shortcut.label}`}
-                onClick={() => resetBinding(entry.shortcut.id)}
+                aria-label={`Reset ${shortcut.label}`}
+                onClick={() => resetBinding(shortcut.id)}
               >
                 <RotateCcw size={12.5} strokeWidth={1.8} />
               </Button>
@@ -448,14 +442,11 @@ type ShortcutKeysProps = {
 
 function ShortcutKeys(props: ShortcutKeysProps) @{
   const { shortcut, mac } = props;
-  const parts = formatShortcutParts(shortcut, mac).map((key, index) => ({
-    key,
-    index,
-  }));
+  const keys = formatShortcutParts(shortcut, mac);
 
   <>
-    @for (const part of parts; key `${part.key}-${part.index}`) {
-      <Kbd>{part.key}</Kbd>
+    @for (const key of keys; index index; key `${key}-${index}`) {
+      <Kbd>{key}</Kbd>
     }
   </>
 }

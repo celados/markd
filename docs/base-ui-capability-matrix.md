@@ -5,8 +5,8 @@ description: >
   对照 Markd 当前 UI contract、Base UI 1.6.0 官方 API 与 Octane Base UI port，冻结 P0 adoption
   的 owner、保留行为和验证重点。
 status: active
-version: 0.8
-timestamp: 2026-07-28T00:00:00+08:00
+version: 0.9
+timestamp: 2026-08-05T10:00:00+08:00
 resource: https://base-ui.com/llms.txt
 tags: [octane, base-ui, markd, migration]
 ---
@@ -15,9 +15,8 @@ tags: [octane, base-ui, markd, migration]
 
 - [`base-ui.com/llms.txt`](https://base-ui.com/llms.txt) 及其 Button、Input、Tooltip、Context Menu、
   Dialog、Popover、Composition、Animation pages；当前 upstream version line 是 1.6.0。
-- `.scratch/octane/packages/base-ui/README.md`、`status.json`、对应 `src/*.ts` 和 `tests/*.test.ts`；
-  当前 port version 是 0.1.15，覆盖 31/43 upstream subpaths。
-- `app/src/components/ui/` 与 `app/src/components/motion/popover-morph.tsrx` 的现有行为。
+- 已安装的 `@octanejs/base-ui@0.1.21` package exports、source 与 tests。
+- `src/components/ui/` 与 `src/components/motion/popover-morph.tsrx` 的现有行为。
 
 Upstream 文档描述目标 API；Octane port 源码/tests 决定当前可用性。React-only composition 示例不能
 机械复制：Octane 使用 ref-as-prop、native events，并通过自己的 `render`/`useRenderElement` 实现组合。
@@ -29,13 +28,13 @@ Upstream 文档描述目标 API；Octane port 源码/tests 决定当前可用性
 | `ui/Input.tsx` | `@octanejs/base-ui/input` | yes | Tailwind classes、native `onInput` callers、普通 ref prop | controlled/uncontrolled value、accessible name、disabled/invalid state |
 | `ui/Button.tsx` | `@octanejs/base-ui/button` | yes | variant/size classes、loading spinner、CSS press feedback | native button semantics、`type="button"`、disabled/loading focus、ref |
 | `ui/Tooltip.tsx` | `@octanejs/base-ui/tooltip` | yes | `label`/`side` convenience adapter 和 Markd visual classes | hover + keyboard focus、delay provider、portal positioning、aria association、unmount |
-| `ui/ContextMenu.tsx` | `@octanejs/base-ui/context-menu` | blocked on publish | `MenuItem[]` data adapter、icon/danger classes、selection callback | right-click/long-press、collision positioning、roving focus、typeahead、Escape/outside dismissal |
+| `ui/ContextMenu.tsx` | `@octanejs/base-ui/context-menu` | available, not adopted | `MenuItem[]` data adapter、icon/danger classes、selection callback | right-click/long-press、collision positioning、roving focus、typeahead、Escape/outside dismissal |
 | `ui/Modal.tsx` | `@octanejs/base-ui/dialog` | yes | `open/onClose/align/className` adapter、state-attribute CSS styling | focus trap/restore、Escape/outside dismissal、title/description labeling、nested dialog、exit lifecycle |
 | `motion/popover-morph.tsrx` | `@octanejs/base-ui/popover` | yes | clip-path morph、Arrow/Home/End navigation、Markd classes | Base UI owns trigger/portal/positioner/dismissal/focus；`pnpm exec playwright test tests/browser/app-shell.spec.ts` verifies focus/navigation/dismissal |
 
 # Current progress
 
-- Installed `@octanejs/base-ui@0.1.15` through pnpm.
+- Installed `@octanejs/base-ui@0.1.21` through pnpm.
 - `ui/Input.tsx` now delegates to Base UI Input while preserving Markd classes and native input props.
 - `ui/Button.tsx` now delegates button semantics to Base UI and retains press feedback with CSS active state.
 - `ui/Tooltip.tsx` now delegates hover、focus、delay、portal and positioning to Base UI while preserving
@@ -56,10 +55,9 @@ pointer coordinates and render `{ position, items, onClose }`. Base UI owns the 
 those callers. `ui/ContextMenu.tsx` cannot be swapped in isolation; the final manifest must include the relevant
 FileTree/PinnedNotes caller changes and remove their manual positioning/focus/dismissal code.
 
-The source snapshot contains `packages/base-ui/src/context-menu.ts` and its tests, but the latest npm tarball
-(`@octanejs/base-ui@0.1.15`) does not contain `context-menu.ts`, `menu.ts`, or `menubar.ts`. A trial adoption failed
-module resolution and was reverted; typecheck is green again. Keep the current app implementation until a package
-release exposes the subpath. Do not bind production code to `.scratch` or vendor the unpublished package source.
+`@octanejs/base-ui@0.1.21` exposes ContextMenu、Menu 与 Menubar. The remaining ContextMenu work is an app-owner
+migration across FileTree/PinnedNotes callers, not a package publication blocker. Keep that work scoped to the
+existing backlog item; do not vendor binding source or retain the obsolete module-resolution restriction.
 
 # Composition contract
 
@@ -80,11 +78,10 @@ express a confirmed product behavior.
 Markd's morph/layout effects remain product behavior. Adoption may replace popup semantics and positioning, but it
 must not silently delete the clip-path morph、shared `layoutId`、reduced-motion handling or exit cleanup.
 
-The Motion failure was a `hostComponent` input-shape bug, not a hook-slot collision. TSRX callers supply a children
-render function, while TSX/createElement value positions supply a descriptor; published `octane@0.1.17` invoked
-both as functions. [`octanejs/octane#328`](https://github.com/octanejs/octane/pull/328) preserves the stable
-function delegate and sends descriptors directly through `childSlot`. The app carries the same change as a pnpm
-patch until release. A fresh install, production build and system-Chrome journeys now cover Welcome,
+The historical Motion failure was a `hostComponent` input-shape bug, not a hook-slot collision. TSRX callers supply
+a children render function, while TSX/createElement value positions supply a descriptor. The fix from
+[`octanejs/octane#328`](https://github.com/octanejs/octane/pull/328) is included in the installed Octane release;
+Riffle no longer carries the pnpm patch. Fresh production builds and system-Chrome journeys cover Welcome,
 Settings/Motion, Dialog focus trap/restore and the ready AppShell with no runtime errors.
 
 `Modal` uses Base UI state attributes plus CSS transitions because it has no real `layoutId` consumer.
