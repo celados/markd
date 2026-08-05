@@ -671,10 +671,11 @@ test("dirty Note flushes to the old Vault before a real Vault switch", async () 
   try {
     const page = await riffleWindow(application, "main");
     await page.getByRole("treeitem", { name: "Existing.md" }).click();
-    const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-    await editor.click();
+    await page.getByRole("button", { name: "Show Markdown source" }).click();
+    const editor = page.locator('[data-note-editor="active"] .cm-content');
+    await editor.locator(".cm-line").last().click();
     await page.keyboard.press("End");
-    await page.keyboard.type(" dirty before switch");
+    await page.keyboard.insertText(" dirty before switch");
     await application.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
     }, secondVault);
@@ -714,10 +715,11 @@ test("failed dirty flush prevents the real Vault dialog and switch", async () =>
   try {
     const page = await riffleWindow(application, "main");
     await page.getByRole("treeitem", { name: "Existing.md" }).click();
-    const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-    await editor.click();
+    await page.getByRole("button", { name: "Show Markdown source" }).click();
+    const editor = page.locator('[data-note-editor="active"] .cm-content');
+    await editor.locator(".cm-line").last().click();
     await page.keyboard.press("End");
-    await page.keyboard.type(" conflicting draft");
+    await page.keyboard.insertText(" conflicting draft");
     await writeFile(join(firstVault, "Existing.md"), "# External conflict");
     await application.evaluate(({ dialog }, path) => {
       process.env.RIFFLE_TEST_SWITCH_DIALOG_CALLS = "0";

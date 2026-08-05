@@ -28,7 +28,7 @@ test("empty Untitled Note moves to Trash without stale tree or tabs", async ({
     .toEqual(["Untitled.md"]);
 });
 
-test("Electron asset URLs are supplied only by the semantic bridge", async ({ page }) => {
+test("Readonly View keeps asset sources inert until the asset policy lands", async ({ page }) => {
   await installVaultSliceFixture(page);
   await page.goto("/");
   await page.evaluate(() => {
@@ -44,18 +44,19 @@ test("Electron asset URLs are supplied only by the semantic bridge", async ({ pa
   });
   await page.getByRole("treeitem", { name: "Existing.md" }).click();
 
-  await expect(page.locator('img[data-vault-src=".markd/assets/fixture.png"]')).toHaveAttribute(
-    "src",
-    "riffle-asset://vault/fixture.png",
+  await expect(page.locator('img[alt="safe"]')).toHaveAttribute(
+    "data-markdown-src",
+    ".markd/assets/fixture.png",
   );
-  await expect(page.locator('img[data-vault-src="../outside.png"]')).toHaveAttribute("src", "");
+  await expect(page.locator('img[alt="safe"]')).not.toHaveAttribute("src", /.+/);
+  await expect(page.locator('img[alt="escape"]')).not.toHaveAttribute("src", /.+/);
 });
 
 test("live index changes reload clean Notes and preserve dirty drafts", async ({ page }) => {
   await installVaultSliceFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "Existing.md" }).click();
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
+  const view = page.locator('[data-note-editor="active"] .prose-note');
 
   await page.evaluate(() => {
     const fixture = (window as Window & {
@@ -75,11 +76,10 @@ test("live index changes reload clean Notes and preserve dirty drafts", async ({
       }],
     });
   });
-  await expect(editor).toContainText("Clean external edit");
+  await expect(view).toContainText("Clean external edit");
 
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" local draft");
+  const editor = await openSource(page);
+  await appendToSource(page, editor, " local draft");
   await page.evaluate(() => {
     const fixture = (window as Window & {
       __RIFFLE_VAULT_TEST__: {
@@ -173,15 +173,13 @@ test("removal during an in-flight save remains visibly missing", async ({ page }
   await installVaultSliceFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "Existing.md" }).click();
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
+  const editor = await openSource(page);
   await page.evaluate(() => {
     (window as Window & {
       __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
     }).__RIFFLE_VAULT_TEST__.deferWrites.value = true;
   });
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" pending save");
+  await appendToSource(page, editor, " pending save");
   await expect.poll(() => page.evaluate(() =>
     (window as Window & {
       __RIFFLE_VAULT_TEST__: { operations: string[] };
@@ -217,10 +215,8 @@ test("Vault switch flushes dirty Notes before sending open", async ({ page }) =>
   await installVaultSliceFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "Existing.md" }).click();
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" dirty before switch");
+  const editor = await openSource(page);
+  await appendToSource(page, editor, " dirty before switch");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Change" }).click();
 
@@ -235,10 +231,8 @@ test("failed dirty flush prevents Vault switch", async ({ page }) => {
   await installVaultSliceFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "Existing.md" }).click();
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" conflicting draft");
+  const editor = await openSource(page);
+  await appendToSource(page, editor, " conflicting draft");
   await page.evaluate(() => {
     (window as Window & {
       __RIFFLE_VAULT_TEST__: { failWrites: { value: boolean } };
@@ -261,21 +255,19 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
   await installVaultSliceFixture(page);
   await page.goto("/");
   await page.getByRole("treeitem", { name: "Existing.md" }).click();
-  const editor = page.locator('[data-note-editor="active"] .ProseMirror');
+  const editor = await openSource(page);
   await page.evaluate(() => {
     (window as Window & {
       __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
     }).__RIFFLE_VAULT_TEST__.deferWrites.value = true;
   });
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" draft one");
+  await appendToSource(page, editor, " draft one");
   await expect.poll(() => page.evaluate(() =>
     (window as Window & {
       __RIFFLE_VAULT_TEST__: { operations: string[] };
     }).__RIFFLE_VAULT_TEST__.operations,
   )).toEqual(["write:Existing.md"]);
-  await page.keyboard.type(" draft two");
+  await page.keyboard.insertText(" draft two");
   await page.waitForTimeout(600);
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Change" }).click();
@@ -291,9 +283,7 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
       __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
     }).__RIFFLE_VAULT_TEST__.deferWrites.value = false;
   });
-  await editor.click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(" newest");
+  await appendToSource(page, editor, " newest");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Change" }).click();
 
@@ -308,3 +298,73 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
     }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
   )).toContain("draft one draft two newest");
 });
+
+test("a committed external append stays visible and survives the next Source edit", async ({
+  page,
+}) => {
+  await installVaultSliceFixture(page);
+  await page.goto("/");
+  await page.getByRole("treeitem", { name: "Existing.md" }).click();
+  const source = await openSource(page);
+  await page.evaluate(() => {
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { deferWrites: { value: boolean } };
+    }).__RIFFLE_VAULT_TEST__.deferWrites.value = true;
+  });
+
+  await appendToSource(page, source, " local edit");
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
+  )).toEqual(["write:Existing.md"]);
+  await page.keyboard.insertText(" newer draft");
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    const fixture = (window as Window & {
+      __RIFFLE_VAULT_TEST__: {
+        deferWrites: { value: boolean };
+        succeedNextDeferredWriteWithAppend: (append: string) => void;
+      };
+    }).__RIFFLE_VAULT_TEST__;
+    fixture.deferWrites.value = false;
+    fixture.succeedNextDeferredWriteWithAppend("\nexternal append");
+  });
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
+    }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
+  )).toBe("# Existing local edit newer draft\nexternal append");
+  await expect(source).toContainText("external append");
+
+  await page.getByRole("button", { name: "Show Readonly View" }).click();
+  await expect(page.locator('[data-note-editor="active"] .prose-note')).toContainText(
+    "external append",
+  );
+  await page.getByRole("button", { name: "Show Markdown source" }).click();
+  const reconciledSource = page.locator('[data-note-editor="active"] .cm-content');
+  await appendToSource(page, reconciledSource, " subsequent edit");
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
+    }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
+  )).toBe("# Existing local edit newer draft\nexternal append subsequent edit");
+});
+
+async function openSource(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Show Markdown source" }).click();
+  const source = page.locator('[data-note-editor="active"] .cm-content');
+  await expect(source).toBeVisible();
+  return source;
+}
+
+async function appendToSource(
+  page: import("@playwright/test").Page,
+  source: import("@playwright/test").Locator,
+  text: string,
+) {
+  await source.locator(".cm-line").last().click();
+  await page.keyboard.press("End");
+  await page.keyboard.insertText(text);
+}

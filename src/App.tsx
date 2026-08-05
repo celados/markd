@@ -167,7 +167,7 @@ function toggleSidebarEditorFocus() {
   if (sidebar?.contains(document.activeElement)) {
     document
       .querySelector<HTMLElement>(
-        '[data-note-editor="active"] .cm-content, [data-note-editor="active"] .ProseMirror',
+        '[data-note-editor="active"] .cm-content, [data-note-editor="active"] [data-readonly-markdown="true"]',
       )
       ?.focus();
     return;

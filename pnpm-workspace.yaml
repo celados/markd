@@ -12,6 +12,9 @@ peerDependencyRules:
     - react
     - react-dom
 minimumReleaseAgeExclude:
+  # Issue #38 reviewed Comark 0.6.0's renamed API before adoption; keep the
+  # exception exact so this does not weaken the release-age gate for upgrades.
+  - 'comark@0.6.0'
   - '@celados/fff-bin-darwin-arm64@0.10.2-nightly.dbc0f62'
   - '@celados/fff-bin-darwin-x64@0.10.2-nightly.dbc0f62'
   - '@celados/fff-node@0.10.2-nightly.dbc0f62'

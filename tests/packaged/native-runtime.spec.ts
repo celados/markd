@@ -116,11 +116,12 @@ test("packaged app completes release-critical desktop journeys in background", a
     });
 
     await page.getByRole("treeitem", { name: "Search.md" }).click();
-    const editor = page.locator('[data-note-editor="active"] .ProseMirror');
-    await expect(editor).toBeVisible();
-    await editor.click();
+    await page.getByRole("button", { name: "Show Markdown source" }).click();
+    const source = page.locator('[data-note-editor="active"] .cm-content');
+    await expect(source).toBeVisible();
+    await source.locator(".cm-line").last().click();
     await page.keyboard.press("End");
-    await page.keyboard.type(" edited through the packaged renderer");
+    await page.keyboard.insertText(" edited through the packaged renderer");
     await expect.poll(() => readFile(join(vault, "Search.md"), "utf8"))
       .toContain("edited through the packaged renderer");
 
