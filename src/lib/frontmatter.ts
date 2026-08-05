@@ -1,7 +1,7 @@
 import { isMap, isScalar, isSeq, parseDocument, stringify } from "yaml";
 
 /**
- * YAML frontmatter handling. Frontmatter stays outside the rich editor and is
+ * YAML frontmatter handling. Frontmatter stays outside the Markdown body and is
  * re-attached on save. UI property edits only touch the selected flat property
  * so comments and unsupported YAML structures continue to round-trip.
  */

@@ -32,7 +32,7 @@ import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 import { NoteProperties } from "./NoteProperties.tsrx";
 import { PublishNoteModal } from "./PublishNoteModal.tsrx";
 import { TitleInput } from "./TitleInput";
-import { useNoteFindReplace } from "./useNoteFindReplace";
+import { useSourceFindReplace } from "./use-source-find-replace";
 
 type NoteEditorProps = {
   rel: string;
@@ -431,11 +431,8 @@ function NoteEditorComponent(props: NoteEditorProps) @{
     [],
   );
 
-  const noteFind = useNoteFindReplace({
+  const noteFind = useSourceFindReplace({
     active: active && markdownSource,
-    contentVersion: 0,
-    editor: null,
-    markdownSource,
     rawText,
     rel,
     applyRawTextChange,
