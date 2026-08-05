@@ -365,6 +365,13 @@ body {
     text-decoration-color: var(--ink);
 }
 
+.prose-note .markdown-link-missing {
+    color: var(--muted);
+    text-decoration: underline dashed var(--faint);
+    text-underline-offset: 3px;
+    cursor: not-allowed;
+}
+
 .prose-note strong {
     font-weight: 650;
 }
@@ -531,6 +538,24 @@ body {
 }
 
 /* task list */
+.prose-note ul.contains-task-list {
+    list-style: none;
+    padding-left: 0;
+}
+
+.prose-note li.task-list-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.prose-note .task-list-item-checkbox {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    accent-color: var(--invert);
+}
+
 .prose-note ul[data-type="taskList"] {
     list-style: none;
     padding-left: 0;

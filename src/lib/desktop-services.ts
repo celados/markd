@@ -80,6 +80,7 @@ export const vaultDesktop = {
   assets: {
     save: (data: string, extension: string) =>
       unwrapDesktopResult(desktop().vault.assets.save(data, extension)),
+    url: (rel: string) => desktop().vault.assets.url(rel),
   },
   theme: {
     get: () => unwrapDesktopResult(desktop().vault.getTheme()),
