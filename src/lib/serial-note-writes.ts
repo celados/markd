@@ -3,6 +3,8 @@ export type NoteWriteResult = {
   committed: string;
 };
 
+export type NoteSourceMutation = (source: string) => string;
+
 export class StaleNoteDraftError extends Error {
   constructor() {
     super("The Note changed while local saves were queued.");
@@ -44,14 +46,44 @@ export class SerialNoteWrites {
   ): Promise<NoteWriteResult> {
     const base = this.#queuedBase;
     this.#queuedBase = draft;
-    this.#pending += 1;
-
-    const result = this.#tail.then(async () => {
+    return this.#enqueue(async () => {
       const desired = rebaseAppendOnly(base, draft, this.#committed);
       const committed = await write(desired, this.#committed);
       this.#committed = committed;
       return { desired, committed };
     });
+  }
+
+  mutateLatest(
+    mutation: NoteSourceMutation,
+    read: () => Promise<string>,
+    write: (desired: string, expected: string) => Promise<string>,
+  ): Promise<NoteWriteResult> {
+    this.#queuedBase = mutation(this.#queuedBase);
+    return this.#enqueue(async () => {
+      let base = await read();
+      this.#committed = base;
+      let desired = mutation(base);
+      let committed: string;
+      try {
+        committed = await write(desired, base);
+      } catch (error) {
+        if (!isStaleNoteWrite(error)) throw error;
+        // A Property action owns metadata intent, so one fresh CAS retry can
+        // preserve an independently changed body without weakening body conflicts.
+        base = await read();
+        this.#committed = base;
+        desired = mutation(base);
+        committed = await write(desired, base);
+      }
+      this.#committed = committed;
+      return { desired, committed };
+    });
+  }
+
+  #enqueue(operation: () => Promise<NoteWriteResult>): Promise<NoteWriteResult> {
+    this.#pending += 1;
+    const result = this.#tail.then(operation);
     this.#tail = result.then(
       () => undefined,
       () => undefined,
@@ -63,4 +95,9 @@ export class SerialNoteWrites {
     void result.then(settle, settle);
     return result;
   }
+}
+
+function isStaleNoteWrite(error: unknown): error is { kind: "STALE_NOTE_WRITE" } {
+  return typeof error === "object" && error !== null && "kind" in error &&
+    error.kind === "STALE_NOTE_WRITE";
 }

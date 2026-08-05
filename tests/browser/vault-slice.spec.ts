@@ -302,6 +302,55 @@ test("failed queued writes retain the newest draft for a switch retry", async ({
   )).toContain("draft one draft two newest");
 });
 
+test("a failed Property write keeps its intent for the Vault switch barrier", async ({
+  page,
+}) => {
+  await installVaultSliceFixture(page);
+  await page.goto("/");
+  await page.evaluate(() => {
+    const fixture = (window as Window & {
+      __RIFFLE_VAULT_TEST__: {
+        notes: Map<string, string>;
+        failWrites: { value: boolean };
+      };
+    }).__RIFFLE_VAULT_TEST__;
+    fixture.notes.set("Existing.md", "---\nstatus: draft\n---\n# Existing");
+    fixture.failWrites.value = true;
+  });
+  await page.getByRole("treeitem", { name: "Existing.md" }).click();
+  await page.getByLabel("status value").fill("reviewed");
+  await page.getByLabel("status value").press("Enter");
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
+  )).toEqual(["write:Existing.md", "write:Existing.md"]);
+
+  await page.evaluate(() => {
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { failWrites: { value: boolean } };
+    }).__RIFFLE_VAULT_TEST__.failWrites.value = false;
+  });
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Change" }).click();
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
+  )).toEqual([
+    "write:Existing.md",
+    "write:Existing.md",
+    "write:Existing.md",
+    "choose",
+  ]);
+  expect(await page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
+    }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
+  )).toContain('status: "reviewed"');
+});
+
 test("a committed external append stays visible and survives the next Source edit", async ({
   page,
 }) => {
@@ -353,6 +402,63 @@ test("a committed external append stays visible and survives the next Source edi
       __RIFFLE_VAULT_TEST__: { notes: Map<string, string> };
     }).__RIFFLE_VAULT_TEST__.notes.get("Existing.md"),
   )).toBe("# Existing local edit newer draft\nexternal append subsequent edit");
+});
+
+test("a Source edit queued behind a Property write preserves both drafts", async ({
+  page,
+}) => {
+  await installVaultSliceFixture(page);
+  await page.goto("/");
+  await page.evaluate(() => {
+    const fixture = (window as Window & {
+      __RIFFLE_VAULT_TEST__: {
+        notes: Map<string, string>;
+        deferWrites: { value: boolean };
+      };
+    }).__RIFFLE_VAULT_TEST__;
+    fixture.notes.set(
+      "Existing.md",
+      "---\nstatus: draft\n---\n# Existing",
+    );
+    fixture.deferWrites.value = true;
+  });
+  await page.getByRole("treeitem", { name: "Existing.md" }).click();
+
+  const status = page.getByLabel("status value");
+  await status.fill("reviewed");
+  await status.press("Enter");
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { operations: string[] };
+    }).__RIFFLE_VAULT_TEST__.operations,
+  )).toEqual(["write:Existing.md"]);
+
+  const source = await openSource(page);
+  await appendToSource(page, source, "\n\n## Interleaved source edit");
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { succeedNextDeferredWrite: () => void };
+    }).__RIFFLE_VAULT_TEST__.succeedNextDeferredWrite();
+  });
+
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __RIFFLE_VAULT_TEST__: { deferredWriteContents: () => string[] };
+    }).__RIFFLE_VAULT_TEST__.deferredWriteContents(),
+  )).toEqual([
+    expect.stringMatching(/status: "reviewed"[\s\S]*## Interleaved source edit/),
+  ]);
+  await page.evaluate(() => {
+    const fixture = (window as Window & {
+      __RIFFLE_VAULT_TEST__: {
+        deferWrites: { value: boolean };
+        succeedNextDeferredWrite: () => void;
+      };
+    }).__RIFFLE_VAULT_TEST__;
+    fixture.deferWrites.value = false;
+    fixture.succeedNextDeferredWrite();
+  });
 });
 
 async function openSource(page: import("@playwright/test").Page) {

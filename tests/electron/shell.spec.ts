@@ -698,6 +698,50 @@ test("dirty Note flushes to the old Vault before a real Vault switch", async () 
   }
 });
 
+test("Properties and agent body writes converge on the latest accepted Note", async () => {
+  const scratch = await mkdtemp(join(tmpdir(), "riffle-electron-note-convergence-"));
+  const configDir = join(scratch, "config");
+  const vault = join(scratch, "vault");
+  const notePath = join(vault, "Interleaved.md");
+  await mkdir(configDir);
+  await mkdir(vault);
+  await writeFile(notePath, "---\nstatus: draft\n---\n# Original body");
+  await writeFile(
+    join(configDir, "config.json"),
+    JSON.stringify({ vaultPath: vault, theme: "system" }),
+  );
+  const application = await launchRiffle({ env: { RIFFLE_TEST_CONFIG_DIR: configDir } });
+  try {
+    const page = await riffleWindow(application, "main");
+    await page.getByRole("treeitem", { name: "Interleaved.md" }).click();
+    const status = page.getByLabel("status value");
+    await expect(status).toHaveValue("draft");
+
+    await status.fill("reviewed");
+    await status.press("Enter");
+    await writeFile(notePath, "---\nstatus: draft\n---\n# Agent body");
+
+    await expect.poll(() => readFile(notePath, "utf8")).toBe(
+      '---\nstatus: "reviewed"\n---\n# Agent body',
+    );
+    await expect(status).toHaveValue("reviewed");
+    await expect(page.getByRole("heading", { name: "Agent body" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Show Markdown source" }).click();
+    const source = page.locator('[data-note-editor="active"] .cm-content');
+    await source.locator(".cm-line").last().click();
+    await page.keyboard.press("End");
+    await page.keyboard.insertText("\n\n## Source body");
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("## Source body");
+    await page.getByRole("button", { name: "Show Readonly View" }).click();
+    await expect(status).toHaveValue("reviewed");
+    await expect(page.getByRole("heading", { name: "Source body" })).toBeVisible();
+  } finally {
+    await application.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
 test("failed dirty flush prevents the real Vault dialog and switch", async () => {
   const scratch = await mkdtemp(join(tmpdir(), "riffle-electron-switch-conflict-"));
   const configDir = join(scratch, "config");

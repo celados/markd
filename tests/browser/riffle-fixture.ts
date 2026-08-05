@@ -443,6 +443,7 @@ export async function installVaultSliceFixture(page: Page): Promise<void> {
           notes.set(write.rel, committed);
           write.resolve(success(committed));
         },
+        deferredWriteContents: () => deferredWrites.map((write) => write.content),
         emitIndexEvent: (event: import("@/lib/desktop").VaultIndexEvent) => {
           for (const listener of indexListeners) listener(event);
         },
