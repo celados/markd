@@ -25,7 +25,7 @@ export const GUIDES: Guide[] = [
       "Learn what local-first note-taking means, where Riffle stores your Markdown files, and how the model keeps your writing portable.",
     eyebrow: "Local-first notes",
     publishedAt: "2026-07-19",
-    updatedAt: "2026-07-19",
+    updatedAt: "2026-08-05",
     takeaways: [
       "Your vault is a normal folder you choose.",
       "Every note is a readable .md file, not a database record.",
@@ -42,7 +42,7 @@ export const GUIDES: Guide[] = [
       {
         heading: "Portability is a product feature",
         paragraphs: [
-          "Plain Markdown reduces the cost of leaving. Titles come from filenames, hierarchy comes from folders, and optional YAML frontmatter remains in the note. Riffle can present a rich editor, backlinks, properties, tabs, todos, and bookmarks without hiding the underlying document format.",
+          "Plain Markdown reduces the cost of leaving. Titles come from filenames, hierarchy comes from folders, and optional YAML frontmatter remains in the note. Riffle can present a rendered Readonly View, editable source, backlinks, properties, tabs, todos, and bookmarks without hiding the underlying document format.",
           "You can back up the vault with Time Machine, git, Syncthing, Dropbox, iCloud Drive, or another file-sync tool. Riffle does not force a particular sync provider, although native Riffle sync is planned for the future.",
         ],
       },
@@ -72,12 +72,12 @@ export const GUIDES: Guide[] = [
     title: "A plain-text notes app with a real editor",
     shortTitle: "Plain-text notes app",
     description:
-      "See how Riffle combines portable plain-text Markdown files with rich editing, source mode, search, links, and properties.",
+      "See how Riffle combines portable plain-text Markdown files with a rendered reading view, editable source, search, links, and properties.",
     eyebrow: "Plain-text notes",
     publishedAt: "2026-07-19",
-    updatedAt: "2026-07-19",
+    updatedAt: "2026-08-05",
     takeaways: [
-      "Write visually or edit the Markdown source directly.",
+      "Read rendered Markdown or edit the source directly.",
       "Use standard links and optional YAML frontmatter.",
       "Keep filenames and folders meaningful outside the app.",
     ],
@@ -85,8 +85,8 @@ export const GUIDES: Guide[] = [
       {
         heading: "Plain text does not have to feel primitive",
         paragraphs: [
-          "A portable file format and a polished writing experience are not opposites. Riffle renders Markdown through a focused editor with headings, lists, tasks, code blocks, tables, links, images, text styles, and keyboard commands. When exact syntax matters, source mode exposes the underlying Markdown for direct editing.",
-          "Both modes edit the same note. There is no export step and no second proprietary representation to keep in sync.",
+          "A portable file format and a polished reading experience are not opposites. Riffle's Readonly View renders headings, lists, tasks, code blocks, tables, links, images, and safe embedded markup. The Source Editor exposes the underlying Markdown in CodeMirror for direct editing.",
+          "Both views derive from the same note. Body changes happen in the Source Editor, while the Properties Editor owns frontmatter; there is no second proprietary document representation to keep in sync.",
         ],
       },
       {
@@ -175,7 +175,7 @@ export const GUIDES: Guide[] = [
       "Understand which Markdown, folders, links, and frontmatter Riffle can share with an Obsidian vault, and where app-specific differences remain.",
     eyebrow: "Vault compatibility",
     publishedAt: "2026-07-19",
-    updatedAt: "2026-07-19",
+    updatedAt: "2026-08-05",
     takeaways: [
       "Point Riffle at a folder of existing Markdown notes.",
       "Real folders and YAML frontmatter remain portable.",
@@ -186,7 +186,7 @@ export const GUIDES: Guide[] = [
         heading: "What the two apps can share",
         paragraphs: [
           "Both Riffle and Obsidian can work with folders of Markdown files. That common foundation means an existing vault does not need to be imported into a new database before Riffle can read it. Filenames, folders, Markdown content, standard links, and common YAML frontmatter remain visible on disk.",
-          "Riffle accepts wiki-link syntax while typing and converts it to standard Markdown links for storage. This favors broad portability, but it means you should test link behavior on a copy if your vault relies on unusual aliases, embeds, or plugin-defined syntax.",
+          "Riffle's Readonly View resolves wiki-link syntax alongside standard Markdown links without rewriting the source. You should still test link behavior on a copy if your vault relies on unusual aliases, embeds, or plugin-defined syntax.",
         ],
       },
       {

@@ -1,39 +1,25 @@
-import type { Editor } from "@tiptap/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "octane";
 import { toast } from "@octanejs/sonner";
+import { useCallback, useEffect, useMemo, useRef, useState } from "octane";
 import { matchesShortcut } from "@/lib/shortcuts";
 import { useShortcuts } from "@/stores/shortcuts";
 import { useUi } from "@/stores/ui";
 import {
-  findEditorMatches,
-  type FindMatch,
   findPlainTextMatches,
+  type FindMatch,
   replaceMatches,
   replaceTextRange,
-  selectEditorMatch,
-  updateFindHighlights,
   wrapIndex,
-} from "./noteFind";
+} from "./source-find";
 
-type UseNoteFindReplaceOptions = {
+type SourceFindReplaceOptions = {
   active: boolean;
-  contentVersion: number;
-  editor: Editor | null;
-  markdownSource: boolean;
   rawText: string;
   rel: string;
   applyRawTextChange: (text: string) => void;
 };
 
-export function useNoteFindReplace({
-  active,
-  contentVersion,
-  editor,
-  markdownSource,
-  rawText,
-  rel,
-  applyRawTextChange,
-}: UseNoteFindReplaceOptions) {
+export function useSourceFindReplace(options: SourceFindReplaceOptions) {
+  const { active, rawText, rel, applyRawTextChange } = options;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -53,13 +39,10 @@ export function useNoteFindReplace({
     setReplaceOpen(nextOpen);
   }, []);
 
-  const matches = useMemo(() => {
-    if (!query) return [];
-    if (markdownSource) return findPlainTextMatches(rawText, query);
-    if (!editor) return [];
-    return findEditorMatches(editor, query);
-  }, [contentVersion, editor, markdownSource, query, rawText, rel]);
-
+  const matches = useMemo(
+    () => (query ? findPlainTextMatches(rawText, query) : []),
+    [query, rawText, rel],
+  );
   const selectedIndex =
     matches.length === 0 ? 0 : Math.min(activeMatch, matches.length - 1);
 
@@ -72,34 +55,19 @@ export function useNoteFindReplace({
     (index: number) => {
       if (matches.length === 0) return;
       const nextIndex = wrapIndex(index, matches.length);
-      const match = matches[nextIndex];
       setActiveMatch(nextIndex);
-      if (markdownSource) selectSourceMatch(match);
-      else if (editor) selectEditorMatch(editor, match);
+      selectSourceMatch(matches[nextIndex]);
     },
-    [editor, markdownSource, matches, selectSourceMatch],
+    [matches, selectSourceMatch],
   );
 
   const replaceCurrent = useCallback(() => {
     if (!query || matches.length === 0) return;
     const match = matches[selectedIndex];
-
-    if (markdownSource) {
-      applyRawTextChange(replaceTextRange(rawText, match, replaceText));
-      selectSourceMatch({ from: match.from, to: match.from + replaceText.length });
-      return;
-    }
-
-    if (!editor) return;
-    editor.view.dispatch(
-      editor.state.tr
-        .insertText(replaceText, match.from, match.to)
-        .scrollIntoView(),
-    );
+    applyRawTextChange(replaceTextRange(rawText, match, replaceText));
+    selectSourceMatch({ from: match.from, to: match.from + replaceText.length });
   }, [
     applyRawTextChange,
-    editor,
-    markdownSource,
     matches,
     query,
     rawText,
@@ -111,34 +79,14 @@ export function useNoteFindReplace({
   const replaceAll = useCallback(() => {
     if (!query || matches.length === 0) return;
     const total = matches.length;
-
-    if (markdownSource) {
-      applyRawTextChange(replaceMatches(rawText, matches, replaceText));
-    } else if (editor) {
-      let transaction = editor.state.tr;
-      for (const match of [...matches].sort((a, b) => b.from - a.from)) {
-        transaction = transaction.insertText(replaceText, match.from, match.to);
-      }
-      editor.view.dispatch(transaction.scrollIntoView());
-    } else {
-      return;
-    }
-
+    applyRawTextChange(replaceMatches(rawText, matches, replaceText));
     setActiveMatch(0);
     toast(`Replaced ${total} ${total === 1 ? "match" : "matches"}`);
-  }, [
-    applyRawTextChange,
-    editor,
-    markdownSource,
-    matches,
-    query,
-    rawText,
-    replaceText,
-  ]);
+  }, [applyRawTextChange, matches, query, rawText, replaceText]);
 
   useEffect(() => {
     setActiveMatch(0);
-  }, [markdownSource, query, rel]);
+  }, [query, rel]);
 
   useEffect(() => {
     if (activeMatch < matches.length) return;
@@ -147,27 +95,8 @@ export function useNoteFindReplace({
 
   useEffect(() => {
     if (!open || !query || matches.length === 0) return;
-    const match = matches[selectedIndex];
-    if (markdownSource) selectSourceMatch(match);
-    else if (editor) selectEditorMatch(editor, match);
-  }, [
-    editor,
-    markdownSource,
-    matches,
-    open,
-    query,
-    selectSourceMatch,
-    selectedIndex,
-  ]);
-
-  useEffect(() => {
-    if (!editor) return;
-    updateFindHighlights(
-      editor,
-      active && !markdownSource && open && query ? matches : [],
-      selectedIndex,
-    );
-  }, [active, editor, markdownSource, matches, open, query, selectedIndex]);
+    selectSourceMatch(matches[selectedIndex]);
+  }, [matches, open, query, selectSourceMatch, selectedIndex]);
 
   useEffect(() => {
     if (!active) return;

@@ -4,9 +4,9 @@ import {
   replaceMatches,
   replaceTextRange,
   wrapIndex,
-} from "../src/components/editor/noteFind";
+} from "../src/components/editor/source-find";
 
-describe("note find helpers", () => {
+describe("Source find helpers", () => {
   test("finds every case-insensitive match", () => {
     expect(findPlainTextMatches("Token token TOKEN", "token")).toEqual([
       { from: 0, to: 5 },

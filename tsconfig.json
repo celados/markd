@@ -16,11 +16,6 @@
     "jsxImportSource": "octane",
     "baseUrl": ".",
     "paths": {
-      "@tiptap/core": ["node_modules/@tiptap/core"],
-      "@tiptap/pm": ["node_modules/@tiptap/pm"],
-      "prosemirror-model": ["node_modules/prosemirror-model"],
-      "prosemirror-state": ["node_modules/prosemirror-state"],
-      "prosemirror-view": ["node_modules/prosemirror-view"],
       "@/*": ["./src/*"],
       "@/components/*": ["./src/components/*"],
       "@/context/*": ["./src/context/*"],

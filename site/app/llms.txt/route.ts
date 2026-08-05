@@ -30,7 +30,7 @@ ${guides}
 
 - Storage: plain .md files and real folders selected by the user
 - Desktop platform: Apple Silicon macOS 12 or newer
-- Editing: rich-text Markdown editor and editable Markdown source mode
+- Editing: Comark-backed Readonly View and editable CodeMirror Markdown source
 - Organization: search, tabs, backlinks, note links, properties, todos, bookmarks, and pinned items
 - Publishing: optional Riffle Cloud subscription; local editing does not require an account
 - AI agent: announced as coming soon, not a currently shipped desktop feature

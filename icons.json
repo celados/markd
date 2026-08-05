@@ -3,9 +3,7 @@
 		"icons": [
 			"arrow-big-up",
 			"arrow-down-to-line",
-			"arrow-left",
-			"bold",
-			"bookmark",
+      "bookmark",
 			"calendar-days",
 			"case-sensitive",
 			"check",
@@ -13,8 +11,7 @@
 			"chevron-right",
 			"chevron-up",
 			"cloud",
-			"code",
-			{
+      {
 				"name": "code-xml",
 				"as": "Code2"
 			},
@@ -39,35 +36,17 @@
 			"folder-plus",
 			"globe",
 			"hash",
-			{
-				"name": "heading-1",
-				"as": "Heading1"
-			},
-			{
-				"name": "heading-2",
-				"as": "Heading2"
-			},
-			{
-				"name": "heading-3",
-				"as": "Heading3"
-			},
-			"highlighter",
-			"italic",
-			"keyboard",
-			"link",
-			{
+      "keyboard",
+      {
 				"name": "link-2",
 				"as": "Link2"
 			},
 			"list",
-			"list-ordered",
-			"list-plus",
-			"list-todo",
+      "list-plus",
 			"log-in",
 			"log-out",
 			"mail",
-			"minus",
-			"monitor",
+      "monitor",
 			"moon",
 			"palette",
 			"panel-left",
@@ -88,17 +67,13 @@
 				"name": "square-check-big",
 				"as": "CheckSquare"
 			},
-			"strikethrough",
-			"sun",
-			"table",
-			"tag",
-			"text-quote",
+      "sun",
+      "tag",
 			{
 				"name": "trash-2",
 				"as": "Trash2"
 			},
-			"underline",
-			"x"
+      "x"
 		]
 	}
 }

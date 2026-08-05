@@ -1,8 +1,7 @@
 /**
- * Internal page links are stored as ordinary markdown links whose href is a
- * vault-relative note path, e.g. `[Roadmap](projects/roadmap.md)`. That keeps
- * the files plain-markdown and portable while letting the app resolve clicks
- * to open the target note.
+ * Internal Markdown links use a vault-relative Note path, for example
+ * `[Roadmap](projects/roadmap.md)`. Riffle also projects wiki-link syntax to
+ * this navigation shape for rendering without mutating the source file.
  */
 
 /** True if `href` points outside the vault (has a scheme) or is an anchor. */
@@ -67,9 +66,8 @@ export function resolveWiki(
 }
 
 /**
- * Rewrite `[[target]]` / `[[target|alias]]` wiki links in a markdown string
- * into standard markdown links, resolving targets against `notes`. Keeps files
- * plain-markdown while letting wiki-style syntax render as page links.
+ * Project `[[target]]` / `[[target|alias]]` syntax into standard Markdown links
+ * for rendering. The returned string is view input, never a source mutation.
  */
 export function wikiToMarkdown(
   markdown: string,
