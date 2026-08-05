@@ -22,6 +22,9 @@ status: active
 - `@octanejs/base-ui` 已正式发布 Menu/Menubar/ContextMenu subpaths，但 Riffle 仍保留现有
   ContextMenu。后续 adoption 需要把 Root/Trigger owner 移入 FileTree/PinnedNotes callers，并以
   browser journey 验证右键、键盘导航、dismissal 和 focus restore；不要复制 binding source。
+- Octane `0.1.23` 的 TSRX key selector 仍不能直接捕获 component-local `label`：
+  `ReadonlyShortcutRow` 使用 ``key `${label}-${key}-${index}` `` 时 production Shortcuts 页面消失。
+  当前只在该 owner 预计算 `{ key, id }`；待上游修复后用 `tests/browser/settings.spec.ts` 证明可删除。
 - `@pierre/trees` 当前仍是 `1.0.0-beta`，且 package metadata 声明 React peers。采用 Vanilla runtime
   前必须证明不会安装或加载 React，并以 browser journeys 锁住 focus、keyboard、rename、drag/drop
   和 context-menu 行为。

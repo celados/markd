@@ -488,8 +488,8 @@ type ReadonlyShortcutRowProps = {
 
 function ReadonlyShortcutRow(props: ReadonlyShortcutRowProps) @{
   const { label, keys } = props;
-  // Octane hoists @for key selectors, so close over all row identity here;
-  // a selector that captures the component-local label loses it at runtime.
+  // Octane 0.1.23 hoists this selector outside the component scope, so the
+  // row identity must include label before lowering or Shortcuts fails at runtime.
   const keyEntries = keys.map((key, index) => ({
     key,
     id: `${label}-${key}-${index}`,
