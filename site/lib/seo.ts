@@ -56,7 +56,7 @@ export const PRODUCT_JSON_LD = {
       },
       featureList: [
         "Plain Markdown files in user-selected folders",
-        "Rich-text and Markdown source editing",
+        "Rendered Markdown and editable source",
         "Backlinks and internal note links",
         "Full-text search",
         "Frontmatter property editing",

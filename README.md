@@ -27,7 +27,7 @@ Riffle releases are Developer ID signed and notarized by Apple before distributi
 
 ## Features
 
-- **WYSIWYG markdown editor:** write in a rich editor, saved as clean markdown on disk
+- **Rendered Markdown and source editing:** read a focused CommonMark/GFM view, then edit the same file directly in CodeMirror
 - **Folders and subfolders:** organize notes in real, file-manager-visible folders
 - **Todos:** a standalone task list with tags and filtering
 - **Bookmarks:** save links with an auto-fetched title, image, and favicon

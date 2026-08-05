@@ -7,9 +7,6 @@ status: active
 
 # Deferred work
 
-- #38 已移除 active Tiptap reading/mutation surface，但 `@octanejs/tiptap`、ProseMirror packages、
-  extensions、menus 与 node views 仍暂存为 dead code；由 #42 做 dependency/source clean cut 与 bundle
-  evidence，#38 不保留 hidden editor 或兼容路径，也不顺手扩大删除范围。
 - updater signing key、release URL 与 updater endpoint 已切到 `celados/riffle`。Cloud Engine 已迁移
   现有协议，但 production ownership gate 在源码层保持关闭；只有 tests 可用 loopback origins 启用。
   在启用 production publishing 或部署 Riffle site 前，必须裁决产品域名与 Cloud API ownership，并把

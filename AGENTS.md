@@ -1,7 +1,7 @@
 # Riffle — agent guide
 
 Local-first markdown notes app for macOS. Electron is the only desktop shell and release path. The UI uses
-Octane + Vite + Tailwind v4 + Tiptap 3.
+Octane + Vite + Tailwind v4. Comark powers the Readonly View; CodeMirror powers the Source Editor.
 
 ## Project provenance
 
@@ -92,11 +92,11 @@ Node, Electron, or native libraries.
 - `components/` — by feature: `layout/`, `tree/`, `editor/`, `todos/`, `bookmarks/`, `palette/`, `settings/`, `welcome/`, `ui/`
 - `icons.json` 是图标依赖清单；`src/icons/icons.tsrx` 由 Sigil 生成，禁止手改。新增图标先
   `sigil add lucide/<name>`，再运行 `pnpm run icons:generate`。
-- Editor: Tiptap with `contentType: "markdown"`; autosave debounced 500ms, flush on unmount; images stored as vault-relative paths, rendered via asset protocol
-- Tabs: `NotesWorkspace` keeps one live editor per open tab, inactive panes hidden via `display:none` — tab switch is a CSS toggle, never a remount/re-parse. Keep it that way.
+- Note views: the Comark-backed Readonly View never mutates the body; the CodeMirror Source Editor autosaves with a 500ms debounce and flushes on unmount. Images stay as Vault-relative paths and render through the asset protocol.
+- Tabs: `NotesWorkspace` keeps one live Note view per open tab, with inactive panes hidden via `display:none` — tab switch is a CSS toggle, never a remount/re-parse. Keep it that way.
 - Session: `lib/session.ts` persists per-vault UI layout (open tabs, active view, todo/bookmark tag filters) to localStorage keyed by vault root, restoring it on launch. Tag filters live in the `todos`/`bookmarks` stores (not component state) so they're subscribable.
-- Page links: internal note links are plain markdown links whose href is a vault-relative note path (`[Title](projects/app.md)`). `lib/noteLinks.ts` converts href↔rel and rewrites `[[wiki]]`/`[[target|alias]]` syntax (on type + on load) into those markdown links; clicking one opens the note; `/link` slash command + `NoteLinkPicker` also insert them.
-- Frontmatter: `lib/frontmatter.ts` splits a leading `---` YAML block off the body on load and re-attaches it on save. `NoteProperties` can add, edit, and remove flat text or list properties while preserving unrelated YAML. The editor body never contains the raw YAML.
+- Page links: internal Markdown links use a Vault-relative href (`[Title](projects/app.md)`). The Markdown module projects `[[wiki]]`/`[[target|alias]]` syntax to the same navigation semantics without rewriting Source Editor content; clicking an existing target opens that Note.
+- Frontmatter: `lib/frontmatter.ts` splits a leading `---` YAML block off the body on load and re-attaches it on save. `NoteProperties` can add, edit, and remove flat text or list properties while preserving unrelated YAML. The Markdown renderer receives only the body.
 
 ## UI conventions
 
@@ -142,4 +142,4 @@ Our `Modal` (`components/ui/Modal.tsx`) is built on the same tokens; keep new di
 
 - Never add "Co-Authored-By" or any AI attribution to commits or PRs.
 - Commit messages: conventional commits, subject ≤50 chars where possible.
-- Don't reintroduce: sticky notes, note IDs, plugin-fs. Never add frontmatter automatically; only explicit actions in the Properties UI may author it. `[[wiki]]` is accepted as input but stored as standard markdown `[title](path.md)` links.
+- Don't reintroduce: sticky notes, note IDs, plugin-fs. Never add frontmatter automatically; only explicit actions in the Properties UI may author it. `[[wiki]]` is Riffle Markdown input and must not be silently rewritten by the Source Editor.

@@ -38,7 +38,10 @@ Comark 自己把 Markdown 解析成框架无关的 document AST；该 AST 与 Oc
 7. 本轮 Riffle Markdown contract 是 CommonMark/GFM、wiki links、Vault assets 与 Embedded Markup；不借 renderer
    迁移加入 Comark components、MDX、Mermaid、math 或 agent-native UI components。
 
-## Current Riffle baseline
+## Pre-cleanup Riffle baseline (historical)
+
+本节记录 issue #42 实施前、commit `f91d8a1` 的依赖与源码形态，仅作为选型和 bundle 对照证据；
+当前 runtime contract 以根 `AGENTS.md`、`CONTEXT.md` 与实现为准。
 
 ### Confirmed
 
@@ -46,12 +49,12 @@ Comark 自己把 Markdown 解析成框架无关的 document AST；该 AST 与 Oc
   `@tiptap/extension-*`、`@tiptap/markdown`；Markdown source mode 另有 CodeMirror。本轮删除 Tiptap editor
   schema、slash/bubble menu、ProseMirror find/replace decoration、wiki-link input rule 和富文本/源码双向
   round-trip，但保留现有 CodeMirror Source Editor。
-  [Riffle package metadata](https://github.com/celados/riffle/blob/main/package.json)
-  [NoteEditor](https://github.com/celados/riffle/blob/main/src/components/editor/NoteEditor.tsrx)
+  [Riffle package metadata at f91d8a1](https://github.com/celados/riffle/blob/f91d8a1/package.json)
+  [NoteEditor at f91d8a1](https://github.com/celados/riffle/blob/f91d8a1/src/components/editor/NoteEditor.tsrx)
 - vault 图片在文件中保持 `.markd/assets/...` 相对路径，显示时改写为受 Electron main 校验的
   `riffle-asset:` URL；相对 note link 由 Riffle 自己路由。任何 renderer 都必须允许 Riffle 覆盖 `a`、`img`
   与 code block，而不是自行解释这些 URL。
-  [current Tiptap extensions](https://github.com/celados/riffle/blob/main/src/components/editor/extensions.ts)
+  [Tiptap extensions at f91d8a1](https://github.com/celados/riffle/blob/f91d8a1/src/components/editor/extensions.ts)
   [asset protocol](https://github.com/celados/riffle/blob/main/electron/native-content.ts)
 - Riffle 已在读取时把 YAML frontmatter 与 body 分离，因此 Markdown renderer 应只接收 body；parser 自带的
   frontmatter 处理不应成为第二个 metadata source of truth。
@@ -328,6 +331,24 @@ prototype machinery 到 main：
 实现仍须通过 #37 及其子 tickets 规定的 Riffle semantics、Embedded Markup negative corpus、system Chrome browser
 contracts、Electron persisted-update journey、真实 Vite/asar bundle evidence 和完整回归。失败应优先归类为 adapter 或
 upstream Comark 问题，而不是在应用内堆 workaround。
+
+## Issue #42 bundle evidence
+
+main baseline 与 clean cut 都在相同 pnpm/Vite toolchain 下运行 `pnpm run build`。baseline commit
+`f91d8a1` 已包含 Comark 0.6.0 与 Readonly View，也仍包含 Tiptap/ProseMirror；因此下面的差值隔离的是
+issue #42 删除旧 editor runtime 后的应用 bundle 变化，不把 registry unpacked size 当成 bundle 证据。
+
+| Vite renderer asset | `f91d8a1` baseline | issue #42 clean cut | Delta |
+| --- | ---: | ---: | ---: |
+| AppShell raw | 1,539.76 kB | 1,285.27 kB | -254.49 kB (-16.53%) |
+| AppShell gzip | 514.38 kB | 435.82 kB | -78.56 kB (-15.27%) |
+| CSS raw | 101.35 kB | 98.90 kB | -2.45 kB (-2.42%) |
+| CSS gzip | 20.57 kB | 20.14 kB | -0.43 kB (-2.09%) |
+
+hash 只标识该次可复核构建：baseline 为 `AppShell-BQykB3rl.js` / `index-Cg-7pRt4.css`，clean cut
+为 `AppShell-B_08HyHT.js` / `index-D5fQd2TK.css`。最终依赖图保留 direct `comark@0.6.0`，且
+`pnpm why @tiptap/core` 无结果；dependency/source gate 同时锁住 package manifest、lockfile、active
+source/config 与已废弃 editor module paths。
 
 ## Fallback conditions for Streamdown
 
