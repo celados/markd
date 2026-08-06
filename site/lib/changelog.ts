@@ -13,6 +13,21 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   {
     version: VERSION,
+    date: "2026-08-06",
+    displayDate: "August 6, 2026",
+    title: "Markdown, without a hidden editor",
+    summary:
+      "Readonly View now renders plain Markdown through Comark, while Source Editor and Properties stay editable.",
+    changes: [
+      "Replace the Tiptap surface with a Comark-backed Readonly View.",
+      "Remove the former rich-text runtime packages and compatibility paths.",
+      "Keep Source Editor, editable Properties, Quick Capture, links, assets, find, and external updates intact.",
+      "Converge Property, Source, and agent changes on the latest committed Markdown.",
+    ],
+    releaseUrl: RELEASE,
+  },
+  {
+    version: "0.3.2",
     date: "2026-08-04",
     displayDate: "August 4, 2026",
     title: "A native path from Markd",
@@ -22,7 +37,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Preserve the updater handoff while Squirrel renames Markd.app to Riffle.app.",
       "Prove the signed Markd 0.2.6 app upgrades, renames, and relaunches as Riffle.",
     ],
-    releaseUrl: RELEASE,
+    releaseUrl: "https://github.com/celados/riffle/releases/tag/v0.3.2",
   },
   {
     version: "0.3.1",

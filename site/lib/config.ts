@@ -1,4 +1,4 @@
-export const VERSION = "0.3.2";
+export const VERSION = "0.4.0";
 export const GITHUB_REPO = "celados/riffle";
 export const GITHUB = `https://github.com/${GITHUB_REPO}`;
 export const RELEASE = `${GITHUB}/releases/tag/v${VERSION}`;
