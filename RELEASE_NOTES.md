@@ -1,11 +1,18 @@
-# Riffle 0.3.2
+# Riffle 0.4.0
 
-Riffle is the independent continuation of the Electron-native local knowledge workspace previously released as Markd.
+Riffle 0.4.0 makes plain Markdown the only Note body source of truth. The former rich-text editor is gone; Readonly View renders through Comark, while Source Editor and Properties remain editable.
+
+## Changed
+
+- Replace the Tiptap reading and editing surface with a Comark-backed Readonly View.
+- Remove all Tiptap and ProseMirror runtime packages, source paths, and compatibility machinery.
+- Keep CodeMirror Source Editor, editable YAML Properties, Quick Capture, external Note changes, and autosave behavior intact.
+- Preserve vault-relative Note links, wiki links, local assets, embedded markup policy, code copy, task display, and Readonly find.
 
 ## Fixed
 
-- Preserve the updater handoff when Squirrel natively renames the installed bundle from `Markd.app` to `Riffle.app`.
-- Verify that the signed Markd 0.2.6 public release upgrades, renames, and relaunches as the signed Riffle release through Squirrel/ShipIt.
+- Converge Property edits, Source edits, and external or agent writes on the latest committed Markdown without losing newer changes.
+- Keep the last valid Note view visible when a render update fails, with an explicit error for invalid static content.
 
 ## Supported platform
 
